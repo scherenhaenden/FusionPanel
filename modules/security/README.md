@@ -67,8 +67,46 @@ have been verified.
 
 ## Verification Evidence
 
-Record commands and environment versions for each implementation run below. A
-blocked runtime case is not an integration or End-to-End pass.
+Recorded run: 2026-11-01 16:26:00–16:26:01 Europe/Berlin, implementation commit
+`40a7a429aa042559c1746cada8d186a00a1aac80`, Ubuntu 26.04.1 LTS,
+`rustc 1.99.1 (58cf8f9c3 2026-10-13)`, and
+`cargo 1.99.1 (5f94df478 2026-08-27)`.
+
+### Commands and results
+
+| Command | Result |
+|---|---|
+| `cargo fmt --manifest-path modules/security/Cargo.toml -- --check` | PASS, exit 0 |
+| `git diff --check` | PASS, exit 0 |
+| `cargo test --offline --manifest-path modules/security/Cargo.toml -- --nocapture --test-threads=1` | PASS for the runnable suite: 25 unit tests passed; 3 BLOCKED diagnostic tests ran and printed the missing runtime prerequisites; 5 other integration placeholders remain ignored; 0 failed. |
+| `cargo tree --offline --manifest-path modules/security/Cargo.toml` | Direct Rust dependencies resolved offline: `serde 1.0.229`, `serde_json 1.0.154`, `thiserror 1.0.69`. No external WAF/parser dependency is declared or installed. |
+
+The three diagnostic tests do not exercise a real parser, HTTP traffic, firewall,
+or SSH service. Their test-harness status means only that the blocker report ran;
+the corresponding integration and E2E outcomes remain **BLOCKED**, not PASS.
+
+### Runtime dependency probes
+
+| Probe | Observed result |
+|---|---|
+| `nginx -v` | NOT INSTALLED (`nginx: command not found`); `nginx -t` was not run. |
+| `modsecurity --version` | NOT INSTALLED (`modsecurity: command not found`). |
+| `sshd -V` | NOT INSTALLED (`sshd: command not found`). |
+| `docker --version` | Docker 29.1.3, build `29.1.3-0ubuntu4.1`; daemon and container availability were not checked. |
+| `dpkg-query -W -f='${binary:Package} ${Version}\n' libmodsecurity3` | Exit 1: no package found. |
+| `dpkg-query -W -f='${binary:Package} ${Version}\n' libnginx-mod-http-modsecurity` | Exit 1: no package found. |
+| `dpkg-query -W -f='${binary:Package} ${Version}\n' modsecurity-crs` | Exit 1: no package found. |
+| `pkg-config --modversion libmodsecurity` | Could not query a version because `pkg-config` is not installed. |
+| `iptables --version` | Exit 1: `iptables: Failed to initialize nft: Operation not permitted`; no firewall test was attempted. |
+
+Accordingly, parser validation with Nginx/ModSecurity, benign and malicious HTTP
+traffic, and emergency SSH access remain **BLOCKED** on this host. The exact
+runtime requirements are Nginx with its ModSecurity connector, libmodsecurity
+v3, OWASP CRS 3.x, a disposable network-isolated fixture, and an independently
+reachable SSH recovery path. No fixture was created, no container or service was
+started, no firewall or SSH configuration was applied, and teardown was not
+applicable. Docker's CLI version alone does not establish that a daemon or safe
+fixture is available.
 
 ## Module Contracts
 
