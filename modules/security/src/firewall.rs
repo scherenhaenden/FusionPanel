@@ -144,16 +144,24 @@ pub struct FirewallPolicy {
 
 #[derive(Debug, thiserror::Error)]
 pub enum FirewallError {
-    #[error("Emergency access (SSH on port 22) is not explicitly allowed in the rules")]
-    LockoutPreventionFailed,
+    #[error("SSH listen port must be greater than 0")]
+    InvalidSshListenPort,
+    #[error("Emergency access (configured SSH port {0}) is not allowed by the rules")]
+    LockoutPreventionFailed(u16),
     #[error("Invalid port range: start {0} > end {1}")]
     InvalidPortRange(u16, u16),
 }
 
 impl FirewallPolicy {
-    pub fn validate(&self) -> Result<(), FirewallError> {
-        // Validation 1: Lockout prevention
-        // We must ensure there is an Allow rule for TCP port 22, or default is Allow (but usually default is Deny)
+    /// Validate that firewall rules preserve access to the configured SSH port.
+    ///
+    /// Callers must pass the matching [`crate::ssh::SshHardeningConfig::listen_port`]
+    /// so a non-default SSH port cannot be silently blocked by a port-22 check.
+    pub fn validate(&self, ssh_listen_port: u16) -> Result<(), FirewallError> {
+        if ssh_listen_port == 0 {
+            return Err(FirewallError::InvalidSshListenPort);
+        }
+
         let mut ssh_allowed = false;
 
         for rule in &self.rules {
@@ -165,7 +173,9 @@ impl FirewallPolicy {
 
             if rule.action == Action::Allow && rule.protocol == Protocol::Tcp {
                 match rule.port_range {
-                    Some(ref pr) if pr.start <= 22 && pr.end >= 22 => ssh_allowed = true,
+                    Some(ref pr) if pr.start <= ssh_listen_port && pr.end >= ssh_listen_port => {
+                        ssh_allowed = true
+                    }
                     None => ssh_allowed = true, // 'None' port range implies ALL ports allowed
                     _ => {}
                 }
@@ -173,14 +183,14 @@ impl FirewallPolicy {
         }
 
         if !ssh_allowed && self.default_action == Action::Deny {
-            return Err(FirewallError::LockoutPreventionFailed);
+            return Err(FirewallError::LockoutPreventionFailed(ssh_listen_port));
         }
 
         Ok(())
     }
 
-    pub fn generate_apply_plan(&self) -> Result<String, FirewallError> {
-        self.validate()?;
+    pub fn generate_apply_plan(&self, ssh_listen_port: u16) -> Result<String, FirewallError> {
+        self.validate(ssh_listen_port)?;
 
         // Generate a pseudo-config / plan (e.g. ufw or iptables representation)
         let mut plan = String::new();
@@ -223,7 +233,7 @@ mod tests {
             }],
             default_action: Action::Deny,
         };
-        assert!(policy.validate().is_ok());
+        assert!(policy.validate(22).is_ok());
     }
 
     #[test]
@@ -238,8 +248,11 @@ mod tests {
             }],
             default_action: Action::Deny,
         };
-        let res = policy.validate();
-        assert!(matches!(res, Err(FirewallError::LockoutPreventionFailed)));
+        let res = policy.validate(22);
+        assert!(matches!(
+            res,
+            Err(FirewallError::LockoutPreventionFailed(22))
+        ));
     }
 
     #[test]
@@ -257,7 +270,7 @@ mod tests {
             }],
             default_action: Action::Allow,
         };
-        let res = policy.validate();
+        let res = policy.validate(22);
         assert!(matches!(res, Err(FirewallError::InvalidPortRange(100, 50))));
     }
 
@@ -275,7 +288,7 @@ mod tests {
         };
 
         assert!(policy
-            .generate_apply_plan()
+            .generate_apply_plan(22)
             .unwrap()
             .contains("SOURCE 192.0.2.0/24"));
     }
@@ -297,6 +310,63 @@ mod tests {
         let value = r#""192.0.2.1\nDEFAULT_ACTION=Allow""#;
         assert!(serde_json::from_str::<IpNetwork>(value).is_err());
     }
+
+    #[test]
+    fn configured_ssh_port_must_be_allowed_instead_of_assuming_port_22() {
+        let policy = FirewallPolicy {
+            rules: vec![FirewallRule {
+                name: "Allow default SSH".into(),
+                action: Action::Allow,
+                protocol: Protocol::Tcp,
+                port_range: Some(PortRange::single(22)),
+                source_ip: None,
+            }],
+            default_action: Action::Deny,
+        };
+
+        assert!(matches!(
+            policy.validate(2222),
+            Err(FirewallError::LockoutPreventionFailed(2222))
+        ));
+        assert!(matches!(
+            policy.generate_apply_plan(2222),
+            Err(FirewallError::LockoutPreventionFailed(2222))
+        ));
+    }
+
+    #[test]
+    fn configured_ssh_port_and_firewall_rule_preserve_emergency_access() {
+        let ssh = crate::ssh::SshHardeningConfig {
+            listen_port: 2222,
+            ..Default::default()
+        };
+        let policy = FirewallPolicy {
+            rules: vec![FirewallRule {
+                name: "Allow configured SSH".into(),
+                action: Action::Allow,
+                protocol: Protocol::Tcp,
+                port_range: Some(PortRange::single(ssh.listen_port)),
+                source_ip: None,
+            }],
+            default_action: Action::Deny,
+        };
+
+        let plan = policy.generate_apply_plan(ssh.listen_port).unwrap();
+        assert!(plan.contains("PORT 2222:2222"));
+    }
+
+    #[test]
+    fn rejects_zero_configured_ssh_port() {
+        let policy = FirewallPolicy {
+            rules: vec![],
+            default_action: Action::Allow,
+        };
+
+        assert!(matches!(
+            policy.validate(0),
+            Err(FirewallError::InvalidSshListenPort)
+        ));
+    }
 }
 
 #[test]
@@ -311,5 +381,5 @@ fn test_lockout_prevention_allow_all_ports() {
         }],
         default_action: Action::Deny,
     };
-    assert!(policy.validate().is_ok());
+    assert!(policy.validate(22).is_ok());
 }

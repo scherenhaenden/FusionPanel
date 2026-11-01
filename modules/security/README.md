@@ -21,17 +21,28 @@ data only and do not invoke host commands or modify system configuration.
   them as JSON strings. IPv4 and IPv6 prefix lengths are range checked, host bits
   are cleared, and the canonical value is used in the preview. A bare address
   represents one host. Malformed input, extra separators, and injected config
-  text are rejected during parsing/deserialization.
+  text are rejected during parsing/deserialization. Pass the configured SSH
+  listen port to `FirewallPolicy::validate` and `generate_apply_plan`; neither
+  API assumes port 22. The check requires a TCP allow rule covering that port
+  when the default action is deny. It does not simulate firewall-provider rule
+  ordering or establish live reachability.
 - **WAF rule-group names** accept only non-empty ASCII letters, digits, `.`,
   `_`, and `-`. Whitespace, newlines, assignment separators, and other syntax
   characters are rejected before plan generation.
+- **WAF modes** preserve `Standard`, `Strict`, and `CRSDetectionOnly` as
+  selectable preview values. `CRSDetectionOnly` serializes with that stable
+  name. The existing generic `DetectionOnly` and `Prevention` modes remain
+  available. These are policy selections in an inert plan; they do not install
+  or tune a WAF engine.
 
-Unit tests exercise the accepted forms, canonicalization, and negative
-directive-injection cases. The ignored integration fixtures are placeholders;
-they do not demonstrate application to a real host. Runtime application,
-rollback, firewall/SSH service reloads, and proxy WAF integration remain
-unimplemented and must stay marked **BLOCKED** until an adapter exists and its
-host-level integration and end-to-end behavior have been verified.
+Unit tests exercise the accepted forms, canonicalization, configured SSH port,
+WAF modes, and negative directive-injection cases. The WAF integration test
+cases run and report **BLOCKED** with dependency probes; they do not count as
+parser, traffic, or emergency-access passes. Other ignored integration fixtures
+are placeholders. Runtime application, rollback, firewall/SSH service reloads,
+and proxy WAF integration remain unimplemented and must stay marked **BLOCKED**
+until an adapter exists and its host-level integration and end-to-end behavior
+have been verified.
 
 ## Capability Ownership and Status
 
@@ -51,7 +62,13 @@ host-level integration and end-to-end behavior have been verified.
 
 * All current partial capabilities (SEC-05, SEC-07, SEC-09, SEC-16) include unit tests covering type invariants and negative paths (e.g. invalid strings, insecure policies).
 * Runtime application and host-level integration for SEC-05, SEC-07, and SEC-09 are **BLOCKED**: there is no executor/adapter, safe apply-and-rollback path, service reload, or proxy integration in this module.
-* Integration and End-to-End behavior remain **BLOCKED** until those adapters are implemented and verified against isolated test hosts. The ignored integration fixtures are placeholders, not passing integration evidence.
+* WAF parser, benign/malicious traffic, and emergency SSH integration cases run as explicit **BLOCKED** diagnostics until the required disposable host adapters are available. Their test-harness success reports the blocker; it does not qualify the real integration or E2E capability.
+* Integration and End-to-End behavior remain **BLOCKED** until those adapters are implemented and verified against isolated test hosts. The remaining ignored integration fixtures are placeholders, not passing integration evidence.
+
+## Verification Evidence
+
+Record commands and environment versions for each implementation run below. A
+blocked runtime case is not an integration or End-to-End pass.
 
 ## Module Contracts
 

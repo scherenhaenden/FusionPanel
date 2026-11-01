@@ -2,7 +2,16 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum WafMode {
+    /// Use the normal WAF ruleset and its standard sensitivity profile.
+    Standard,
+    /// Use a stricter WAF profile for deployments that opt into it.
+    Strict,
+    /// Evaluate CRS rules without blocking requests during rollout.
+    #[serde(rename = "CRSDetectionOnly")]
+    CrsDetectionOnly,
+    /// Backward-compatible generic detection-only mode.
     DetectionOnly,
+    /// Backward-compatible generic prevention mode.
     Prevention,
 }
 
@@ -55,7 +64,7 @@ impl WafConfig {
         self.validate()?;
 
         let mut plan = String::new();
-        plan.push_str(&format!("WAF_MODE={:?}\n", self.mode));
+        plan.push_str(&format!("WAF_MODE={}\n", self.mode.plan_name()));
         for group in &self.rule_groups {
             if group.enabled {
                 plan.push_str(&format!("INCLUDE_GROUP={}\n", group.name));
@@ -66,6 +75,18 @@ impl WafConfig {
         }
 
         Ok(plan)
+    }
+}
+
+impl WafMode {
+    fn plan_name(&self) -> &'static str {
+        match self {
+            Self::Standard => "Standard",
+            Self::Strict => "Strict",
+            Self::CrsDetectionOnly => "CRSDetectionOnly",
+            Self::DetectionOnly => "DetectionOnly",
+            Self::Prevention => "Prevention",
+        }
     }
 }
 
@@ -141,5 +162,34 @@ mod tests {
                 Err(WafError::InvalidRuleGroupName)
             ));
         }
+    }
+
+    #[test]
+    fn preserves_documented_waf_modes_in_preview_and_serialization() {
+        let cases = [
+            (WafMode::Standard, "WAF_MODE=Standard"),
+            (WafMode::Strict, "WAF_MODE=Strict"),
+            (WafMode::CrsDetectionOnly, "WAF_MODE=CRSDetectionOnly"),
+            (WafMode::DetectionOnly, "WAF_MODE=DetectionOnly"),
+            (WafMode::Prevention, "WAF_MODE=Prevention"),
+        ];
+
+        for (mode, expected_plan_mode) in cases {
+            let config = WafConfig {
+                mode,
+                rule_groups: vec![WafRuleGroup {
+                    name: "OWASP_CRS".into(),
+                    enabled: true,
+                }],
+                custom_rules_enabled: false,
+            };
+
+            assert!(config.generate_plan().unwrap().contains(expected_plan_mode));
+        }
+
+        assert_eq!(
+            serde_json::to_string(&WafMode::CrsDetectionOnly).unwrap(),
+            "\"CRSDetectionOnly\""
+        );
     }
 }
