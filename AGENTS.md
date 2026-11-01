@@ -9,3 +9,7 @@ Write original implementation for the specified contracts. Preserve required lic
 ## Execution-window rules
 
 The canonical branch is master. Read docs/execution/DELIVERY_PLAN.md and your task spec. Independent modules may edit only their assigned module and must use a standalone `[workspace]` until integration. The root-manifest prohibition applies except when your task explicitly assigns those files. Never remove a capability or user-visible mode to simplify implementation. Follow docs/engineering/FEATURE_PRESERVATION.md and docs/engineering/VARIANT_DESIGN.md. Read docs/testing/TEST_STRATEGY.md; no mocked success may qualify a real dependency or E2E journey. Missing prerequisites are BLOCKED, never PASS. Record actual tests, limits and unresolved gaps. Preserve required notices for reused material.
+
+## Merge and issue policy
+
+Merge approved pull requests with a regular merge commit; preserve their reviewed commit history and never squash. Before merging, refresh the exact PR head, approvals, required checks and master mergeability; use a head-SHA guard. Do not bypass blocked review/version checks or use administrator override. Close an issue only after verifying its linked PR is MERGED on master and recording the merge SHA, user-visible changes, actual unit/integration/E2E commands and results, and remaining limitations in the issue. If no merge occurred, the issue stays open.
