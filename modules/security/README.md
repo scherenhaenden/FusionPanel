@@ -2,7 +2,36 @@
 
 ## Objective
 
-Firewall/SSH/WAF/CSP typed policies, validation and safe apply plans.
+Firewall/SSH/WAF/CSP typed policies, validation, and inert preview plans.
+
+## Validation Contract
+
+The policy APIs reject values that could alter the structure of generated
+configuration previews. Validation happens before rendering; these previews are
+data only and do not invoke host commands or modify system configuration.
+
+- **SSH `AllowUsers`** accepts a conservative single-token pattern grammar:
+  ASCII letters and digits plus `_`, `-`, `.`, `*`, and `?` for the user
+  pattern, optionally followed by `@` and a host pattern using those characters
+  plus `:`. Empty components, multiple `@` separators, whitespace, and control
+  characters are rejected. The restricted grammar avoids directive injection
+  and may reject patterns outside this supported subset.
+- **Firewall source addresses** are represented by `IpNetwork`, not free-form
+  strings. Parse addresses/CIDRs with `str::parse::<IpNetwork>()` or deserialize
+  them as JSON strings. IPv4 and IPv6 prefix lengths are range checked, host bits
+  are cleared, and the canonical value is used in the preview. A bare address
+  represents one host. Malformed input, extra separators, and injected config
+  text are rejected during parsing/deserialization.
+- **WAF rule-group names** accept only non-empty ASCII letters, digits, `.`,
+  `_`, and `-`. Whitespace, newlines, assignment separators, and other syntax
+  characters are rejected before plan generation.
+
+Unit tests exercise the accepted forms, canonicalization, and negative
+directive-injection cases. The ignored integration fixtures are placeholders;
+they do not demonstrate application to a real host. Runtime application,
+rollback, firewall/SSH service reloads, and proxy WAF integration remain
+unimplemented and must stay marked **BLOCKED** until an adapter exists and its
+host-level integration and end-to-end behavior have been verified.
 
 ## Capability Ownership and Status
 
@@ -21,7 +50,8 @@ Firewall/SSH/WAF/CSP typed policies, validation and safe apply plans.
 ## Testing and Verification
 
 * All current partial capabilities (SEC-05, SEC-07, SEC-09, SEC-16) include unit tests covering type invariants and negative paths (e.g. invalid strings, insecure policies).
-* Integration and End-to-End verified states are pending follow-up task scheduling for real system integration.
+* Runtime application and host-level integration for SEC-05, SEC-07, and SEC-09 are **BLOCKED**: there is no executor/adapter, safe apply-and-rollback path, service reload, or proxy integration in this module.
+* Integration and End-to-End behavior remain **BLOCKED** until those adapters are implemented and verified against isolated test hosts. The ignored integration fixtures are placeholders, not passing integration evidence.
 
 ## Module Contracts
 

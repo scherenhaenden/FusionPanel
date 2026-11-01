@@ -23,16 +23,21 @@ pub struct WafConfig {
 pub enum WafError {
     #[error("No rule groups enabled, WAF would be ineffective")]
     NoRulesEnabled,
-    #[error("Rule group name '{0}' is invalid")]
-    InvalidRuleGroupName(String),
+    #[error("Rule group names may contain only ASCII letters, digits, '.', '_' and '-'")]
+    InvalidRuleGroupName,
 }
 
 impl WafConfig {
     pub fn validate(&self) -> Result<(), WafError> {
         let mut has_enabled = false;
         for group in &self.rule_groups {
-            if group.name.is_empty() || group.name.contains('\n') || group.name.contains('\r') {
-                return Err(WafError::InvalidRuleGroupName(group.name.clone()));
+            if group.name.is_empty()
+                || !group
+                    .name
+                    .chars()
+                    .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
+            {
+                return Err(WafError::InvalidRuleGroupName);
             }
             if group.enabled {
                 has_enabled = true;
@@ -72,7 +77,10 @@ mod tests {
     fn test_valid_waf_config() {
         let config = WafConfig {
             mode: WafMode::Prevention,
-            rule_groups: vec![WafRuleGroup { name: "OWASP_CRS".into(), enabled: true }],
+            rule_groups: vec![WafRuleGroup {
+                name: "OWASP_CRS".into(),
+                enabled: true,
+            }],
             custom_rules_enabled: false,
         };
         assert!(config.validate().is_ok());
@@ -82,7 +90,10 @@ mod tests {
     fn test_no_rules_enabled() {
         let config = WafConfig {
             mode: WafMode::Prevention,
-            rule_groups: vec![WafRuleGroup { name: "OWASP_CRS".into(), enabled: false }],
+            rule_groups: vec![WafRuleGroup {
+                name: "OWASP_CRS".into(),
+                enabled: false,
+            }],
             custom_rules_enabled: false,
         };
         assert!(matches!(config.validate(), Err(WafError::NoRulesEnabled)));
@@ -92,9 +103,43 @@ mod tests {
     fn test_invalid_rule_name() {
         let config = WafConfig {
             mode: WafMode::Prevention,
-            rule_groups: vec![WafRuleGroup { name: "invalid\nname".into(), enabled: true }],
+            rule_groups: vec![WafRuleGroup {
+                name: "invalid\nname".into(),
+                enabled: true,
+            }],
             custom_rules_enabled: false,
         };
-        assert!(matches!(config.validate(), Err(WafError::InvalidRuleGroupName(_))));
+        assert!(matches!(
+            config.validate(),
+            Err(WafError::InvalidRuleGroupName)
+        ));
+    }
+
+    #[test]
+    fn rejects_waf_group_directive_injection_and_separators() {
+        for name in [
+            "OWASP_CRS\nINCLUDE_CUSTOM_RULES=true",
+            "OWASP CRS",
+            "OWASP_CRS=INCLUDE_CUSTOM_RULES=true",
+            "OWASP_CRS;INCLUDE_CUSTOM_RULES=true",
+        ] {
+            let config = WafConfig {
+                mode: WafMode::Prevention,
+                rule_groups: vec![WafRuleGroup {
+                    name: name.into(),
+                    enabled: true,
+                }],
+                custom_rules_enabled: false,
+            };
+
+            assert!(matches!(
+                config.validate(),
+                Err(WafError::InvalidRuleGroupName)
+            ));
+            assert!(matches!(
+                config.generate_plan(),
+                Err(WafError::InvalidRuleGroupName)
+            ));
+        }
     }
 }

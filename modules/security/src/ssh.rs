@@ -37,6 +37,8 @@ pub enum SshError {
     RootLoginAllowed,
     #[error("Listen port must be greater than 0")]
     InvalidPort,
+    #[error("AllowUsers entries must be single safe OpenSSH user or user@host patterns")]
+    InvalidAllowUser,
 }
 
 impl SshHardeningConfig {
@@ -51,6 +53,14 @@ impl SshHardeningConfig {
 
         if self.listen_port == 0 {
             return Err(SshError::InvalidPort);
+        }
+
+        if self
+            .allow_users
+            .iter()
+            .any(|user| !is_safe_allow_user_pattern(user))
+        {
+            return Err(SshError::InvalidAllowUser);
         }
 
         Ok(())
@@ -70,8 +80,18 @@ impl SshHardeningConfig {
         };
         config.push_str(&format!("PermitRootLogin {}\n", prl_str));
 
-        config.push_str(&format!("PasswordAuthentication {}\n", if self.password_authentication { "yes" } else { "no" }));
-        config.push_str(&format!("X11Forwarding {}\n", if self.x11_forwarding { "yes" } else { "no" }));
+        config.push_str(&format!(
+            "PasswordAuthentication {}\n",
+            if self.password_authentication {
+                "yes"
+            } else {
+                "no"
+            }
+        ));
+        config.push_str(&format!(
+            "X11Forwarding {}\n",
+            if self.x11_forwarding { "yes" } else { "no" }
+        ));
 
         if !self.allow_users.is_empty() {
             config.push_str(&format!("AllowUsers {}\n", self.allow_users.join(" ")));
@@ -79,6 +99,33 @@ impl SshHardeningConfig {
 
         Ok(config)
     }
+}
+
+// Accept a conservative, whitespace-free subset of OpenSSH AllowUsers patterns.
+// A pattern is either a username pattern or a username@host pattern. Keeping
+// each value to one token prevents configuration directives from being injected.
+fn is_safe_allow_user_pattern(value: &str) -> bool {
+    if value.is_empty() {
+        return false;
+    }
+
+    let mut parts = value.split('@');
+    let user = parts.next().unwrap_or_default();
+    let host = parts.next();
+
+    if parts.next().is_some() || user.is_empty() || host.is_some_and(|host| host.is_empty()) {
+        return false;
+    }
+
+    let user_chars_are_safe = user
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | '*' | '?'));
+    let host_chars_are_safe = host.map_or(true, |host| {
+        host.chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | '*' | '?' | ':'))
+    });
+
+    user_chars_are_safe && host_chars_are_safe
 }
 
 #[cfg(test)]
@@ -100,7 +147,10 @@ mod tests {
             password_authentication: true,
             ..Default::default()
         };
-        assert!(matches!(config.validate(), Err(SshError::InsecurePasswordAuthentication)));
+        assert!(matches!(
+            config.validate(),
+            Err(SshError::InsecurePasswordAuthentication)
+        ));
     }
 
     #[test]
@@ -110,5 +160,39 @@ mod tests {
             ..Default::default()
         };
         assert!(matches!(config.validate(), Err(SshError::RootLoginAllowed)));
+    }
+
+    #[test]
+    fn rejects_allow_users_directive_injection() {
+        let config = SshHardeningConfig {
+            allow_users: vec!["alice\nPermitRootLogin yes".into()],
+            ..Default::default()
+        };
+
+        assert!(matches!(config.validate(), Err(SshError::InvalidAllowUser)));
+        assert!(matches!(
+            config.generate_sshd_config(),
+            Err(SshError::InvalidAllowUser)
+        ));
+    }
+
+    #[test]
+    fn rejects_allow_users_control_characters() {
+        for value in ["alice\tadmin", "alice\rPermitRootLogin yes"] {
+            let config = SshHardeningConfig {
+                allow_users: vec![value.into()],
+                ..Default::default()
+            };
+            assert!(matches!(config.validate(), Err(SshError::InvalidAllowUser)));
+        }
+    }
+
+    #[test]
+    fn accepts_safe_allow_users_patterns() {
+        let config = SshHardeningConfig {
+            allow_users: vec!["alice".into(), "deploy@10.0.0.*".into()],
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
     }
 }
