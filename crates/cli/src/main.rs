@@ -51,6 +51,8 @@ struct ErrorDetails {
 
 #[derive(thiserror::Error, Debug)]
 enum CliError {
+    #[error("Invalid command arguments: {0}")]
+    InvalidArguments(String),
     #[error("Missing token: FUSIONPANEL_TOKEN must be set for capabilities command")]
     MissingToken,
     #[error("Network or parse error: {0}")]
@@ -66,9 +68,10 @@ async fn run_cli(
 ) -> Result<(), CliError> {
     let cli = match Cli::try_parse_from(args) {
         Ok(c) => c,
+        Err(e) if e.use_stderr() => return Err(CliError::InvalidArguments(e.to_string())),
         Err(e) => {
             write!(output, "{}", e).unwrap();
-            return Ok(()); // clap handles help/version exiting
+            return Ok(()); // Help/version requests are successful, non-error exits.
         }
     };
 
@@ -153,6 +156,26 @@ mod tests {
 
     fn string_iter<'a>(args: &'a [&'a str]) -> impl Iterator<Item = String> + 'a {
         args.iter().map(|s| s.to_string())
+    }
+
+    #[tokio::test]
+    async fn test_invalid_arguments_are_errors() {
+        let mut out = Vec::new();
+        let result = run_cli(
+            string_iter(&["fusionpanel-cli", "unknown-command"]),
+            None,
+            &mut out,
+        )
+        .await;
+        assert!(matches!(result, Err(CliError::InvalidArguments(_))));
+    }
+
+    #[tokio::test]
+    async fn test_help_is_successful() {
+        let mut out = Vec::new();
+        let result = run_cli(string_iter(&["fusionpanel-cli", "--help"]), None, &mut out).await;
+        assert!(result.is_ok());
+        assert!(String::from_utf8(out).unwrap().contains("Usage:"));
     }
 
     #[tokio::test]
