@@ -14,6 +14,8 @@ This table links each observed implementation pull request to its primary packag
 | [#71](https://github.com/scherenhaenden/FusionPanel/pull/71) | [S15](sessions/S15.md) Host security controls | [#23](https://github.com/scherenhaenden/FusionPanel/issues/23) | Firewall, SSH, WAF and CSP policy module | Open at `7f95350b139a2745356b41ed649b282a0a2e7ad6`; GStraccini checks pass, Sourcery is pending, and recorded approval is on an older head. Offline tests: 21 passed, 6 ignored integration stubs; real host apply/E2E is blocked. | Keep open until current-head review/approval and runtime qualification are resolved |
 | [#72](https://github.com/scherenhaenden/FusionPanel/pull/72) | [S16](sessions/S16.md) Observability | [#22](https://github.com/scherenhaenden/FusionPanel/issues/22) | Metrics, alerts and incident primitives | Merged 2026-11-01 with regular merge commit `8b06ce49e0030ab96fb7848f842292ae053bc9e6` | Issue remains open for runtime integration and real alert E2E evidence |
 
+| [#81](https://github.com/scherenhaenden/FusionPanel/pull/81) | [S06](sessions/S06.md) Foundation integration coordination | [#6](https://github.com/scherenhaenden/FusionPanel/issues/6) | Documentation-only PR/issue traceability; does not implement workspace integration or CI | Open at `03b6dfd62ab9b56409e130f4e2c654917cf1fcc1`; doc checks and review pending | Keep #6 open; S06's code integration and runtime acceptance remain outstanding |
+
 ## Association rules
 
 - Keep the package issue link in every PR description and in this table.
@@ -24,4 +26,4 @@ This table links each observed implementation pull request to its primary packag
 
 ## Pending integration work
 
-Issue [#6](https://github.com/scherenhaenden/FusionPanel/issues/6) owns root workspace integration and CI for the foundation packages. It does not yet have an implementation PR. Do not dispatch dependent runtime packages as complete until their required foundation interfaces and real-process workflows are integrated and verified.
+Issue [#6](https://github.com/scherenhaenden/FusionPanel/issues/6) owns root workspace integration and CI for the foundation packages. It has documentation-only PR #81 for traceability; the S06 workspace integration implementation and CI PR remain pending. Do not dispatch dependent runtime packages as complete until their required foundation interfaces and real-process workflows are integrated and verified.
