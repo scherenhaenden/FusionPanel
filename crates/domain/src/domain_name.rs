@@ -33,10 +33,12 @@ impl DomainName {
 
         let name = name.to_ascii_lowercase();
 
-        // Ensure it doesn't parse as an IP address
-        if std::net::IpAddr::from_str(&name).is_ok() {
+        // Some URL parsers accept non-canonical IPv4 forms such as `127.1`
+        // and interpret them as loopback. Reject those forms before they can
+        // be stored as domain names.
+        if std::net::IpAddr::from_str(&name).is_ok() || is_ipv4_address_or_legacy_form(&name) {
             return Err(DomainError::InvalidDomainName(
-                "Domain name cannot be an IP literal".to_string(),
+                "Domain name cannot be an IP literal or alternate IPv4 form".to_string(),
             ));
         }
 
@@ -70,6 +72,49 @@ impl DomainName {
 
         Ok(name)
     }
+}
+
+/// Returns true when `host` is a valid WHATWG-style IPv4 address, including
+/// shortened, octal, and hexadecimal component forms.
+fn is_ipv4_address_or_legacy_form(host: &str) -> bool {
+    let parts: Vec<&str> = host.split('.').collect();
+    if parts.is_empty() || parts.len() > 4 {
+        return false;
+    }
+
+    let numbers: Option<Vec<u64>> = parts.iter().map(|part| parse_ipv4_number(part)).collect();
+    let Some(numbers) = numbers else {
+        return false;
+    };
+
+    if numbers[..numbers.len() - 1].iter().any(|part| *part > 255) {
+        return false;
+    }
+
+    let remaining_bytes = 5 - numbers.len();
+    let max_last_part = (1_u64 << (remaining_bytes * 8)) - 1;
+    numbers[numbers.len() - 1] <= max_last_part
+}
+
+/// Parses one IPv4 component using decimal, octal, or hexadecimal notation.
+fn parse_ipv4_number(part: &str) -> Option<u64> {
+    if part.is_empty() {
+        return None;
+    }
+
+    if let Some(hex) = part.strip_prefix("0x") {
+        return if hex.is_empty() {
+            Some(0)
+        } else {
+            u64::from_str_radix(hex, 16).ok()
+        };
+    }
+
+    if part.len() > 1 && part.starts_with('0') {
+        return u64::from_str_radix(&part[1..], 8).ok();
+    }
+
+    part.parse().ok()
 }
 
 impl TryFrom<String> for DomainName {
@@ -146,6 +191,15 @@ mod tests {
         // IP Literals
         assert!(DomainName::try_from("192.168.1.1").is_err());
         assert!(DomainName::try_from("127.0.0.1").is_err());
+
+        // Alternate IPv4 spellings accepted by common URL parsers must not
+        // pass as DNS names.
+        for alternate_ip in ["127.1", "127.0.1", "2130706433", "0x7f.1", "0177.1"] {
+            assert!(
+                DomainName::try_from(alternate_ip).is_err(),
+                "accepted alternate IPv4 form: {alternate_ip}"
+            );
+        }
 
         // invalid chars
         assert!(DomainName::try_from("example!.com").is_err());
