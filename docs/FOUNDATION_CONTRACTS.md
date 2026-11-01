@@ -4,7 +4,7 @@ All packages in this batch are independent. Do not depend on unfinished sibling 
 
 ## HTTP contract
 
-Bind to `127.0.0.1:8080` by default; configure using `FUSIONPANEL_LISTEN`. The executable is `fusionpanel-api`. Require nonempty `FUSIONPANEL_ADMIN_TOKEN` at startup. Public `GET /v1/health` returns HTTP 200 JSON `{"status":"ok","service":"fusionpanel-api","version":"<workspace package version>"}`. Authenticated `GET /v1/capabilities` requires `Authorization: Bearer <token>` and returns `{"capabilities":["control-plane.health.read","control-plane.capabilities.read"]}`. Invalid/missing authentication returns 401 JSON `{"error":{"code":"unauthorized","message":"Authentication required"}}`. Unknown routes return JSON error code `not_found`, HTTP 404. These endpoints do not claim hosting support. Tokens never appear in logs or response bodies. No CORS wildcard. Graceful shutdown on Ctrl-C.
+Bind to `127.0.0.1:8080` by default; configure using `FUSIONPANEL_LISTEN`. The executable is `fusionpanel-api`. Require nonempty `FUSIONPANEL_ADMIN_TOKEN` at startup. Public `GET /v1/health` returns HTTP 200 JSON `{"status":"ok","service":"fusionpanel-api","version":"0.1.0"}`. Authenticated `GET /v1/capabilities` requires `Authorization: Bearer <token>` and returns `{"capabilities":["control-plane.health.read","control-plane.capabilities.read"]}`. Invalid/missing authentication returns 401 JSON `{"error":{"code":"unauthorized","message":"Authentication required"}}`. Unknown routes return JSON error code `not_found`, HTTP 404. These endpoints do not claim hosting support. Tokens never appear in logs or response bodies. No CORS wildcard. Graceful shutdown on Ctrl-C.
 
 ## Domain contract
 

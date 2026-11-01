@@ -1,6 +1,6 @@
 # Migration and Adoption
 
-CloudPanel import is a product requirement and the initial initial deployment adoption path. Define versioned source adapters, a canonical import representation, a dry-run planner and target-node jobs that use normal provisioning/restore services.
+CloudPanel import is a product requirement and the initial Rockatuestilo adoption path. Define versioned source adapters, a canonical import representation, a dry-run planner and target-node jobs that use normal provisioning/restore services.
 
 Inventory source OS/panel version, domains, runtime types, files, databases/users/grants, aliases, TLS, cron, ownership, SSH access, DNS/mail dependencies, backup destinations and resource capacity. Store sensitive data outside this repository.
 

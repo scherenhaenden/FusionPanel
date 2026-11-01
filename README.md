@@ -4,7 +4,7 @@ A self-hosted server and hosting control panel for managing websites, containers
 
 ## Status
 
-**Open-source software, licensed under AGPL-3.0-only. Active early development.** The initial milestone establishes the Rust foundation; production hosting features are planned and must not be advertised as available before acceptance testing.
+Private development repository. The initial milestone establishes the Rust foundation; production hosting features are planned and must not be advertised as available before acceptance testing.
 
 ## Product principles
 
@@ -20,11 +20,6 @@ The Rust workspace contains five independently scoped foundation packages. See [
 
 ## Documentation
 
-- [Delivery plan and 63-session table](docs/execution/DELIVERY_PLAN.md)
-- [Capability ownership and evidence ledger](docs/execution/CAPABILITY_LEDGER.md)
-- [Feature preservation](docs/engineering/FEATURE_PRESERVATION.md)
-- [Selectable modes](docs/engineering/VARIANT_DESIGN.md)
-- [Real-system test strategy](docs/testing/TEST_STRATEGY.md)
 - [Project charter](PROJECT_CHARTER.md)
 - [Capability catalog](CAPABILITY_CATALOG.md)
 - [Architecture](ARCHITECTURE.md)
