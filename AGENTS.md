@@ -13,3 +13,5 @@ The canonical branch is master. Read docs/execution/DELIVERY_PLAN.md and your ta
 ## Merge and issue policy
 
 Merge approved pull requests with a regular merge commit; preserve their reviewed commit history and never squash. Before merging, refresh the exact PR head, approvals, required checks and master mergeability; use a head-SHA guard. Do not bypass blocked review/version checks or use administrator override. Close an issue only after verifying its linked PR is MERGED on master and recording the merge SHA, user-visible changes, actual unit/integration/E2E commands and results, and remaining limitations in the issue. If no merge occurred, the issue stays open.
+
+Every PR must link its primary package issue from the [PR and issue tracker](docs/execution/PR_ISSUE_TRACKER.md). Use `Fixes #N` only when the PR satisfies that issue's full acceptance criteria and the issue should close after merge; use `Refs #N` for partial implementations, blocked qualification or follow-up work.
