@@ -26,7 +26,12 @@ pub enum CspError {
 impl CspPolicy {
     pub fn validate(&self) -> Result<(), CspError> {
         for directive in &self.directives {
-            if directive.name.is_empty() || !directive.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            if directive.name.is_empty()
+                || !directive
+                    .name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-')
+            {
                 return Err(CspError::InvalidDirectiveName(directive.name.clone()));
             }
 
@@ -35,20 +40,30 @@ impl CspPolicy {
 
             for value in &directive.values {
                 if value.contains('\n') || value.contains('\r') || value.contains(';') {
-                    return Err(CspError::InvalidCharacters(value.clone(), directive.name.clone()));
+                    return Err(CspError::InvalidCharacters(
+                        value.clone(),
+                        directive.name.clone(),
+                    ));
                 }
 
                 if value == "'unsafe-inline'" {
                     has_unsafe_inline = true;
                 }
 
-                if value.starts_with("'nonce-") || value.starts_with("'sha256-") || value.starts_with("'sha384-") || value.starts_with("'sha512-") {
+                if value.starts_with("'nonce-")
+                    || value.starts_with("'sha256-")
+                    || value.starts_with("'sha384-")
+                    || value.starts_with("'sha512-")
+                {
                     has_nonce_or_hash = true;
                 }
             }
 
             if has_unsafe_inline && !has_nonce_or_hash {
-                return Err(CspError::UnsafeInline("'unsafe-inline'".into(), directive.name.clone()));
+                return Err(CspError::UnsafeInline(
+                    "'unsafe-inline'".into(),
+                    directive.name.clone(),
+                ));
             }
         }
 
@@ -91,43 +106,43 @@ mod tests {
     #[test]
     fn test_valid_csp() {
         let policy = CspPolicy {
-            directives: vec![
-                CspDirective {
-                    name: "default-src".into(),
-                    values: vec!["'self'".into()],
-                }
-            ],
+            directives: vec![CspDirective {
+                name: "default-src".into(),
+                values: vec!["'self'".into()],
+            }],
             report_only: false,
             report_uri: None,
         };
         assert!(policy.validate().is_ok());
-        assert_eq!(policy.generate_header_value().unwrap(), "default-src 'self'");
+        assert_eq!(
+            policy.generate_header_value().unwrap(),
+            "default-src 'self'"
+        );
     }
 
     #[test]
     fn test_unsafe_inline() {
         let policy = CspPolicy {
-            directives: vec![
-                CspDirective {
-                    name: "script-src".into(),
-                    values: vec!["'unsafe-inline'".into()],
-                }
-            ],
+            directives: vec![CspDirective {
+                name: "script-src".into(),
+                values: vec!["'unsafe-inline'".into()],
+            }],
             report_only: false,
             report_uri: None,
         };
-        assert!(matches!(policy.validate(), Err(CspError::UnsafeInline(_, _))));
+        assert!(matches!(
+            policy.validate(),
+            Err(CspError::UnsafeInline(_, _))
+        ));
     }
 
     #[test]
     fn test_unsafe_inline_mitigated() {
         let policy = CspPolicy {
-            directives: vec![
-                CspDirective {
-                    name: "script-src".into(),
-                    values: vec!["'unsafe-inline'".into(), "'nonce-123'".into()],
-                }
-            ],
+            directives: vec![CspDirective {
+                name: "script-src".into(),
+                values: vec!["'unsafe-inline'".into(), "'nonce-123'".into()],
+            }],
             report_only: false,
             report_uri: None,
         };
@@ -137,15 +152,16 @@ mod tests {
     #[test]
     fn test_invalid_chars() {
         let policy = CspPolicy {
-            directives: vec![
-                CspDirective {
-                    name: "default-src".into(),
-                    values: vec!["'self'; attack".into()],
-                }
-            ],
+            directives: vec![CspDirective {
+                name: "default-src".into(),
+                values: vec!["'self'; attack".into()],
+            }],
             report_only: false,
             report_uri: None,
         };
-        assert!(matches!(policy.validate(), Err(CspError::InvalidCharacters(_, _))));
+        assert!(matches!(
+            policy.validate(),
+            Err(CspError::InvalidCharacters(_, _))
+        ));
     }
 }

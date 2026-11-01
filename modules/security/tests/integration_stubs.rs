@@ -17,7 +17,9 @@ fn test_waf_integration_blocked() {
 #[test]
 #[ignore = "BLOCKED: Missing namespace/cgroup sandbox setup and runner wrapper (SEC-11)"]
 fn test_safe_command_execution_blocked() {
-    unimplemented!("Execute a malicious command (e.g., escaping the sandbox) and ensure it fails safely.");
+    unimplemented!(
+        "Execute a malicious command (e.g., escaping the sandbox) and ensure it fails safely."
+    );
 }
 
 #[test]
