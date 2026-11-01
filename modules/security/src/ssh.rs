@@ -88,6 +88,10 @@ impl SshHardeningConfig {
                 "no"
             }
         ));
+        // Keyboard-interactive authentication can still prompt for a password
+        // even when PasswordAuthentication is disabled. Keep both password
+        // based SSH methods off for this hardening profile.
+        config.push_str("KbdInteractiveAuthentication no\n");
         config.push_str(&format!(
             "X11Forwarding {}\n",
             if self.x11_forwarding { "yes" } else { "no" }
@@ -139,6 +143,7 @@ mod tests {
         let generated = config.generate_sshd_config().unwrap();
         assert!(generated.contains("PermitRootLogin no"));
         assert!(generated.contains("PasswordAuthentication no"));
+        assert!(generated.contains("KbdInteractiveAuthentication no"));
     }
 
     #[test]
