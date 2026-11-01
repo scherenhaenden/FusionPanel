@@ -9,6 +9,6 @@
 *.sqlite3
 *.pem
 *.key
-
 __pycache__/
 *.py[cod]
+modules/migration/target/
