@@ -1,10 +1,12 @@
-# Roadmap
+# Roadmap Through 11 November 2026
 
-1. Foundation: domain model, API, node protocol, durable jobs and CLI; integrate and establish CI.
-2. Hosting/data: sites, runtimes, TLS, files, cron, database operations, WordPress and verified backup/restore.
-3. Containers/delivery: Docker/Compose, application catalog, images, builds, Git/webhooks, previews and release recovery.
-4. Operations: DNS/DNSSEC, hosted email, observability/incidents, security, reseller/branding, plans and reports.
-5. Coverage closure: remaining capability entries, multi-node operations, installation/update/recovery and migration qualification.
-6. Adoption: representative Rockatuestilo acceptance, timed cutover and independent rollback before production authorization.
+The authoritative schedule is the [63-session delivery plan](docs/execution/DELIVERY_PLAN.md), with a [162-capability evidence ledger](docs/execution/CAPABILITY_LEDGER.md) and [per-session specifications](docs/execution/sessions.json).
 
-Each stage requires measured behavior and tests. No dates or production-readiness guarantees are committed. The first five programming tasks are documented in [INITIAL_TASKS.md](docs/INITIAL_TASKS.md).
+- Nov 1–3: foundation and independently testable modules, UI and real-service laboratory.
+- Nov 4–6: authenticated node/runtime integration and actual hosting/data/container/DNS/mail workflows.
+- Nov 7–8: real-process, real-service, browser and full-OS end-to-end/failure testing.
+- Nov 9: capability/mode closure, performance and explicit gap correction.
+- Nov 10: integrated release candidate, clean install and independent restore; target complete recoverable artifacts by 18:00 Europe/Berlin.
+- Nov 11: correction reserve and final handoff before provider access ends.
+
+This is a capacity- and dependency-constrained target. The calendar cannot substitute for acceptance evidence. No production cutover is authorized by this roadmap. Full scope and useful user workflow variants must remain visible through staged delivery; unresolved work must be reported explicitly.
