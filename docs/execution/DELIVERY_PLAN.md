@@ -6,6 +6,8 @@ Use Jules through 11 November 2026 to implement and qualify FusionPanel's combin
 
 The planning baseline is 63 reviewable work packages. Some may require more than one bounded Jules session if observed complexity or failures exceed the prompt scope. Every such split retains the original capability owner and acceptance requirements. Dates are target gates, not evidence of completion.
 
+Track every implementation PR against its package issue in the [PR and issue tracker](PR_ISSUE_TRACKER.md). That tracker records merged SHAs and qualification gaps; it does not replace the 162-capability evidence ledger.
+
 ## Coordination model
 
 The coordinator owns architecture, feature preservation, interfaces, task specifications, dependencies, issue/session traceability, review and integration proposals. Jules sessions implement bounded code and tests. Only dispatch a dependent task after its prerequisite artifacts are reviewed and available on its explicit base branch/SHA. Sessions never merge their own PRs. Integration merges remain pending explicit owner authorization under current project policy; without them, dependent sessions are blocked rather than pointed at absent code.
