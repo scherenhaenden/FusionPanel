@@ -1,6 +1,9 @@
 #![forbid(unsafe_code)]
 
-//! Foundation implementation pending assigned work package.
+//! Versioned node operation envelopes and lexical input validation.
+//!
+//! Runtime agents must still enforce filesystem ownership and symlink-safe access.
+//! Lexical document-root validation does not establish filesystem containment.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -91,13 +94,9 @@ impl Request {
 
 impl SiteValidatePayload {
     pub fn validate(&self) -> Result<(), ValidationError> {
-        // Validate domain
-        if self.domain.is_empty()
-            || self.domain.contains('\0')
-            || self.domain.contains('/')
-            || self.domain.contains('\\')
-            || self.domain.contains("..")
-        {
+        // Validate an ASCII DNS name rather than just excluding path separators.
+        // Unicode/IDNA must be handled explicitly before constructing this protocol.
+        if !valid_domain(&self.domain) {
             return Err(ValidationError::InvalidDomain);
         }
 
@@ -112,6 +111,26 @@ impl SiteValidatePayload {
 
         Ok(())
     }
+}
+
+fn valid_domain(domain: &str) -> bool {
+    if domain.is_empty()
+        || domain.len() > 253
+        || !domain.is_ascii()
+        || domain.parse::<std::net::IpAddr>().is_ok()
+    {
+        return false;
+    }
+
+    domain.split('.').all(|label| {
+        !label.is_empty()
+            && label.len() <= 63
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && label
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    })
 }
 
 #[cfg(test)]
@@ -173,6 +192,27 @@ mod tests {
     }
 
     #[test]
+    fn test_unknown_payload_fields_are_rejected() {
+        for value in [
+            json!({"version": 1, "request_id": Uuid::nil(), "operation": "system.info", "payload": {"extra": true}}),
+            json!({"version": 1, "request_id": Uuid::nil(), "operation": "site.validate", "payload": {"domain": "example.com", "document_root": "/srv/fusionpanel/sites/example.com", "extra": true}}),
+        ] {
+            assert!(serde_json::from_value::<Request>(value).is_err());
+        }
+    }
+
+    #[test]
+    fn test_unknown_response_and_error_fields_are_rejected() {
+        for value in [
+            json!({"version": 1, "request_id": Uuid::nil(), "result": {}, "extra": true}),
+            json!({"version": 1, "request_id": Uuid::nil(), "error": {"code": "invalid", "message": "bad", "extra": true}}),
+            json!({"version": 1, "request_id": Uuid::nil()}),
+        ] {
+            assert!(serde_json::from_value::<Response>(value).is_err());
+        }
+    }
+
+    #[test]
     fn test_unknown_operation_rejected() {
         let req_json = json!({
             "version": 1,
@@ -207,6 +247,77 @@ mod tests {
             document_root: "/srv/fusionpanel/sites/example.com".to_string(),
         };
         assert_eq!(p.validate(), Err(ValidationError::InvalidDomain));
+    }
+
+    #[test]
+    fn test_dns_validation_rejects_malformed_names() {
+        let overlong_label = format!("{}.example", "a".repeat(64));
+        let overlong_name = format!(
+            "{}.{}.{}.{}",
+            "a".repeat(63),
+            "b".repeat(63),
+            "c".repeat(63),
+            "d".repeat(63)
+        );
+        for domain in [
+            "",
+            "invalid domain.example",
+            "-bad.example",
+            "bad-.example",
+            "bad_.example",
+            "éxample.com",
+            "127.0.0.1",
+            "::1",
+            "example.com\nother",
+            "example.com\r",
+            "example.com\t",
+            ".example.com",
+            "example.com.",
+            "example..com",
+            "example/com",
+            "example\\com",
+            "example\0com",
+            "example;include.conf",
+            overlong_label.as_str(),
+            overlong_name.as_str(),
+        ] {
+            let payload = SiteValidatePayload {
+                domain: domain.to_string(),
+                document_root: "/srv/fusionpanel/sites/example.com".to_string(),
+            };
+            assert_eq!(
+                payload.validate(),
+                Err(ValidationError::InvalidDomain),
+                "accepted {domain:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_dns_validation_preserves_valid_names_and_label_boundaries() {
+        let max_label = format!("{}.example", "a".repeat(63));
+        let max_name = format!(
+            "{}.{}.{}.{}",
+            "a".repeat(63),
+            "b".repeat(63),
+            "c".repeat(63),
+            "d".repeat(61)
+        );
+        assert_eq!(max_name.len(), 253);
+        for domain in [
+            "example.com",
+            "Sub.Example.COM",
+            "my-site.example",
+            "123.example",
+            max_label.as_str(),
+            max_name.as_str(),
+        ] {
+            let payload = SiteValidatePayload {
+                domain: domain.to_string(),
+                document_root: "/srv/fusionpanel/sites/example.com".to_string(),
+            };
+            assert_eq!(payload.validate(), Ok(()), "rejected {domain:?}");
+        }
     }
 
     #[test]
