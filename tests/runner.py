@@ -117,7 +117,10 @@ def capture_fixture_metadata(project):
         return {"metadata_capture": "blocked", "reason": "Docker CLI is not installed"}
 
     compose_file = Path(__file__).resolve().parent / "fixtures" / "docker-compose.yml"
-    prefix = [docker, "compose", "-p", project, "-f", str(compose_file)]
+    credential_file = Path(tempfile.gettempdir()) / "fusionpanel-test-fixture-secrets" / f"{project}.env"
+    if credential_file.is_symlink() or not credential_file.is_file():
+        return {"metadata_capture": "blocked", "reason": "Generated fixture credentials are unavailable"}
+    prefix = [docker, "compose", "-p", project, "--env-file", str(credential_file), "-f", str(compose_file)]
     try:
         config = subprocess.run(
             [*prefix, "config", "--format", "json"],
@@ -146,6 +149,8 @@ def capture_fixture_metadata(project):
             "compose_version": compose_version.stdout.strip() if compose_version.returncode == 0 else None,
             "docker_engine_version": engine_version.stdout.strip() if engine_version.returncode == 0 else None,
             "images": {name: service.get("image") for name, service in sorted(services.items())},
+            "setup_command": ["python3", "tests/fixtures/compose.py", "up", "--project", project],
+            "cleanup_command": ["python3", "tests/fixtures/compose.py", "down", "--project", project],
         }
     except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
         return {"metadata_capture": "blocked", "reason": "Docker fixture metadata could not be captured"}

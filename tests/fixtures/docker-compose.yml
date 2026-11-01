@@ -3,7 +3,7 @@ services:
     image: postgres:15-alpine@sha256:54e0dd8e8cddcdbb9156c2486eed5a43eccb7214d7c6828097d41ce049fb3984
     environment:
       POSTGRES_USER: fp_user
-      POSTGRES_PASSWORD: fp_password
+      POSTGRES_PASSWORD: ${FP_TEST_POSTGRES_PASSWORD:?Run tests/fixtures/compose.py up to create disposable credentials}
       POSTGRES_DB: fp_db
     ports:
       - "127.0.0.1:${FP_TEST_POSTGRES_PORT:-}:5432"
@@ -16,9 +16,9 @@ services:
   mariadb:
     image: mariadb:10.11@sha256:d769e37960821dfdcf096954f6e7ac89f747e116c1bba98e48edd265dfc7deae
     environment:
-      MYSQL_ROOT_PASSWORD: fp_root_password
+      MYSQL_ROOT_PASSWORD: ${FP_TEST_MARIADB_ROOT_PASSWORD:?Run tests/fixtures/compose.py up to create disposable credentials}
       MYSQL_USER: fp_user
-      MYSQL_PASSWORD: fp_password
+      MYSQL_PASSWORD: ${FP_TEST_MARIADB_PASSWORD:?Run tests/fixtures/compose.py up to create disposable credentials}
       MYSQL_DATABASE: fp_db
     ports:
       - "127.0.0.1:${FP_TEST_MARIADB_PORT:-}:3306"
@@ -45,7 +45,7 @@ services:
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: fp_admin
-      MINIO_ROOT_PASSWORD: fp_admin_password
+      MINIO_ROOT_PASSWORD: ${FP_TEST_MINIO_PASSWORD:?Run tests/fixtures/compose.py up to create disposable credentials}
     ports:
       - "127.0.0.1:${FP_TEST_MINIO_PORT:-}:9000"
       - "127.0.0.1:${FP_TEST_MINIO_CONSOLE_PORT:-}:9001"

@@ -31,12 +31,13 @@ For host mutation tests (like systemd, firewall, OS quotas), a separate disposab
 
 ## Fixtures
 
-Bounded Docker Compose fixtures for actual PostgreSQL, MariaDB, Nginx, and object-store (MinIO) dependencies are provided in `tests/fixtures/docker-compose.yml`. The MinIO fixture uses the CoollabsIO GHCR build from upstream MinIO releases because upstream no longer publishes pullable images from Docker Hub or Quay. This image is for disposable integration testing only; it is not a production image recommendation.
+Bounded Docker Compose fixtures for actual PostgreSQL, MariaDB, Nginx, and object-store (MinIO) dependencies are provided in `tests/fixtures/docker-compose.yml`. The MinIO fixture uses the CoollabsIO GHCR build from upstream MinIO releases because upstream no longer publishes pullable images from Docker Hub or Quay. This image is for disposable integration testing only; it is not a production image recommendation. `compose.py` generates random database and object-store passwords in a mode-0600 environment file under the system temporary directory. It never prints the credentials or puts them in command arguments, and the generated file is removed by the teardown command.
 
 To bring them up for integration testing:
 ```bash
-docker compose -p fusionpanel-test -f tests/fixtures/docker-compose.yml up -d
-python3 tests/runner.py --suite integration
+python3 tests/fixtures/compose.py up --project fusionpanel-test
+FP_TEST_COMPOSE_PROJECT=fusionpanel-test python3 tests/runner.py --suite integration
+python3 tests/fixtures/compose.py down --project fusionpanel-test
 ```
 
-Service ports bind to loopback only and Compose assigns ephemeral host ports by default; the integration suite resolves those mappings from the isolated `fusionpanel-test` project. Set `FP_TEST_*_PORT` variables before both commands only when fixed host ports are required. The suite verifies a fixture-specific Nginx response and runs identity queries against the actual PostgreSQL and MariaDB services, so an unrelated host service cannot satisfy those checks. Stop the fixtures with `docker compose -p fusionpanel-test -f tests/fixtures/docker-compose.yml down`; do not use `--volumes` unless you intend to remove test data.
+Service ports bind to loopback only and Compose assigns ephemeral host ports by default; the integration suite resolves those mappings from the isolated `fusionpanel-test` project. Set `FP_TEST_*_PORT` variables before setup and test commands only when fixed host ports are required. The suite verifies a fixture-specific Nginx response and runs identity queries against the actual PostgreSQL and MariaDB services, so an unrelated host service cannot satisfy those checks. Teardown removes only the named disposable Compose project and its volumes, then deletes its generated credential file.

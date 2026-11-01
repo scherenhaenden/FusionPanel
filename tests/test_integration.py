@@ -2,6 +2,7 @@ import os
 import shutil
 import socket
 import subprocess
+import tempfile
 import unittest
 import urllib.error
 import urllib.request
@@ -10,15 +11,18 @@ from runner import poll_readiness
 
 COMPOSE_FILE = Path(__file__).resolve().parent / "fixtures" / "docker-compose.yml"
 COMPOSE_PROJECT = os.environ.get("FP_TEST_COMPOSE_PROJECT", "fusionpanel-test")
+FIXTURE_ENV_FILE = Path(tempfile.gettempdir()) / "fusionpanel-test-fixture-secrets" / f"{COMPOSE_PROJECT}.env"
 
 
 def _compose(*args, timeout=15):
     docker = shutil.which("docker")
     if not docker:
         raise Exception("BLOCKED_BY: Docker CLI is not installed")
+    if FIXTURE_ENV_FILE.is_symlink() or not FIXTURE_ENV_FILE.is_file():
+        raise Exception("BLOCKED_BY: generated fixture credentials are missing; run tests/fixtures/compose.py up")
     try:
         return subprocess.run(
-            [docker, "compose", "-p", COMPOSE_PROJECT, "-f", str(COMPOSE_FILE), *args],
+            [docker, "compose", "-p", COMPOSE_PROJECT, "--env-file", str(FIXTURE_ENV_FILE), "-f", str(COMPOSE_FILE), *args],
             capture_output=True,
             text=True,
             timeout=timeout,
