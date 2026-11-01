@@ -6,7 +6,25 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnssecStatus {
     pub enabled: bool,
-    pub keys: Vec<String>, // Public keys or DS records for the domain
+    pub key_material: Vec<DnssecKeyMaterial>,
+}
+
+/// Public DNSSEC material, with the wire-record type and text encoding explicit.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DnssecKeyMaterial {
+    Dnskey {
+        flags: u16,
+        protocol: u8,
+        algorithm: u8,
+        public_key_base64: String,
+    },
+    Ds {
+        key_tag: u16,
+        algorithm: u8,
+        digest_type: u8,
+        digest_hex: String,
+    },
 }
 
 #[derive(Debug, Error)]
