@@ -1,6 +1,11 @@
+#[path = "common/blocked_driver.rs"]
+mod blocked_driver;
+
 #[test]
-#[ignore = "BLOCKED: Two real local service identities with signed transport fixtures. Missing actual dependencies in disposable fixtures."]
-fn test_integration_flow() {
-    // We cannot run real service identities test yet without the transport fixtures.
-    // Record it as BLOCKED as per instructions.
+fn two_local_node_identities_use_signed_transport() {
+    blocked_driver::run(
+        "FUSIONPANEL_NODES_INTEGRATION_DRIVER",
+        "two-identities-signed-transport",
+        "two disposable local service identities, the signed node transport, and an executable fixture driver",
+    );
 }

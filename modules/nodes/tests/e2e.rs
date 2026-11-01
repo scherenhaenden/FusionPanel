@@ -1,7 +1,11 @@
+#[path = "common/blocked_driver.rs"]
+mod blocked_driver;
+
 #[test]
-#[ignore = "BLOCKED: Enrol two disposable nodes, revoke one and reject its further requests. Missing runtime prerequisites (node agent, API server)."]
-fn test_e2e_enroll_revoke() {
-    // E2E test requires enrolling two disposable nodes, revoking one, and rejecting its further requests.
-    // However, real runtime prerequisites (e.g., node agent and real backend) are not available yet.
-    // Record it as BLOCKED.
+fn enroll_two_nodes_revoke_one_and_reject_its_requests() {
+    blocked_driver::run(
+        "FUSIONPANEL_NODES_E2E_DRIVER",
+        "enroll-two-revoke-one-reject-requests",
+        "the integrated API and node agent, two disposable nodes, signed requests, and an executable E2E fixture driver",
+    );
 }
