@@ -88,8 +88,8 @@ have been verified.
 
 ## Verification Evidence
 
-Recorded run: 2026-11-01 16:34 Europe/Berlin, working tree based on
-`21092d00b05b8985f178e23b503580952298efaa`, Linux x86_64 host,
+Recorded run: 2026-11-01 16:37 Europe/Berlin, package source at
+`f3f0581f31d23984a6e335ea28c96d3cd33fee58`, Linux x86_64 host,
 `rustc 1.99.1 (58cf8f9c3 2026-10-13)`, and
 `cargo 1.99.1 (5f94df478 2026-08-27)`.
 
