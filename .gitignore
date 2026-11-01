@@ -10,3 +10,5 @@
 *.pem
 *.key
 modules/migration/target/
+__pycache__/
+*.py[cod]
