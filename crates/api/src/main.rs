@@ -56,7 +56,7 @@ async fn health_handler() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
         service: "fusionpanel-api",
-        version: "0.1.0",
+        version: env!("CARGO_PKG_VERSION"),
     })
 }
 
@@ -206,7 +206,7 @@ mod tests {
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert_eq!(
             body_str,
-            r#"{"status":"ok","service":"fusionpanel-api","version":"0.1.0"}"#
+            format!(r#"{{"status":"ok","service":"fusionpanel-api","version":"{}"}}"#, env!("CARGO_PKG_VERSION"))
         );
     }
 
