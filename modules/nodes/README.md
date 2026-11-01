@@ -70,6 +70,7 @@ Without those drivers, the respective test exits non-zero with `RESULT=BLOCKED` 
 - No node agent, authenticated transport, master/worker API, UI, or CLI is implemented here.
 - Placement and movement calls return decisions/plans only; they do not reserve capacity, copy data, switch traffic, or clean up resources.
 - Copying sites between nodes is not implemented.
+- Enrollment and revocation do not implement idempotent replay or operation-ID semantics. Defining request IDs, exact-replay behavior, conflict handling, and reconciliation is deferred to [S34 multi-node runtime, issue #37](https://github.com/scherenhaenden/FusionPanel/issues/37) before RPC integration; this S21 package makes no idempotency claim.
 
 ## Proposed shared changes
 
