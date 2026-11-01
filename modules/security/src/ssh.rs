@@ -124,7 +124,7 @@ fn is_safe_allow_user_pattern(value: &str) -> bool {
     let user_chars_are_safe = user
         .chars()
         .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | '*' | '?'));
-    let host_chars_are_safe = host.map_or(true, |host| {
+    let host_chars_are_safe = host.is_none_or(|host| {
         host.chars()
             .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | '*' | '?' | ':'))
     });
