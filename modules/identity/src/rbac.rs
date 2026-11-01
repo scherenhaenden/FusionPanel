@@ -105,8 +105,13 @@ impl FromStr for Permission {
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum Scope {
     Global,
-    Tenant { tenant_id: TenantId },
-    Site { tenant_id: TenantId, site_id: SiteId },
+    Tenant {
+        tenant_id: TenantId,
+    },
+    Site {
+        tenant_id: TenantId,
+        site_id: SiteId,
+    },
 }
 
 impl Scope {
@@ -258,7 +263,9 @@ impl AccessControl {
         requested_scope: &Scope,
     ) -> Result<(), IdentityError> {
         for binding in bindings {
-            if binding.scope.matches(requested_scope) && binding.role.permissions.contains(&permission) {
+            if binding.scope.matches(requested_scope)
+                && binding.role.permissions.contains(&permission)
+            {
                 return Ok(());
             }
         }

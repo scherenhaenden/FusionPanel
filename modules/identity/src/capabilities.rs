@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::error::IdentityError;
+use serde::{Deserialize, Serialize};
 
 /// Capability Status for S08 owned security capabilities:
 /// - SEC-01: TOTP two-factor authentication
@@ -71,7 +71,9 @@ pub struct TotpService;
 impl TotpService {
     pub fn setup_totp(_user_id: &str) -> Result<(), IdentityError> {
         Err(IdentityError::Unsupported {
-            capability: "SEC-01: TOTP two-factor authentication is blocked pending S25 API integration".to_string(),
+            capability:
+                "SEC-01: TOTP two-factor authentication is blocked pending S25 API integration"
+                    .to_string(),
         })
     }
 }
@@ -81,7 +83,8 @@ pub struct WebAuthnService;
 impl WebAuthnService {
     pub fn register_passkey(_user_id: &str) -> Result<(), IdentityError> {
         Err(IdentityError::Unsupported {
-            capability: "SEC-02: Passkeys and WebAuthn is blocked pending S17/S25 integration".to_string(),
+            capability: "SEC-02: Passkeys and WebAuthn is blocked pending S17/S25 integration"
+                .to_string(),
         })
     }
 }
