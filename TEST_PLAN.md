@@ -17,7 +17,3 @@ Each session owns tests within its allowed package. Integration owns the root Ca
 Every committed capability requires successful normal, permission-denied and relevant failure journeys. Cover real site provisioning, database integrity, TLS renewal, scheduled jobs, deployments, container volumes, mail send/receive, DNS changes, alert delivery, backup restoration and node failure recovery as modules become available.
 
 Disposable full OS VMs are required for host integration, quotas, firewall, systemd, installation and reboot testing. Container smoke results alone do not certify those behaviors. No existing FusionPanel implementation test results are claimed by this initial scaffold.
-
-## Required detailed strategy
-
-[TEST_STRATEGY.md](docs/testing/TEST_STRATEGY.md) defines unit, actual-dependency integration, browser/process E2E, VM and external qualification tiers. [DELIVERY_PLAN.md](docs/execution/DELIVERY_PLAN.md) assigns test sessions and gates; [CAPABILITY_LEDGER.md](docs/execution/CAPABILITY_LEDGER.md) records individual capability evidence. Missing prerequisites never count as passing tests.

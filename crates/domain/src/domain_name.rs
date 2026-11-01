@@ -1,7 +1,7 @@
-use crate::error::DomainError;
-use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
+use serde::{Deserialize, Serialize};
+use crate::error::DomainError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -12,109 +12,70 @@ impl DomainName {
         &self.0
     }
 
+    fn is_alternate_ipv4(name: &str) -> bool {
+        let labels: Vec<&str> = name.split('.').collect();
+        if labels.is_empty() || labels.len() > 4 {
+            return false;
+        }
+        labels.iter().all(|label| {
+            if label.is_empty() {
+                return false;
+            }
+            if let Some(hex) = label.strip_prefix("0x").or_else(|| label.strip_prefix("0X")) {
+                !hex.is_empty() && hex.chars().all(|c| c.is_ascii_hexdigit())
+            } else {
+                label.chars().all(|c| c.is_ascii_digit())
+            }
+        })
+    }
+
     fn validate(name: &str) -> Result<String, DomainError> {
         if name.is_empty() {
-            return Err(DomainError::InvalidDomainName(
-                "Domain name cannot be empty".to_string(),
-            ));
+            return Err(DomainError::InvalidDomainName("Domain name cannot be empty".to_string()));
         }
 
         if name.len() > 253 {
-            return Err(DomainError::InvalidDomainName(
-                "Domain name too long (max 253 bytes)".to_string(),
-            ));
+            return Err(DomainError::InvalidDomainName("Domain name too long (max 253 bytes)".to_string()));
         }
 
         if !name.is_ascii() {
-            return Err(DomainError::InvalidDomainName(
-                "Domain name must be ASCII (IDNA not supported)".to_string(),
-            ));
+            return Err(DomainError::InvalidDomainName("Domain name must be ASCII (IDNA not supported)".to_string()));
         }
 
         let name = name.to_ascii_lowercase();
 
-        // Some URL parsers accept non-canonical IPv4 forms such as `127.1`
-        // and interpret them as loopback. Reject those forms before they can
-        // be stored as domain names.
-        if std::net::IpAddr::from_str(&name).is_ok() || is_ipv4_address_or_legacy_form(&name) {
-            return Err(DomainError::InvalidDomainName(
-                "Domain name cannot be an IP literal or alternate IPv4 form".to_string(),
-            ));
+        // Ensure it doesn't parse as an IP address (standard IPv4/IPv6)
+        if std::net::IpAddr::from_str(&name).is_ok() {
+            return Err(DomainError::InvalidDomainName("Domain name cannot be an IP literal".to_string()));
+        }
+
+        // Reject alternate numeric IPv4 (e.g. 0x7f000001, 2130706433, 0177.0.0.1)
+        if Self::is_alternate_ipv4(&name) {
+            return Err(DomainError::InvalidDomainName("Domain name cannot be an alternate numeric IPv4 literal".to_string()));
         }
 
         let labels: Vec<&str> = name.split('.').collect();
 
         for label in &labels {
             if label.is_empty() {
-                return Err(DomainError::InvalidDomainName(
-                    "Empty label or consecutive separators".to_string(),
-                ));
+                return Err(DomainError::InvalidDomainName("Empty label or consecutive separators".to_string()));
             }
 
             if label.len() > 63 {
-                return Err(DomainError::InvalidDomainName(
-                    "Label too long (max 63 bytes)".to_string(),
-                ));
+                return Err(DomainError::InvalidDomainName("Label too long (max 63 bytes)".to_string()));
             }
 
             if !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
-                return Err(DomainError::InvalidDomainName(
-                    "Invalid characters in label".to_string(),
-                ));
+                return Err(DomainError::InvalidDomainName("Invalid characters in label".to_string()));
             }
 
             if label.starts_with('-') || label.ends_with('-') {
-                return Err(DomainError::InvalidDomainName(
-                    "Label cannot start or end with a hyphen".to_string(),
-                ));
+                return Err(DomainError::InvalidDomainName("Label cannot start or end with a hyphen".to_string()));
             }
         }
 
         Ok(name)
     }
-}
-
-/// Returns true when `host` is a valid WHATWG-style IPv4 address, including
-/// shortened, octal, and hexadecimal component forms.
-fn is_ipv4_address_or_legacy_form(host: &str) -> bool {
-    let parts: Vec<&str> = host.split('.').collect();
-    if parts.is_empty() || parts.len() > 4 {
-        return false;
-    }
-
-    let numbers: Option<Vec<u64>> = parts.iter().map(|part| parse_ipv4_number(part)).collect();
-    let Some(numbers) = numbers else {
-        return false;
-    };
-
-    if numbers[..numbers.len() - 1].iter().any(|part| *part > 255) {
-        return false;
-    }
-
-    let remaining_bytes = 5 - numbers.len();
-    let max_last_part = (1_u64 << (remaining_bytes * 8)) - 1;
-    numbers[numbers.len() - 1] <= max_last_part
-}
-
-/// Parses one IPv4 component using decimal, octal, or hexadecimal notation.
-fn parse_ipv4_number(part: &str) -> Option<u64> {
-    if part.is_empty() {
-        return None;
-    }
-
-    if let Some(hex) = part.strip_prefix("0x") {
-        return if hex.is_empty() {
-            Some(0)
-        } else {
-            u64::from_str_radix(hex, 16).ok()
-        };
-    }
-
-    if part.len() > 1 && part.starts_with('0') {
-        return u64::from_str_radix(&part[1..], 8).ok();
-    }
-
-    part.parse().ok()
 }
 
 impl TryFrom<String> for DomainName {
@@ -161,18 +122,9 @@ mod tests {
 
     #[test]
     fn test_valid_domain_names() {
-        assert_eq!(
-            DomainName::try_from("example.com").unwrap().as_str(),
-            "example.com"
-        );
-        assert_eq!(
-            DomainName::try_from("sub.example.com").unwrap().as_str(),
-            "sub.example.com"
-        );
-        assert_eq!(
-            DomainName::try_from("EXAMple.cOm").unwrap().as_str(),
-            "example.com"
-        ); // canonicalization
+        assert_eq!(DomainName::try_from("example.com").unwrap().as_str(), "example.com");
+        assert_eq!(DomainName::try_from("sub.example.com").unwrap().as_str(), "sub.example.com");
+        assert_eq!(DomainName::try_from("EXAMple.cOm").unwrap().as_str(), "example.com"); // canonicalization
         assert_eq!(DomainName::try_from("a-b.com").unwrap().as_str(), "a-b.com");
         assert_eq!(DomainName::try_from("123.com").unwrap().as_str(), "123.com");
     }
@@ -192,14 +144,11 @@ mod tests {
         assert!(DomainName::try_from("192.168.1.1").is_err());
         assert!(DomainName::try_from("127.0.0.1").is_err());
 
-        // Alternate IPv4 spellings accepted by common URL parsers must not
-        // pass as DNS names.
-        for alternate_ip in ["127.1", "127.0.1", "2130706433", "0x7f.1", "0177.1"] {
-            assert!(
-                DomainName::try_from(alternate_ip).is_err(),
-                "accepted alternate IPv4 form: {alternate_ip}"
-            );
-        }
+        // Alternate numeric IPv4
+        assert!(DomainName::try_from("2130706433").is_err());
+        assert!(DomainName::try_from("0x7f000001").is_err());
+        assert!(DomainName::try_from("0177.0.0.1").is_err());
+        assert!(DomainName::try_from("127.1").is_err());
 
         // invalid chars
         assert!(DomainName::try_from("example!.com").is_err());

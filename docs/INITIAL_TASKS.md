@@ -1,6 +1,6 @@
 # Initial Programming Tasks
 
-Five parallel tasks start from the same verified master commit and own disjoint paths. Each must submit a separate PR against master without merging.
+Five parallel tasks start from the same main commit and own disjoint paths. Each must submit a separate PR against main without merging.
 
 ## 01-domain: Domain types and lifecycle validation
 
