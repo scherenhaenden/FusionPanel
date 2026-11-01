@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
+/// Maximum UTF-8 byte length stored in a job error message.
+pub const MAX_ERROR_TEXT_BYTES: usize = 4096;
+
 /// Unique identifier for a job.
 pub type JobId = String;
 
@@ -29,7 +32,6 @@ impl JobState {
             JobState::Cancelled => "cancelled",
         }
     }
-
 }
 
 impl std::str::FromStr for JobState {
@@ -74,4 +76,10 @@ pub enum JobStoreError {
 
     #[error("Malformed data in database: {0}")]
     MalformedData(String),
+
+    #[error("Job error text is {actual_bytes} bytes; maximum is {max_bytes} bytes")]
+    ErrorTextTooLong {
+        max_bytes: usize,
+        actual_bytes: usize,
+    },
 }

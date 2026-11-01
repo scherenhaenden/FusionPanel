@@ -7,7 +7,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::models::{Job, JobId, JobState, JobStoreError};
+use crate::models::{Job, JobId, JobState, JobStoreError, MAX_ERROR_TEXT_BYTES};
 
 pub struct JobStore {
     conn: Connection,
@@ -95,7 +95,9 @@ impl JobStore {
 
     /// Atomically claim the oldest queued job for a worker.
     pub fn claim(&mut self, worker_id: &str) -> Result<Option<Job>, JobStoreError> {
-        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 
         let job_id: Option<String> = {
             let mut stmt =
@@ -110,21 +112,42 @@ impl JobStore {
                 "UPDATE jobs SET state = ?1, worker_id = ?2, updated_at = ?3 WHERE id = ?4",
                 params![JobState::Running.as_str(), worker_id, now, id],
             )?;
+            // Decode before commit so a malformed row cannot leave a failed
+            // claim persisted as Running. Return the transaction's snapshot.
+            let job = tx.query_row(
+                "SELECT id, kind, payload, state, worker_id, error_text, created_at, updated_at FROM jobs WHERE id = ?1",
+                [&id],
+                Self::row_to_job,
+            )?;
             tx.commit()?;
-            Ok(Some(self.get(&id)?))
+            Ok(Some(job))
         } else {
             Ok(None)
         }
     }
 
     /// Transition a job to a new state.
+    ///
+    /// Error text is limited to [`MAX_ERROR_TEXT_BYTES`] UTF-8 bytes. Oversized
+    /// text is rejected without truncation or any mutation of the job.
     pub fn transition(
         &mut self,
         id: &JobId,
         new_state: JobState,
         error_text: Option<String>,
     ) -> Result<(), JobStoreError> {
-        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        if let Some(text) = &error_text {
+            if text.len() > MAX_ERROR_TEXT_BYTES {
+                return Err(JobStoreError::ErrorTextTooLong {
+                    max_bytes: MAX_ERROR_TEXT_BYTES,
+                    actual_bytes: text.len(),
+                });
+            }
+        }
+
+        let tx = self
+            .conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 
         let current_state_str: String = tx
             .query_row("SELECT state FROM jobs WHERE id = ?1", [id], |row| {
