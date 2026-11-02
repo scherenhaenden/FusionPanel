@@ -1,0 +1,21 @@
+[package]
+name = "backup-destinations"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[workspace]
+
+[dependencies]
+async-trait = "0.1"
+thiserror = "1.0"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+hex = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
