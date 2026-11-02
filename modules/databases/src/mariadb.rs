@@ -55,12 +55,13 @@ impl DatabaseAdapter for MariaDbAdapter {
         let mut cmd = self.build_cmd("mysql");
         cmd.arg("-e").arg("SELECT 1;");
 
-        let output = cmd.output().await
-            .map_err(|e| DatabaseError::ConnectionFailed(format!("Failed to execute mysql: {}", e)))?;
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::ConnectionFailed(format!("Failed to execute mysql: {}", e))
+        })?;
 
         if !output.status.success() {
             return Err(DatabaseError::ConnectionFailed(
-                String::from_utf8_lossy(&output.stderr).to_string()
+                String::from_utf8_lossy(&output.stderr).to_string(),
             ));
         }
         Ok(())
@@ -69,80 +70,119 @@ impl DatabaseAdapter for MariaDbAdapter {
     async fn plan_create_database(&self, name: DbName, owner: DbUser) -> Result<CreateDbPlan> {
         validate_identifier(&name.0)?;
         validate_identifier(&owner.0)?;
-        Ok(CreateDbPlan { db_name: name, owner })
+        Ok(CreateDbPlan {
+            db_name: name,
+            owner,
+        })
     }
 
     async fn apply_create_database(&self, plan: &CreateDbPlan) -> Result<()> {
-        let sql = format!("CREATE DATABASE IF NOT EXISTS `{}`;", plan.db_name.0);
+        let sql = format!(
+            "CREATE DATABASE IF NOT EXISTS `{}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;",
+            plan.db_name.0
+        );
 
         let mut cmd = self.build_cmd("mysql");
         cmd.arg("-e").arg(&sql);
 
-        let output = cmd.output().await
-            .map_err(|e| DatabaseError::OperationFailed(format!("Failed to execute mysql: {}", e)))?;
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute mysql: {}", e))
+        })?;
 
         if !output.status.success() {
             return Err(DatabaseError::OperationFailed(
-                String::from_utf8_lossy(&output.stderr).to_string()
+                String::from_utf8_lossy(&output.stderr).to_string(),
             ));
         }
         Ok(())
     }
 
-    async fn plan_create_user(&self, username: DbUser, password_ref: SecretString) -> Result<CreateUserPlan> {
+    async fn plan_create_user(
+        &self,
+        username: DbUser,
+        password_ref: SecretString,
+    ) -> Result<CreateUserPlan> {
         validate_identifier(&username.0)?;
-        Ok(CreateUserPlan { username, password_ref })
+        Ok(CreateUserPlan {
+            username,
+            password_ref,
+        })
     }
 
     async fn apply_create_user(&self, plan: &CreateUserPlan) -> Result<()> {
         let escaped_pwd = plan.password_ref.0.replace("\\", "\\\\").replace("'", "''");
-        let sql = format!("CREATE USER IF NOT EXISTS '{}'@'%' IDENTIFIED BY '{}';", plan.username.0, escaped_pwd);
+        let sql = format!(
+            "CREATE USER IF NOT EXISTS '{}'@'%' IDENTIFIED BY '{}';",
+            plan.username.0, escaped_pwd
+        );
 
         let mut cmd = self.build_cmd("mysql");
-        cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
 
-        let mut child = cmd.spawn()
+        let mut child = cmd
+            .spawn()
             .map_err(|e| DatabaseError::OperationFailed(format!("Failed to spawn mysql: {}", e)))?;
 
         if let Some(mut stdin) = child.stdin.take() {
             use tokio::io::AsyncWriteExt;
-            stdin.write_all(sql.as_bytes()).await
-                .map_err(|e| DatabaseError::OperationFailed(format!("Failed to write to stdin: {}", e)))?;
+            stdin.write_all(sql.as_bytes()).await.map_err(|e| {
+                DatabaseError::OperationFailed(format!("Failed to write to stdin: {}", e))
+            })?;
         }
 
-        let output = child.wait_with_output().await
-            .map_err(|e| DatabaseError::OperationFailed(format!("Failed to wait for mysql: {}", e)))?;
+        let output = child.wait_with_output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to wait for mysql: {}", e))
+        })?;
 
         if !output.status.success() {
             return Err(DatabaseError::OperationFailed(
-                String::from_utf8_lossy(&output.stderr).to_string()
+                String::from_utf8_lossy(&output.stderr).to_string(),
             ));
         }
         Ok(())
     }
 
-    async fn plan_grant(&self, db_name: DbName, username: DbUser, privileges: Vec<String>) -> Result<GrantPlan> {
+    async fn plan_grant(
+        &self,
+        db_name: DbName,
+        username: DbUser,
+        privileges: Vec<String>,
+    ) -> Result<GrantPlan> {
         validate_identifier(&db_name.0)?;
         validate_identifier(&username.0)?;
         for priv_str in &privileges {
             validate_privilege(priv_str)?;
         }
-        Ok(GrantPlan { db_name, username, privileges })
+        Ok(GrantPlan {
+            db_name,
+            username,
+            privileges,
+        })
     }
 
     async fn apply_grant(&self, plan: &GrantPlan) -> Result<()> {
-        let privs = if plan.privileges.is_empty() { "ALL PRIVILEGES".to_string() } else { plan.privileges.join(", ") };
-        let sql = format!("GRANT {} ON `{}`.* TO '{}'@'%';", privs, plan.db_name.0, plan.username.0);
+        let privs = if plan.privileges.is_empty() {
+            "ALL PRIVILEGES".to_string()
+        } else {
+            plan.privileges.join(", ")
+        };
+        let sql = format!(
+            "GRANT {} ON `{}`.* TO '{}'@'%';",
+            privs, plan.db_name.0, plan.username.0
+        );
 
         let mut cmd = self.build_cmd("mysql");
         cmd.arg("-e").arg(&sql);
 
-        let output = cmd.output().await
-            .map_err(|e| DatabaseError::OperationFailed(format!("Failed to execute mysql: {}", e)))?;
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute mysql: {}", e))
+        })?;
 
         if !output.status.success() {
             return Err(DatabaseError::OperationFailed(
-                String::from_utf8_lossy(&output.stderr).to_string()
+                String::from_utf8_lossy(&output.stderr).to_string(),
             ));
         }
         Ok(())
@@ -150,24 +190,29 @@ impl DatabaseAdapter for MariaDbAdapter {
 
     async fn plan_dump(&self, db_name: DbName, output_path: String) -> Result<DumpPlan> {
         validate_identifier(&db_name.0)?;
-        Ok(DumpPlan { db_name, output_path })
+        Ok(DumpPlan {
+            db_name,
+            output_path,
+        })
     }
 
     async fn apply_dump(&self, plan: &DumpPlan) -> Result<()> {
         let mut cmd = self.build_cmd("mysqldump");
         cmd.arg(&plan.db_name.0);
 
-        let file = std::fs::File::create(&plan.output_path)
-            .map_err(|e| DatabaseError::OperationFailed(format!("Failed to create dump file: {}", e)))?;
+        let file = std::fs::File::create(&plan.output_path).map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to create dump file: {}", e))
+        })?;
 
         cmd.stdout(Stdio::from(file));
 
-        let output = cmd.output().await
-            .map_err(|e| DatabaseError::OperationFailed(format!("Failed to execute mysqldump: {}", e)))?;
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute mysqldump: {}", e))
+        })?;
 
         if !output.status.success() {
             return Err(DatabaseError::OperationFailed(
-                String::from_utf8_lossy(&output.stderr).to_string()
+                String::from_utf8_lossy(&output.stderr).to_string(),
             ));
         }
         Ok(())
@@ -175,24 +220,29 @@ impl DatabaseAdapter for MariaDbAdapter {
 
     async fn plan_restore(&self, db_name: DbName, input_path: String) -> Result<RestorePlan> {
         validate_identifier(&db_name.0)?;
-        Ok(RestorePlan { db_name, input_path })
+        Ok(RestorePlan {
+            db_name,
+            input_path,
+        })
     }
 
     async fn apply_restore(&self, plan: &RestorePlan) -> Result<()> {
         let mut cmd = self.build_cmd("mysql");
         cmd.arg(&plan.db_name.0);
 
-        let file = std::fs::File::open(&plan.input_path)
-            .map_err(|e| DatabaseError::OperationFailed(format!("Failed to open restore file: {}", e)))?;
+        let file = std::fs::File::open(&plan.input_path).map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to open restore file: {}", e))
+        })?;
 
         cmd.stdin(Stdio::from(file));
 
-        let output = cmd.output().await
-            .map_err(|e| DatabaseError::OperationFailed(format!("Failed to execute mysql restore: {}", e)))?;
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute mysql restore: {}", e))
+        })?;
 
         if !output.status.success() {
             return Err(DatabaseError::OperationFailed(
-                String::from_utf8_lossy(&output.stderr).to_string()
+                String::from_utf8_lossy(&output.stderr).to_string(),
             ));
         }
         Ok(())

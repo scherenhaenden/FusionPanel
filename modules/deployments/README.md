@@ -1,37 +1,22 @@
-# Deployments Module
+# fp-deployments
 
-## Overview
-This module handles deployment workflows, including git builds, webhooks, blue-green deployments, releases, and rollbacks.
+This is the deployments module for FusionPanel, responsible for managing deployment workflows, environments, and deployment status.
 
-## Implemented Capabilities
-- DEP-04: Blue-green deployments (Partial - Atomic symlink switcher implemented)
-- DEP-07: Release rollback (Partial - Core atomic switcher enables this)
+## Capabilities
 
-## Blocked/Partial Capabilities
-- DEP-01: Git push-to-deploy (Missing: Complete implementation)
-- DEP-02: Git webhooks (Missing: Complete implementation)
-- DEP-03: Multi-language builds (Missing: Complete implementation)
-- DEP-04: Blue-green deployments (Missing: Full orchestrator)
-- DEP-05: Per-commit preview environments (Missing: Complete implementation)
-- DEP-06: Staging (Missing: Complete implementation)
-- DEP-07: Release rollback (Missing: Full orchestrator API)
-- DEP-08: Scheduled deployments (Missing: Complete implementation)
-- DEP-09: Two-person deployment approval (Missing: Complete implementation)
-- DEP-10: Deployment history and progress (Missing: Complete implementation)
-- DEP-11: Failure diagnostics (Missing: Complete implementation)
-- DEP-12: GitHub Actions integration (Missing: Complete implementation)
+* **DEP-01: Git push-to-deploy** - Blocked (No Git repository integration)
+* **DEP-02: Git webhooks** - Blocked (No webhooks implemented)
+* **DEP-03: Multi-language builds** - Blocked (No builds implemented)
+* **DEP-04: Blue-green deployments** - Blocked (No blue-green deployment implemented)
+* **DEP-05: Per-commit preview environments** - Partial (Domain model supports `Environment::Preview`, but logic is unimplemented)
+* **DEP-06: Staging** - Partial (Domain model supports `Environment::Staging`, but logic is unimplemented)
+* **DEP-07: Release rollback** - Partial (Domain model supports `DeploymentStatus::RolledBack`, but actual rollback logic is unimplemented)
+* **DEP-08: Scheduled deployments** - Blocked (No scheduling implemented)
+* **DEP-09: Two-person deployment approval** - Blocked (No approval implemented)
+* **DEP-10: Deployment history and progress** - Partial (Domain model tracks status, history storage unimplemented)
+* **DEP-11: Failure diagnostics** - Blocked (No diagnostics implemented)
+* **DEP-12: GitHub Actions integration** - Blocked (No integration implemented)
 
-## Follow-on Work
-- Implement git push-to-deploy receivers.
-- Implement webhooks and payload verification.
-- Implement the deployment orchestrator.
-- Implement rollback control APIs.
+## Models
 
-## Testing
-Unit tests can be run via:
-```bash
-cargo test --manifest-path Cargo.toml
-```
-
-## Shared Changes Proposed
-None at this time.
+See `src/domain/models.rs` and `src/domain/state_machine.rs` for initial domain logic. Tests cover valid and negative transition state machine tests.
