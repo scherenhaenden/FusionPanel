@@ -1,10 +1,17 @@
+[workspace]
+
 [package]
-name = "fusionpanel-module-mail"
+name = "mail"
 version = "0.1.0"
 edition = "2021"
 license = "AGPL-3.0-only"
+description = "Mail configuration and domain management"
 
 [dependencies]
+serde = { version = "1.0", features = ["derive"] }
+regex = "1.10"
+uuid = { version = "1.7", features = ["v4", "serde"] }
+tempfile = "3.10"
 thiserror = "2"
 
-[workspace]
+[dev-dependencies]

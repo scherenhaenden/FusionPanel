@@ -1,4 +1,4 @@
-use fusionpanel_module_mail::aliases::{AliasError, AliasRouter};
+use mail::aliases::{AliasError, AliasRouter};
 
 #[test]
 fn test_valid_alias() {
