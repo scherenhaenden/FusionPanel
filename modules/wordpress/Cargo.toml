@@ -7,4 +7,23 @@ license = "AGPL-3.0-only"
 [workspace]
 
 [dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 thiserror = "1.0"
+sha1 = "0.10"
+hex = "0.4"
+rand = "0.8"
+base64 = "0.22"
+futures-util = "0.3"
+mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
+urlencoding = "2.1"
+zip = { version = "0.6", default-features = false, features = ["deflate", "time"] }
+uuid = { version = "1", features = ["v4"] }
+tempfile = "3"
+
+[dev-dependencies]
+tempfile = "3"
+tokio-test = "0.4"
+mockito = "1"
