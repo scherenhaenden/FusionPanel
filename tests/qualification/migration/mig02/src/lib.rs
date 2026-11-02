@@ -205,6 +205,7 @@ mod tests {
     #[test]
     fn test_dangling_foreign_key() -> SqliteResult<()> {
         let conn = Connection::open_in_memory()?;
+        conn.execute("PRAGMA foreign_keys = OFF;", [])?;
         setup_valid_schema(&conn)?;
 
         // Insert a dangling foreign key (site_id 999 does not exist)
