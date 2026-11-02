@@ -1,19 +1,28 @@
 # WordPress Module
 
-This is the WordPress module for FusionPanel.
-It manages WordPress installations, updates, plugins, etc.
+This is an independent package providing automation for WordPress self-hosting.
 
 ## Capabilities
 
-* WP-01: Automatic installation (Implemented)
-* WP-02: Plugin management (Blocked: Needs WP-CLI wrapper)
-* WP-03: Theme management (Blocked: Needs WP-CLI wrapper)
-* WP-04: Automatic updates (Blocked: Needs WP-CLI wrapper)
-* WP-05: WordPress staging and production push (Blocked: Needs database cloning and URL rewrite logic)
-* WP-06: Vulnerability scanning (Blocked: Needs scanner integration)
-* WP-07: Core repair (Blocked: Needs WP-CLI wrapper)
-* WP-08: Plugin failure diagnostics (Blocked: Needs PHP log parser)
-* WP-09: Restore with URL rewrite (Blocked: Needs database dump parser)
-* WP-10: Redis object cache (Blocked: Needs wp-config manipulator)
-* WP-11: WordPress hardening (Blocked: Needs filesystem permissions manager)
-* WP-12: Multiple installation management (Blocked: Needs instance registry)
+* **Maintenance Mode Coordinator:** Automatically create and remove the `.maintenance` file to put WordPress sites into and out of maintenance mode.
+* **Cron Offloading:** Modifies `wp-config.php` to set `DISABLE_WP_CRON`, allowing system cron to take over background tasks for improved performance.
+
+## Tests
+
+This module is independently testable:
+
+```bash
+cargo test --manifest-path modules/wordpress/Cargo.toml
+```
+
+## Modes
+
+The maintenance coordinator allows setting WordPress to run in maintenance mode or standard production mode. Cron offloading can similarly be enabled or disabled based on operator preference.
+
+## Features
+
+- **Implemented:**
+  - Automated maintenance mode toggling
+  - WordPress cron offloading configuration manipulation
+- **Unsupported/Blocked:**
+  - Currently unsupported: complex PHP-based AST parsing of `wp-config.php`. The module relies on line-based modification for `DISABLE_WP_CRON`.
