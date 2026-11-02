@@ -30,10 +30,20 @@ Whether you're hosting static sites, complex multi-container stacks, or managing
 - **Resource Constraints**: Disk quotas, bandwidth limits, per-site CPU/RAM constraints.
 - **Atomic Provisioning**: All operations employ robust LIFO compensation for atomic success or clean rollback.
 
-### 🐳 Containers & App Catalog
-- **Native Docker & Compose**: Manage Docker containers, Compose stacks, and registries directly.
-- **One-Click Apps**: Built-in App Catalog templates with automated image update detection.
-- **Security & Sandboxing**: CVE scanning, per-image SBOMs, strict isolation policies, and GPU passthrough.
+- [Current atomic readiness: all 162 features and 63 work packages](docs/execution/READINESS.md)
+
+- [Delivery plan and 63-session table](docs/execution/DELIVERY_PLAN.md)
+- [Capability ownership and evidence ledger](docs/execution/CAPABILITY_LEDGER.md)
+- [Feature preservation](docs/engineering/FEATURE_PRESERVATION.md)
+- [Selectable modes](docs/engineering/VARIANT_DESIGN.md)
+- [Real-system test strategy](docs/testing/TEST_STRATEGY.md)
+- [Project charter](PROJECT_CHARTER.md)
+- [Capability catalog](CAPABILITY_CATALOG.md)
+- [Architecture](ARCHITECTURE.md)
+- [Roadmap](ROADMAP.md)
+- [Test plan](TEST_PLAN.md)
+- [Migration plan](ARCHITECTURE_AND_MIGRATION.md)
+- [Decisions and open questions](DECISIONS_AND_OPEN_QUESTIONS.md)
 
 ### 🗄️ Databases (Multi-DB)
 - **Engines**: Seamlessly manage **MariaDB, MySQL, and PostgreSQL**.
