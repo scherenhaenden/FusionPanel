@@ -8,6 +8,9 @@ license = "AGPL-3.0-only"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-uuid = { version = "1.0", features = ["v4", "serde"] }
+serde_yaml = "0.9"
 thiserror = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
 async-trait = "0.1"
+
+[dev-dependencies]
