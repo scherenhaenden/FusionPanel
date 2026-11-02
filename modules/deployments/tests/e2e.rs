@@ -2,6 +2,7 @@
 mod blocked_driver;
 
 #[test]
+#[ignore = "requires live production HTTP server and FUSIONPANEL_DEPLOYMENTS_E2E_DRIVER"]
 fn deploy_known_commit_serve_rollback_verify() {
     blocked_driver::run(
         "FUSIONPANEL_DEPLOYMENTS_E2E_DRIVER",
