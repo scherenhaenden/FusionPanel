@@ -250,13 +250,37 @@ pub struct RoleBinding {
     pub scope: Scope,
 }
 
-/// Authorization evaluator enforcing deny-by-default rules
+/// Authorization evaluator enforcing deny-by-default rules and principal filtering
 pub struct AccessControl;
 
 impl AccessControl {
-    /// Evaluates if the set of bindings allows `permission` on `requested_scope`.
-    /// Deny by default: returns Ok(()) only if at least one matching binding includes the permission,
-    /// otherwise Err(IdentityError::Unauthorized).
+    /// Evaluates if the set of bindings allows `permission` on `requested_scope` for `principal_id`.
+    /// Deny by default: returns Ok(()) only if at least one matching binding belongs to the principal
+    /// and grants the permission on the target scope.
+    pub fn evaluate_principal(
+        principal_id: UserId,
+        bindings: &[RoleBinding],
+        permission: Permission,
+        requested_scope: &Scope,
+    ) -> Result<(), IdentityError> {
+        for binding in bindings {
+            if binding.user_id == principal_id
+                && binding.scope.matches(requested_scope)
+                && binding.role.permissions.contains(&permission)
+            {
+                return Ok(());
+            }
+        }
+
+        Err(IdentityError::Unauthorized {
+            reason: format!(
+                "Principal '{}' denied permission '{}' on scope {:?}",
+                principal_id, permission, requested_scope
+            ),
+        })
+    }
+
+    /// Evaluates if ANY supplied binding allows `permission` on `requested_scope`.
     pub fn evaluate(
         bindings: &[RoleBinding],
         permission: Permission,
@@ -276,5 +300,231 @@ impl AccessControl {
                 permission, requested_scope
             ),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_principal_scoping_enforcement() {
+        let principal1 = UserId::new_v4();
+        let principal2 = UserId::new_v4();
+        let tenant = TenantId::new_v4();
+
+        let binding_p1 = RoleBinding {
+            user_id: principal1,
+            role: Role::tenant_admin(),
+            scope: Scope::Tenant { tenant_id: tenant },
+        };
+
+        let bindings = vec![binding_p1];
+
+        // Principal 1 is allowed
+        let allowed = AccessControl::evaluate_principal(
+            principal1,
+            &bindings,
+            Permission::SiteCreate,
+            &Scope::Tenant { tenant_id: tenant },
+        );
+        assert!(allowed.is_ok());
+
+        // Principal 2 must be DENIED even if bindings array contains principal 1's role
+        let denied = AccessControl::evaluate_principal(
+            principal2,
+            &bindings,
+            Permission::SiteCreate,
+            &Scope::Tenant { tenant_id: tenant },
+        );
+        assert!(matches!(denied, Err(IdentityError::Unauthorized { .. })));
+    }
+
+    #[test]
+    fn test_tenant_isolation() {
+        let user = UserId::new_v4();
+        let tenant_a = TenantId::new_v4();
+        let tenant_b = TenantId::new_v4();
+
+        let binding = RoleBinding {
+            user_id: user,
+            role: Role::tenant_admin(),
+            scope: Scope::Tenant {
+                tenant_id: tenant_a,
+            },
+        };
+
+        let bindings = vec![binding];
+
+        // Granted on Tenant A
+        assert!(AccessControl::evaluate_principal(
+            user,
+            &bindings,
+            Permission::SiteCreate,
+            &Scope::Tenant {
+                tenant_id: tenant_a
+            }
+        )
+        .is_ok());
+
+        // Denied on Tenant B (Strict Tenant Isolation)
+        let cross_tenant = AccessControl::evaluate_principal(
+            user,
+            &bindings,
+            Permission::SiteCreate,
+            &Scope::Tenant {
+                tenant_id: tenant_b,
+            },
+        );
+        assert!(matches!(
+            cross_tenant,
+            Err(IdentityError::Unauthorized { .. })
+        ));
+    }
+
+    #[test]
+    fn test_site_scope_containment() {
+        let user = UserId::new_v4();
+        let tenant = TenantId::new_v4();
+        let site_1 = SiteId::new_v4();
+        let site_2 = SiteId::new_v4();
+
+        let binding = RoleBinding {
+            user_id: user,
+            role: Role::site_operator(),
+            scope: Scope::Site {
+                tenant_id: tenant,
+                site_id: site_1,
+            },
+        };
+
+        let bindings = vec![binding];
+
+        // Operator has permission on Site 1
+        assert!(AccessControl::evaluate_principal(
+            user,
+            &bindings,
+            Permission::SiteDeploy,
+            &Scope::Site {
+                tenant_id: tenant,
+                site_id: site_1
+            }
+        )
+        .is_ok());
+
+        // Operator CANNOT deploy Site 2
+        let site2_denied = AccessControl::evaluate_principal(
+            user,
+            &bindings,
+            Permission::SiteDeploy,
+            &Scope::Site {
+                tenant_id: tenant,
+                site_id: site_2,
+            },
+        );
+        assert!(matches!(
+            site2_denied,
+            Err(IdentityError::Unauthorized { .. })
+        ));
+
+        // Operator CANNOT perform tenant-level operations
+        let tenant_denied = AccessControl::evaluate_principal(
+            user,
+            &bindings,
+            Permission::SiteDeploy,
+            &Scope::Tenant { tenant_id: tenant },
+        );
+        assert!(matches!(
+            tenant_denied,
+            Err(IdentityError::Unauthorized { .. })
+        ));
+    }
+
+    #[test]
+    fn test_super_admin_global_access() {
+        let admin = UserId::new_v4();
+        let tenant = TenantId::new_v4();
+        let site = SiteId::new_v4();
+
+        let binding = RoleBinding {
+            user_id: admin,
+            role: Role::super_admin(),
+            scope: Scope::Global,
+        };
+
+        let bindings = vec![binding];
+
+        // Global super admin has permission anywhere
+        assert!(AccessControl::evaluate_principal(
+            admin,
+            &bindings,
+            Permission::SystemAdmin,
+            &Scope::Global
+        )
+        .is_ok());
+        assert!(AccessControl::evaluate_principal(
+            admin,
+            &bindings,
+            Permission::SiteDelete,
+            &Scope::Tenant { tenant_id: tenant }
+        )
+        .is_ok());
+        assert!(AccessControl::evaluate_principal(
+            admin,
+            &bindings,
+            Permission::SiteDeploy,
+            &Scope::Site {
+                tenant_id: tenant,
+                site_id: site
+            }
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn test_deny_by_default_and_role_demotion() {
+        let user = UserId::new_v4();
+        let tenant = TenantId::new_v4();
+
+        // Viewer role does NOT have SiteCreate permission
+        let binding = RoleBinding {
+            user_id: user,
+            role: Role::viewer(),
+            scope: Scope::Tenant { tenant_id: tenant },
+        };
+
+        let mut bindings = vec![binding];
+
+        // Viewer can read site
+        assert!(AccessControl::evaluate_principal(
+            user,
+            &bindings,
+            Permission::SiteRead,
+            &Scope::Tenant { tenant_id: tenant }
+        )
+        .is_ok());
+
+        // Viewer cannot create site
+        assert!(matches!(
+            AccessControl::evaluate_principal(
+                user,
+                &bindings,
+                Permission::SiteCreate,
+                &Scope::Tenant { tenant_id: tenant }
+            ),
+            Err(IdentityError::Unauthorized { .. })
+        ));
+
+        // Demotion/Revocation: Remove all bindings
+        bindings.clear();
+        assert!(matches!(
+            AccessControl::evaluate_principal(
+                user,
+                &bindings,
+                Permission::SiteRead,
+                &Scope::Tenant { tenant_id: tenant }
+            ),
+            Err(IdentityError::Unauthorized { .. })
+        ));
     }
 }

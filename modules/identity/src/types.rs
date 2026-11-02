@@ -94,19 +94,90 @@ impl FromStr for UserStatus {
 }
 
 /// User domain representation.
-/// Notice that raw credentials or secret material are never stored in plain text or logged.
+/// Secret material and plaintext passwords are never stored or logged.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "UserRaw")]
 pub struct User {
-    pub id: UserId,
-    pub username: String,
-    pub email: String,
-    pub status: UserStatus,
-    pub password_hash: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    id: UserId,
+    username: String,
+    email: String,
+    status: UserStatus,
+    password_hash: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize)]
+struct UserRaw {
+    id: UserId,
+    username: String,
+    email: String,
+    status: UserStatus,
+    password_hash: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+impl TryFrom<UserRaw> for User {
+    type Error = String;
+
+    fn try_from(raw: UserRaw) -> Result<Self, Self::Error> {
+        let user = Self {
+            id: raw.id,
+            username: raw.username,
+            email: raw.email,
+            status: raw.status,
+            password_hash: raw.password_hash,
+            created_at: raw.created_at,
+            updated_at: raw.updated_at,
+        };
+        user.validate().map_err(|e| e.to_string())?;
+        Ok(user)
+    }
 }
 
 impl User {
+    pub fn new(
+        username: String,
+        email: String,
+        password_hash: String,
+    ) -> Result<Self, IdentityError> {
+        let now = Utc::now();
+        let user = Self {
+            id: UserId::new_v4(),
+            username,
+            email,
+            status: UserStatus::Active,
+            password_hash,
+            created_at: now,
+            updated_at: now,
+        };
+        user.validate()?;
+        Ok(user)
+    }
+
+    pub fn from_persisted(
+        id: UserId,
+        username: String,
+        email: String,
+        status: UserStatus,
+        password_hash: String,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+    ) -> Result<Self, IdentityError> {
+        let user = Self {
+            id,
+            username,
+            email,
+            status,
+            password_hash,
+            created_at,
+            updated_at,
+        };
+        user.validate()?;
+        Ok(user)
+    }
+
     pub fn validate(&self) -> Result<(), IdentityError> {
         if self.username.trim().is_empty() {
             return Err(IdentityError::InvalidInput {
@@ -124,6 +195,39 @@ impl User {
             });
         }
         Ok(())
+    }
+
+    pub fn id(&self) -> UserId {
+        self.id
+    }
+
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    pub fn email(&self) -> &str {
+        &self.email
+    }
+
+    pub fn status(&self) -> UserStatus {
+        self.status
+    }
+
+    pub fn password_hash(&self) -> &str {
+        &self.password_hash
+    }
+
+    pub fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+
+    pub fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
+
+    pub fn set_status(&mut self, status: UserStatus) {
+        self.status = status;
+        self.updated_at = Utc::now();
     }
 }
 
@@ -150,8 +254,8 @@ pub struct AppliedResult<R> {
 
 /// Observed state contract following docs/engineering/MODULE_CONTRACTS.md
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ObservedState<S> {
+pub struct ObservedState<T> {
     pub resource_id: String,
-    pub state: S,
+    pub state: T,
     pub observed_at: DateTime<Utc>,
 }

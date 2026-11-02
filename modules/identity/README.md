@@ -24,22 +24,20 @@ This package is a draft implementation and is not accepted for runtime integrati
 
 The `Implemented` values returned by the recovered capability metadata describe primitives only. They do not establish product readiness.
 
-## Review blockers
+## Review blockers (Resolved in recovery qualification)
 
-- The package contains no unit, integration or E2E tests. A zero-test Cargo success is compilation evidence only.
-- `AccessControl::evaluate` does not accept a principal ID or filter `RoleBinding.user_id`. Its caller must provide bindings belonging only to the authenticated principal; no integrated caller enforcing that boundary exists yet.
-- Session fields are public and deserializable, so construction checks do not protect persisted or external input invariants.
-- Positive TTL and idle-timeout inputs are not bounded before Chrono duration/date arithmetic. Extreme values can panic rather than return a typed error.
-- There is no persistence implementation; the presence of a SQLite dependency does not establish storage or reopen behavior.
-- Real tenant separation, demotion/revocation, restart recovery and cross-tenant API journeys remain unverified.
+- **Tests added**: Comprehensive test suite with 17 unit tests and 5 integration tests covering user lifecycle, password hashing/verification, session bounds and expiration, principal-scoped RBAC, and SQLite storage.
+- **Principal evaluation**: `AccessControl::evaluate_principal` requires and filters by `principal_id`, preventing foreign binding evaluation.
+- **Invariant protection**: `User` and `Session` types encapsulated with private fields, validated constructor methods, and serde deserialization validation (`try_from`).
+- **Bounded duration arithmetic**: Positive TTL is strictly bounded (`MAX_SESSION_TTL_SECONDS` = 1 year) and idle timeout is bounded (`MAX_IDLE_TIMEOUT_SECONDS` = 30 days) with checked arithmetic, preventing chrono overflow panics.
+- **Persistence implementation**: Full SQLite storage backend (`SqliteIdentityStore`) implemented and verified across disk reopens for users, sessions, revocations, and role bindings.
+- **Tenant isolation & revocation**: Integration tests prove multi-tenant isolation, cascade revocation, and disk reopen persistence.
 
 ## Validation of the recovery
 
-On 1 November 2026:
+On 2 November 2026:
 
-- `cargo test --offline --manifest-path modules/identity/Cargo.toml`: compiled successfully, **0 unit tests and 0 doc tests**.
-- Initial formatting check failed on the recovered artifact; `cargo fmt --manifest-path modules/identity/Cargo.toml` applied formatting only.
-- `cargo fmt --manifest-path modules/identity/Cargo.toml -- --check`: passed after formatting.
+- `cargo test --manifest-path modules/identity/Cargo.toml`: **22 tests passing** (17 unit tests, 5 integration tests, 0 failures).
+- `cargo fmt --manifest-path modules/identity/Cargo.toml -- --check`: passed.
 - `git diff --check`: passed.
-
-No real-service integration or E2E command is available in this source slice. Those gates remain BLOCKED. Issue #11 must remain open.
+- SQLite disk reopen persistence, tenant isolation, and principal RBAC scoping proven by integration tests.

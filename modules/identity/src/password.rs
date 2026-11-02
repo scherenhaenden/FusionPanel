@@ -49,3 +49,50 @@ impl PasswordManager {
             .map_err(|_| IdentityError::InvalidCredentials)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_password_hash_and_verify_success() {
+        let password = "SuperSecretSecurePassword123!";
+        let hash = PasswordManager::hash_password(password).unwrap();
+
+        assert!(!hash.is_empty());
+        assert!(hash.starts_with("$argon2id$"));
+        assert!(PasswordManager::verify_password(password, &hash).is_ok());
+    }
+
+    #[test]
+    fn test_password_verify_wrong_password() {
+        let password = "SuperSecretSecurePassword123!";
+        let hash = PasswordManager::hash_password(password).unwrap();
+
+        let wrong = "WrongPassword456!";
+        assert_eq!(
+            PasswordManager::verify_password(wrong, &hash),
+            Err(IdentityError::InvalidCredentials)
+        );
+    }
+
+    #[test]
+    fn test_password_length_validation() {
+        assert!(matches!(
+            PasswordManager::hash_password(""),
+            Err(IdentityError::InvalidInput { .. })
+        ));
+        assert!(matches!(
+            PasswordManager::hash_password("short"),
+            Err(IdentityError::InvalidInput { .. })
+        ));
+    }
+
+    #[test]
+    fn test_password_malformed_hash() {
+        assert_eq!(
+            PasswordManager::verify_password("Password12345", "not-a-valid-argon2-hash"),
+            Err(IdentityError::InvalidCredentials)
+        );
+    }
+}
