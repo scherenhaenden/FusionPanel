@@ -1,7 +1,7 @@
-use fusionpanel_wordpress::install::{DbCredentials, Orchestrator, verify_file_checksum, InstallError};
-use tempfile::TempDir;
 use std::fs;
 use std::io::Write;
+use tempfile::TempDir;
+use wordpress::install::{verify_file_checksum, DbCredentials, InstallError, Orchestrator};
 
 #[tokio::test]
 async fn test_generate_wp_config() {
@@ -45,7 +45,9 @@ async fn test_database_validation() {
     };
 
     assert!(matches!(
-        orchestrator.validate_database_connection(&invalid_creds).await,
+        orchestrator
+            .validate_database_connection(&invalid_creds)
+            .await,
         Err(InstallError::DatabaseValidationFailed(_))
     ));
 
@@ -58,13 +60,18 @@ async fn test_database_validation() {
         db_prefix: "wp_",
     };
 
-    let result = orchestrator.validate_database_connection(&valid_creds).await;
+    let result = orchestrator
+        .validate_database_connection(&valid_creds)
+        .await;
     match result {
         Ok(_) => {
             println!("BLOCKED: Cannot connect to arbitrary DB but test passed incorrectly");
-        },
+        }
         Err(e) => {
-            println!("BLOCKED: DB connection expectedly failed in test env: {}", e);
+            println!(
+                "BLOCKED: DB connection expectedly failed in test env: {}",
+                e
+            );
         }
     }
 }
@@ -94,7 +101,7 @@ async fn test_download_and_verify_blocked_network() {
     match result {
         Ok(_) => {
             println!("Network call succeeded.");
-        },
+        }
         Err(e) => {
             println!("BLOCKED: Network call failed or blocked: {}", e);
         }
