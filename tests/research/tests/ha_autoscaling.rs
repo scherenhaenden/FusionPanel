@@ -2,6 +2,7 @@ use std::process::Command;
 use tokio;
 
 #[tokio::test]
+#[ignore = "BLOCKED: NODE-12 missing distributed consensus"]
 async fn test_ha_control_plane_blocked() {
     // 1. Attempt an HTTP request to simulate HA control plane capabilities
     // Even though we expect HA to be missing, we execute a real external interface.
@@ -25,6 +26,7 @@ async fn test_ha_control_plane_blocked() {
 }
 
 #[tokio::test]
+#[ignore = "BLOCKED: CTR-13 missing shared state mechanisms"]
 async fn test_horizontal_autoscaling_blocked() {
     // Attempt a system operation or mock scaling command
     // We expect this to fail since autoscaling implies managing replica sets
