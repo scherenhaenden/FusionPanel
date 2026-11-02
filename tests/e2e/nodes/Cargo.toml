@@ -1,0 +1,15 @@
+[package]
+name = "e2e-nodes"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "AGPL-3.0-only"
+
+[workspace]
+members = ["."]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+# Standard library is enough for what we need to simulate as black box
