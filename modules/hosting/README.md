@@ -21,3 +21,9 @@ These should map to `crates/domain` in a later integration phase:
 - `DomainName` (with IDNA unsupported explicitly)
 - `SiteKind`
 - `ResourceState` (Pending, Active, Suspended, Failed, Deleting, Deleted)
+
+## Validation Updates (Refs #91)
+- Strict validation added via "parse, don't validate" pattern: `DocumentRoot`, `PoolName`, `PhpVersion`, `MemoryLimit`, and `UpstreamUrl`.
+- Deserialization automatically enforced via `TryFrom` in `serde`.
+- `www-data` default pools explicitly replaced by strict `tenant_x` identity mappings to preserve tenant isolation.
+- Integration tests robustly handle BLOCKED environmental limitations and explicit negative checking against configuration bypasses (e.g. multiline injection).

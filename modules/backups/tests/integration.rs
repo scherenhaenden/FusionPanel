@@ -1,14 +1,14 @@
 use backups::backup::BackupJob;
 use backups::error::BackupError;
-use backups::models::{DbInfo, RetentionPolicy};
+use backups::models::{BackupType, DbInfo, FileInfo, Manifest, RetentionPolicy};
 use backups::restore::restore_archive;
 use backups::retention::apply_retention_policy;
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Write;
-use tempfile::TempDir;
 use tar::Builder;
-use flate2::write::GzEncoder;
-use flate2::Compression;
+use tempfile::TempDir;
+use zstd::stream::Encoder as ZstdEncoder;
 
 #[test]
 fn test_full_backup_and_restore_cycle() {
@@ -26,7 +26,7 @@ fn test_full_backup_and_restore_cycle() {
     let mut file2 = File::create(&file2_path).unwrap();
     file2.write_all(b"Subdir content").unwrap();
 
-    let archive_path = dest_dir.path().join("backup.tar.gz");
+    let archive_path = dest_dir.path().join("backup.tar.zst");
 
     let job = BackupJob::new(source_dir.path()).with_db(DbInfo {
         engine: "sqlite".to_string(),
@@ -58,7 +58,7 @@ fn test_retention_policy() {
 
     // Create 3 valid backups
     for i in 0..3 {
-        let path = backup_dir.path().join(format!("backup{}.tar.gz", i));
+        let path = backup_dir.path().join(format!("backup{}.tar.zst", i));
         job.execute(&path).expect("Backup failed");
 
         // Wait a bit to ensure different modified times
@@ -87,14 +87,14 @@ fn test_tamper_detection() {
     let mut file1 = File::create(&file1_path).unwrap();
     file1.write_all(b"Valid content").unwrap();
 
-    let archive_path = dest_dir.path().join("backup.tar.gz");
+    let archive_path = dest_dir.path().join("backup.tar.zst");
     let job = BackupJob::new(source_dir.path());
     let original_manifest = job.execute(&archive_path).expect("Backup failed");
 
     // Corrupt archive by replacing the valid file with malicious content
-    let corrupted_archive_path = dest_dir.path().join("corrupt.tar.gz");
+    let corrupted_archive_path = dest_dir.path().join("corrupt.tar.zst");
     let dest = File::create(&corrupted_archive_path).unwrap();
-    let enc = GzEncoder::new(dest, Compression::default());
+    let enc = ZstdEncoder::new(dest, 3).unwrap();
     let mut tar = Builder::new(enc);
 
     // Write original manifest
@@ -123,16 +123,79 @@ fn test_tamper_detection() {
     match result {
         Err(BackupError::SizeMismatch { path, .. }) | Err(BackupError::ChecksumMismatch { path, .. }) => {
             assert_eq!(path, "file1.txt");
-        },
+        }
         _ => panic!("Expected SizeMismatch or ChecksumMismatch error, got {:?}", result),
     }
 
-    // Ensure the corrupted file was removed
+    // Ensure the corrupted file was not written to target
     assert!(!restore_dir.path().join("file1.txt").exists());
 }
 
 #[test]
-fn test_missing_files_from_manifest() {
+fn test_manifest_validation_failures() {
+    let mut manifest = Manifest {
+        version: 2, // invalid
+        backup_id: "invalid-uuid".to_string(),
+        timestamp: "not-a-date".to_string(),
+        backup_type: BackupType::Files,
+        files: vec![
+            FileInfo {
+                path: "file1".to_string(),
+                size: 0,
+                checksum_sha256: "".to_string(),
+            },
+            FileInfo {
+                path: "file1".to_string(),
+                size: 0,
+                checksum_sha256: "".to_string(),
+            }, // duplicate
+        ],
+        databases: vec![],
+        metadata: HashMap::new(),
+    };
+
+    let err = manifest.validate().unwrap_err();
+    match err {
+        BackupError::InvalidManifest(msg) => assert!(msg.contains("Unsupported version")),
+        _ => panic!("Expected InvalidManifest"),
+    }
+
+    manifest.version = 1;
+    let err = manifest.validate().unwrap_err();
+    match err {
+        BackupError::InvalidManifest(msg) => assert!(msg.contains("Invalid backup_id UUID")),
+        _ => panic!("Expected InvalidManifest"),
+    }
+
+    manifest.backup_id = uuid::Uuid::new_v4().to_string();
+    let err = manifest.validate().unwrap_err();
+    match err {
+        BackupError::InvalidManifest(msg) => assert!(msg.contains("Invalid timestamp format")),
+        _ => panic!("Expected InvalidManifest"),
+    }
+
+    manifest.timestamp = chrono::Utc::now().to_rfc3339();
+    let err = manifest.validate().unwrap_err();
+    match err {
+        BackupError::InvalidManifest(msg) => assert!(msg.contains("Duplicate file path")),
+        _ => panic!("Expected InvalidManifest"),
+    }
+
+    manifest.files.pop();
+    manifest.files.push(FileInfo {
+        path: "../unsafe/path".to_string(),
+        size: 0,
+        checksum_sha256: "".to_string(),
+    });
+    let err = manifest.validate().unwrap_err();
+    match err {
+        BackupError::InvalidManifest(msg) => assert!(msg.contains("Unsafe path in manifest")),
+        _ => panic!("Expected InvalidManifest"),
+    }
+}
+
+#[test]
+fn test_incomplete_archive() {
     let source_dir = TempDir::new().unwrap();
     let dest_dir = TempDir::new().unwrap();
     let restore_dir = TempDir::new().unwrap();
@@ -141,21 +204,16 @@ fn test_missing_files_from_manifest() {
     let mut file1 = File::create(&file1_path).unwrap();
     file1.write_all(b"Valid content").unwrap();
 
-    let file2_path = source_dir.path().join("file2.txt");
-    let mut file2 = File::create(&file2_path).unwrap();
-    file2.write_all(b"More content").unwrap();
-
-    let archive_path = dest_dir.path().join("backup.tar.gz");
+    let archive_path = dest_dir.path().join("backup.tar.zst");
     let job = BackupJob::new(source_dir.path());
     let original_manifest = job.execute(&archive_path).expect("Backup failed");
 
-    // Corrupt archive by missing a file
-    let corrupted_archive_path = dest_dir.path().join("corrupt.tar.gz");
-    let dest = File::create(&corrupted_archive_path).unwrap();
-    let enc = GzEncoder::new(dest, Compression::default());
+    // Create incomplete archive (manifest is there, file is missing)
+    let incomplete_archive_path = dest_dir.path().join("incomplete.tar.zst");
+    let dest = File::create(&incomplete_archive_path).unwrap();
+    let enc = ZstdEncoder::new(dest, 3).unwrap();
     let mut tar = Builder::new(enc);
 
-    // Write original manifest
     let manifest_json = serde_json::to_string_pretty(&original_manifest).unwrap();
     let mut header = tar::Header::new_gnu();
     header.set_path("manifest.json").unwrap();
@@ -164,20 +222,45 @@ fn test_missing_files_from_manifest() {
     header.set_cksum();
     tar.append(&header, manifest_json.as_bytes()).unwrap();
 
-    // Write only file1.txt
-    let valid_content = b"Valid content";
-    let mut header = tar::Header::new_gnu();
-    header.set_path("file1.txt").unwrap();
-    header.set_size(valid_content.len() as u64);
-    header.set_mode(0o644);
-    header.set_cksum();
-    tar.append(&header, valid_content.as_slice()).unwrap();
-
     tar.into_inner().unwrap().finish().unwrap();
 
-    let result = restore_archive(&corrupted_archive_path, restore_dir.path());
-
+    let result = restore_archive(&incomplete_archive_path, restore_dir.path());
     assert!(matches!(result, Err(BackupError::MissingFiles)));
+}
+
+#[test]
+fn test_unsafe_archive_paths() {
+    let dest_dir = TempDir::new().unwrap();
+    let _restore_dir = TempDir::new().unwrap();
+
+    let archive_path = dest_dir.path().join("unsafe.tar.zst");
+    let dest = File::create(&archive_path).unwrap();
+    let enc = ZstdEncoder::new(dest, 3).unwrap();
+    let mut tar = Builder::new(enc);
+
+    let manifest = Manifest {
+        version: 1,
+        backup_id: uuid::Uuid::new_v4().to_string(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        backup_type: BackupType::Files,
+        files: vec![FileInfo {
+            path: "../unsafe".to_string(),
+            size: 5,
+            checksum_sha256: "dummy".to_string(),
+        }],
+        databases: vec![],
+        metadata: HashMap::new(),
+    };
+
+    let manifest_json = serde_json::to_string_pretty(&manifest).unwrap();
+    let mut header = tar::Header::new_gnu();
+    header.set_path("manifest.json").unwrap();
+    header.set_size(manifest_json.len() as u64);
+    header.set_mode(0o644);
+    header.set_cksum();
+    tar.append(&header, manifest_json.as_bytes()).unwrap();
+
+    tar.into_inner().unwrap().finish().unwrap();
 }
 
 #[test]
@@ -190,13 +273,13 @@ fn test_duplicate_manifest() {
     let mut file1 = File::create(&file1_path).unwrap();
     file1.write_all(b"Valid content").unwrap();
 
-    let archive_path = dest_dir.path().join("backup.tar.gz");
+    let archive_path = dest_dir.path().join("backup.tar.zst");
     let job = BackupJob::new(source_dir.path());
     let original_manifest = job.execute(&archive_path).expect("Backup failed");
 
-    let corrupted_archive_path = dest_dir.path().join("corrupt.tar.gz");
+    let corrupted_archive_path = dest_dir.path().join("duplicate_manifest.tar.zst");
     let dest = File::create(&corrupted_archive_path).unwrap();
-    let enc = GzEncoder::new(dest, Compression::default());
+    let enc = ZstdEncoder::new(dest, 3).unwrap();
     let mut tar = Builder::new(enc);
 
     let manifest_json = serde_json::to_string_pretty(&original_manifest).unwrap();
@@ -209,24 +292,23 @@ fn test_duplicate_manifest() {
     header.set_cksum();
     tar.append(&header, manifest_json.as_bytes()).unwrap();
 
-    let mut header = tar::Header::new_gnu();
-    header.set_path("manifest.json").unwrap();
-    header.set_size(manifest_json.len() as u64);
-    header.set_mode(0o644);
-    header.set_cksum();
-    tar.append(&header, manifest_json.as_bytes()).unwrap();
+    let mut header2 = tar::Header::new_gnu();
+    header2.set_path("manifest.json").unwrap();
+    header2.set_size(manifest_json.len() as u64);
+    header2.set_mode(0o644);
+    header2.set_cksum();
+    tar.append(&header2, manifest_json.as_bytes()).unwrap();
 
     tar.into_inner().unwrap().finish().unwrap();
 
     let result = restore_archive(&corrupted_archive_path, restore_dir.path());
-
     assert!(matches!(result, Err(BackupError::DuplicateManifest)));
 }
 
 #[test]
 fn test_source_directory_nonexistent() {
     let dest_dir = TempDir::new().unwrap();
-    let archive_path = dest_dir.path().join("backup.tar.gz");
+    let archive_path = dest_dir.path().join("backup.tar.zst");
 
     let job = BackupJob::new("/nonexistent/directory/path");
     let result = job.execute(&archive_path);
@@ -237,7 +319,7 @@ fn test_source_directory_nonexistent() {
 #[test]
 fn test_target_inside_source() {
     let source_dir = TempDir::new().unwrap();
-    let dest_path = source_dir.path().join("backup.tar.gz");
+    let dest_path = source_dir.path().join("backup.tar.zst");
 
     let job = BackupJob::new(source_dir.path());
     let result = job.execute(&dest_path);
@@ -255,7 +337,7 @@ fn test_preservation_on_failure() {
     let mut file1 = File::create(&file1_path).unwrap();
     file1.write_all(b"Valid content").unwrap();
 
-    let archive_path = dest_dir.path().join("backup.tar.gz");
+    let archive_path = dest_dir.path().join("backup.tar.zst");
     let job = BackupJob::new(source_dir.path());
     let original_manifest = job.execute(&archive_path).expect("Backup failed");
 
@@ -265,9 +347,9 @@ fn test_preservation_on_failure() {
     pre_existing_file.write_all(b"Old content").unwrap();
 
     // Corrupt archive by replacing the valid file with malicious content
-    let corrupted_archive_path = dest_dir.path().join("corrupt.tar.gz");
+    let corrupted_archive_path = dest_dir.path().join("corrupt.tar.zst");
     let dest = File::create(&corrupted_archive_path).unwrap();
-    let enc = GzEncoder::new(dest, Compression::default());
+    let enc = ZstdEncoder::new(dest, 3).unwrap();
     let mut tar = Builder::new(enc);
 
     // Write original manifest
@@ -319,7 +401,7 @@ fn test_malicious_symlinks() {
     let mut file1 = File::create(&file1_path).unwrap();
     file1.write_all(b"Valid content").unwrap();
 
-    let archive_path = dest_dir.path().join("backup.tar.gz");
+    let archive_path = dest_dir.path().join("backup.tar.zst");
     let job = BackupJob::new(source_dir.path());
     job.execute(&archive_path).expect("Backup failed");
 
