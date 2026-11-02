@@ -1,6 +1,6 @@
 # Capability Delivery and Evidence Ledger
 
-All 162 catalog entries retain a row. State is initially PLANNED unless the capability is RESEARCH. Implementation and test claims require artifacts; session completion does not change state automatically. All rows require unit, real integration and E2E evidence with the supported configuration recorded. See [feature preservation](../engineering/FEATURE_PRESERVATION.md).
+All 162 catalog entries retain a row. Current maturity and remaining work are recorded in the [2 November snapshot](READINESS_SNAPSHOT_2026-11-02.md). PLANNED and RESEARCH rows have no credited component evidence; PARTIAL is not full acceptance. Implementation and test claims require artifacts; session completion does not change state automatically. All rows require unit, real integration and E2E evidence with the supported configuration recorded. See [feature preservation](../engineering/FEATURE_PRESERVATION.md).
 
 | Capability | Name | Component owner | Integration owner | E2E owner | Closure owner | State | Evidence |
 |---|---|---|---|---|---|---|---|
