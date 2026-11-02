@@ -1,4 +1,4 @@
-use fp_deployments::domain::{
+use deployments::domain::{
     Deployment, DeploymentId, DeploymentStatus, Environment, ReleaseId, TransitionError,
 };
 use uuid::Uuid;
