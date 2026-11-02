@@ -20,6 +20,8 @@ The Rust workspace contains five independently scoped foundation packages. See [
 
 ## Documentation
 
+- [Current atomic readiness: all 162 features and 63 work packages](docs/execution/READINESS.md)
+
 - [Delivery plan and 63-session table](docs/execution/DELIVERY_PLAN.md)
 - [Capability ownership and evidence ledger](docs/execution/CAPABILITY_LEDGER.md)
 - [Feature preservation](docs/engineering/FEATURE_PRESERVATION.md)
