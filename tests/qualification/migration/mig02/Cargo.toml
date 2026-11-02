@@ -1,0 +1,11 @@
+[workspace]
+
+[package]
+name = "mig02-qualification"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[dependencies]
+rusqlite = "0.31.0"
+thiserror = "1.0"
