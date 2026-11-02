@@ -20,7 +20,7 @@ path = "identity_auth.rs"
 identity = { path = "../../../modules/identity" }
 fusionpanel-domain = { path = "../../../crates/domain" }
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 uuid = { version = "1.7", features = ["v4"] }
