@@ -1,10 +1,10 @@
 # Current readiness milestone
 
-The latest evidence snapshot is [2 November 2026](READINESS_SNAPSHOT_2026-11-02.md), based on master `195a481714eaa16ecbb9ba7e7962ab9622a05a22`.
+Latest: [2 November, revision 2](READINESS_SNAPSHOT_2026-11-02_R2.md), baseline `dc5ea184c70c57544310496290214336b5868db2`.
 
-- All 162 features: **7.18% maturity**, **92.82% remaining**, 0 fully accepted.
-- All 63 packages: **39.84% maturity**, **60.16% remaining**.
+| Scope | Maturity | Remaining evidence gates | Fully accepted |
+|---|---:|---:|---:|
+| 162 features | 7.33% | 92.67% | 0/162 |
+| 63 packages | 39.84% | 60.16% | 3/63 |
 
-These are delivery/evidence gate scores, not time estimates or code completion. Each feature and package has its own remaining-work entry. Open PRs and mocked service behavior do not establish real acceptance.
-
-[Machine-readable rows](READINESS_SNAPSHOT_2026-11-02.json) · [Historical snapshot](READINESS_SNAPSHOT_2026-11-01.md) · [Capability ledger](CAPABILITY_LEDGER.md)
+These measure evidence gates, not code completion or engineering time. Each row lists remaining work. [JSON](READINESS_SNAPSHOT_2026-11-02_R2.json); [previous revision](READINESS_SNAPSHOT_2026-11-02.md).
