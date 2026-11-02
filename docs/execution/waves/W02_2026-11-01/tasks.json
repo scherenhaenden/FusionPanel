@@ -109,7 +109,7 @@
     ],
     "detail": "TCP probe currently uses only first resolved address (probes.rs43-44,67); try bounded candidates so reachable alternate addresses do not cause false incidents. Make timeout budgets deterministic and bounded across attempts. Existing integration.rs109-136 DOES use a loopback webhook receiver; preserve it and assert HTTP method/path/headers and JSON alert payload plus failure/recovery behavior. Do not claim unbounded default reqwest blocking timeout (it is30seconds). Add real local socket regressions and failure cases. Preserve explicit scheduler/collector/persistence/E2E gaps instead of inventing live metrics.",
     "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
-    "status": "PREPARED",
+    "status": "QUEUED_NOT_DISPATCHED",
     "session": null,
     "issue": 96,
     "issue_url": "https://github.com/scherenhaenden/FusionPanel/issues/96"
@@ -124,7 +124,7 @@
     ],
     "detail": "Continue existing OPEN PR69 instead of starting another competing implementation. Fetch branch issue-19-migration-discovery-2421886187897473093 at exact1a16791752fb7f42f5d475cb6472c5d915bbba40; preserve all commits and add only scoped fixes, merge verified master base normally if needed. Planner::create_review_plan can allow decommission for empty inventory through vacuous all(). Fail closed for empty/unknown/unqualified source inventory even when handoff attestations are all true; add explicit blockers and regressions. Keep exact-source registry empty until genuine version-matched sanitized source evidence exists. No guessed CloudPanel schema/support, no actual apply/decommission. Update existing PR69 with additive commits and evidence (no force push); do not duplicate it solely for delivery.",
     "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
-    "status": "PREPARED",
+    "status": "QUEUED_NOT_DISPATCHED",
     "session": null,
     "issue": 97,
     "issue_url": "https://github.com/scherenhaenden/FusionPanel/issues/97"
@@ -139,22 +139,24 @@
     ],
     "detail": "A recovered S08 result is being published separately from session3198712460135711531. Continue draft PR90 branch recovery/s08-identity-3198712460135711531 at exact ff4caef9a7eba8f9f60b8e570e182a92fdefd325. Preserve original source commits, apply additive changes, update PR90 without force-push or merge. Repair principal-scoped RBAC, checked session expiry and private validated invariants; add real tests rather than0-test cargo success. Verify huge/negative/zero TTL without panic, caller/user binding filtering, revocation/demotion/session expiration, actual SQLite persistence reopen and tenant isolation. Do not fabricate authenticated API integration; expose explicit boundaries for S25. Continue recovered source additively and update its existing PR when possible; no duplicate rerun to request PR delivery.",
     "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
-    "status": "PREPARED",
+    "status": "QUEUED_NOT_DISPATCHED",
     "session": null,
     "recovery_head": "ff4caef9a7eba8f9f60b8e570e182a92fdefd325",
     "recovery_branch": "recovery/s08-identity-3198712460135711531"
   },
   {
     "id": "W02-10",
-    "package": "S17",
-    "issue": 18,
-    "title": "Recover failed administration frontend as a bounded live shell",
+    "package": "S23",
+    "issue": 25,
+    "title": "Qualify recovered secrets storage and rotation",
     "paths": [
-      "frontend/"
+      "modules/secrets/"
     ],
-    "detail": "Previous session8596482107365986135 is Failed; this is a bounded retry of implementation, not a duplicate PR request. Read S17 specification, provide accessible responsive login/shell/API client and selectable workflow UX. Use actual existing health/capabilities endpoints and show unsupported/blocked product actions explicitly; never hardcode successful hosting/container/admin operations. Write meaningful component/accessibility tests and a real browser-to-API smoke path using the actual binary with valid/invalid credentials. Isolate frontend package/lockfile; do not change root manifests, shared docs or sibling modules. Record actual UI/runtime gaps and supported modes.",
     "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
-    "status": "PREPARED",
-    "session": null
+    "status": "QUEUED_NOT_DISPATCHED",
+    "session": null,
+    "detail": "Continue draft PR98 branch recovery/s23-secrets-1788723557430535400 at exact18c65b8e5a1e84c03a34791540d2dbd2acf9e034, preserving source/history with additive fixes and updating the existing PR without force push or merge. Repair raw-key Debug disclosure, unchecked ID path traversal, tenant/scope delimiter collisions, unauthenticated metadata and get_state authorization, non-atomic key rotation/store writes and unsafe permissions. Bind tenant/scope/ID/version cryptographically as authenticated context, validate opaque identifiers, redact all key material, stage atomic restricted-permission writes, and preserve recoverability on interrupted rotation. Eight crypto/filesystem tests passed, but one E2E placeholder printed BLOCKED and returned success; remove false-green qualification. Add meaningful isolation/adversarial/path/metadata and crash/rotation tests proving new-key reopen, old-key rejection, no partial store loss and actual secret-injection/recovery outcome or nonzero BLOCKED. Do not invent S25 API authorization or production KMS. Real crypto dependencies only, no homemade algorithms.",
+    "recovery_head": "18c65b8e5a1e84c03a34791540d2dbd2acf9e034",
+    "recovery_branch": "recovery/s23-secrets-1788723557430535400"
   }
 ]

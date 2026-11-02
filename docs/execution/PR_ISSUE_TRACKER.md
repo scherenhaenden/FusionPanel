@@ -28,6 +28,21 @@ This register lists reviewed package PRs and directly related documentation or c
 | [#90](https://github.com/scherenhaenden/FusionPanel/pull/90) | [S08](sessions/S08.md) Identity | [#11](https://github.com/scherenhaenden/FusionPanel/issues/11) | Scoped recovery from session 3198712460135711531 | Draft recovery at ff4caef9a7eba8f9f60b8e570e182a92fdefd325; compilation with zero tests; invariants, persistence and principal-bound RBAC remain unqualified. Later repair heads must be checked live | Keep #11 open; W02-09 owns recovered-source qualification |
 | [#98](https://github.com/scherenhaenden/FusionPanel/pull/98) | [S23](sessions/S23.md) Secrets | [#25](https://github.com/scherenhaenden/FusionPanel/issues/25) | Scoped recovery from session 1788723557430535400 | Draft recovery at 18c65b8e5a1e84c03a34791540d2dbd2acf9e034; eight crypto/filesystem tests passed, one false-green E2E excluded. Key disclosure, identifier/authorization and rotation/recovery defects block merge. Later repair heads must be checked live | Keep #25 open; W02-10 owns recovered-source qualification |
 
+## W02 dispatch register
+
+| Task | Package | Issue | Session and base | Dispatch state |
+|---|---|---|---|---|
+| W02-01 | S06 | #6 | [7302772204230979493](https://jules.google.com/session/7302772204230979493), base `3a8bf9e` | Dispatched; not reviewed |
+| W02-02 | S09 | [#91](https://github.com/scherenhaenden/FusionPanel/issues/91) | [7764619453540187587](https://jules.google.com/session/7764619453540187587), base `3a8bf9e` | Dispatched; not reviewed |
+| W02-03 | S10 | [#92](https://github.com/scherenhaenden/FusionPanel/issues/92) | [1885562045966245180](https://jules.google.com/session/1885562045966245180), base `3a8bf9e` | Dispatched; not reviewed |
+| W02-04 | S11 | [#93](https://github.com/scherenhaenden/FusionPanel/issues/93) | [1116061198015020496](https://jules.google.com/session/1116061198015020496), base `3a8bf9e` | Dispatched; not reviewed |
+| W02-05 | S13 | [#94](https://github.com/scherenhaenden/FusionPanel/issues/94) | [3274795259823328621](https://jules.google.com/session/3274795259823328621), base `3a8bf9e` | Dispatched; not reviewed |
+| W02-06 | S15 | [#95](https://github.com/scherenhaenden/FusionPanel/issues/95) | [14127040891990959948](https://jules.google.com/session/14127040891990959948), base `3a8bf9e` | Dispatched after the first five; not reviewed |
+| W02-07 | S16 | [#96](https://github.com/scherenhaenden/FusionPanel/issues/96) | Not created | Queued |
+| W02-08 | S18 | [#97](https://github.com/scherenhaenden/FusionPanel/issues/97) | Existing PR #69 target; no session created | Queued |
+| W02-09 | S08 | #11 | Existing draft PR #90 target; no session created | Queued |
+| W02-10 | S23 | #25 | Existing draft PR #98 target; no session created | Queued |
+
 ## Association rules
 
 - Keep package implementation PRs linked to their primary issue and recorded in this table. Record directly related docs/maintenance PRs with their relevant issue; state why no issue applies when none is relevant.
@@ -39,4 +54,5 @@ This register lists reviewed package PRs and directly related documentation or c
 ## Pending integration work
 
 Issue [#6](https://github.com/scherenhaenden/FusionPanel/issues/6) owns root workspace integration and CI for the foundation packages. PR #81 is merged documentation-only traceability; the S06 integration/CI implementation PR is still pending. PR #69 remains open; PR #83 and refined DNS PR #85 are merged but have runtime qualification gaps. PR #84 was closed unmerged as superseded. Do not treat dependent runtime packages as complete until their required foundation interfaces and real-process workflows are integrated and verified.
-\nThe [source audit](../audits/2026-11-01/SOURCE_AUDIT.md) records release-blocking source findings and actual test evidence. [Wave W02](waves/W02_2026-11-01/README.md) owns ten non-overlapping repair/integration sessions, including additive work on existing PRs #69, #90 and #98. Failed S17 frontend session 8596482107365986135 remains queued; it is not reported as delivered.\n
+
+The [source audit](../audits/2026-11-01/SOURCE_AUDIT.md) records release-blocking source findings and actual test evidence. [Wave W02](waves/W02_2026-11-01/README.md) defines ten non-overlapping repair/integration tasks (six dispatched, four queued), including additive work on existing PRs #69, #90 and #98. Failed S17 frontend session 8596482107365986135 remains queued; it is not reported as delivered.

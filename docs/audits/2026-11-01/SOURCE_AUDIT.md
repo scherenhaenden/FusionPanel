@@ -151,7 +151,11 @@ The coordinator owns issue creation, dispatch prompts, exact base SHAs, session 
 | DNS regression restoration | #16 | modules/dns/** | Preserve earlier TTL/Null MX/typed DNSSEC/alias and mutation invariants; real provider evidence or nonzero BLOCKED. |
 | Security policy semantics and qualification status | #23 | modules/security/** | Parsed CSP expressions, effective firewall recovery access, and required blocked diagnostics failing qualification. |
 | Observability probe and webhook evidence | #22 | modules/observability/** | Multi-address TCP deadline cases, captured alert payload assertions and actual outage/recovery evidence when runtime prerequisites exist. |
-| Secrets recovery qualification | #25 | modules/secrets/** on the reviewed recovery branch | Key redaction, checked identifiers/authorization, collision-safe authenticated metadata, atomic rotation and crash/reopen evidence. |\n| Identity recovery qualification | #11 | modules/identity/** on the reviewed recovery branch | Nonzero meaningful tests for invariants, extreme TTL, RBAC isolation, persistence and revocation; independently inspect coordinator-reported findings. |
+| Secrets recovery qualification | #25 | modules/secrets/** on the reviewed recovery branch | Key redaction, checked identifiers/authorization, collision-safe authenticated metadata, atomic rotation and crash/reopen evidence. |
+| Identity recovery qualification | #11 | modules/identity/** on the reviewed recovery branch | Nonzero meaningful tests for invariants, extreme TTL, RBAC isolation, persistence and revocation; independently inspect coordinator-reported findings. |
 
 Each repair must preserve existing feature IDs and selectable user workflows, state unsupported behavior explicitly, add meaningful negative cases, report dependency versions and cleanup, and create a focused PR against master using Refs with the correct parent issue. Parallel sessions must not share write paths. No repair session merges its own PR or qualifies a blocked dependency as a pass.
-\n## Execution handoff\n\nAudit repairs are tracked by issues #91–#97; the exact prompts, base commits, recovered branch heads, and session IDs are maintained in [wave W02](../../execution/waves/W02_2026-11-01/README.md). The source audit does not itself mark any capability accepted.\n
+
+## Execution handoff
+
+Audit repairs are tracked by issues #91–#97; the exact prompts, base commits, recovered branch heads, and session IDs are maintained in [wave W02](../../execution/waves/W02_2026-11-01/README.md). The source audit does not itself mark any capability accepted.
