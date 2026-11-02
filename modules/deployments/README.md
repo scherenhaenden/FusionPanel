@@ -1,27 +1,22 @@
-# Deployments Module
+# fp-deployments
 
-## Overview
-This module handles deployment workflows, focusing currently on Git webhook payload verification for GitHub and GitLab.
+This is the deployments module for FusionPanel, responsible for managing deployment workflows, environments, and deployment status.
 
-## Current Capabilities (Implemented)
-- **DEP-02: Git webhooks (Partial)**
-  - Implemented secure webhook signature validation (HMAC SHA-256 for GitHub, simple token comparison for GitLab) using timing-safe operations.
-  - Implemented payload event parsing to detect Push and Tag events.
+## Capabilities
 
-## Missing Capabilities (Blocked/Pending)
-- **DEP-01: Git push-to-deploy**
-- **DEP-02: Git webhooks (Remaining)**
-  - Connecting verified events to an actual deployment trigger logic.
-- **DEP-03: Multi-language builds**
-- **DEP-04: Blue-green deployments**
-- **DEP-05: Per-commit preview environments**
-- **DEP-06: Staging**
-- **DEP-07: Release rollback**
-- **DEP-08: Scheduled deployments**
-- **DEP-09: Two-person deployment approval**
-- **DEP-10: Deployment history and progress**
-- **DEP-11: Failure diagnostics**
-- **DEP-12: GitHub Actions integration**
+* **DEP-01: Git push-to-deploy** - Blocked (No Git repository integration)
+* **DEP-02: Git webhooks** - Blocked (No webhooks implemented)
+* **DEP-03: Multi-language builds** - Blocked (No builds implemented)
+* **DEP-04: Blue-green deployments** - Blocked (No blue-green deployment implemented)
+* **DEP-05: Per-commit preview environments** - Partial (Domain model supports `Environment::Preview`, but logic is unimplemented)
+* **DEP-06: Staging** - Partial (Domain model supports `Environment::Staging`, but logic is unimplemented)
+* **DEP-07: Release rollback** - Partial (Domain model supports `DeploymentStatus::RolledBack`, but actual rollback logic is unimplemented)
+* **DEP-08: Scheduled deployments** - Blocked (No scheduling implemented)
+* **DEP-09: Two-person deployment approval** - Blocked (No approval implemented)
+* **DEP-10: Deployment history and progress** - Partial (Domain model tracks status, history storage unimplemented)
+* **DEP-11: Failure diagnostics** - Blocked (No diagnostics implemented)
+* **DEP-12: GitHub Actions integration** - Blocked (No integration implemented)
 
-## Tests
-Run unit tests with `cargo test --manifest-path modules/deployments/Cargo.toml`.
+## Models
+
+See `src/domain/models.rs` and `src/domain/state_machine.rs` for initial domain logic. Tests cover valid and negative transition state machine tests.
