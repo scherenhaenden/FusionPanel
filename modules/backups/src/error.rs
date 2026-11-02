@@ -18,4 +18,6 @@ pub enum BackupError {
     ManifestNotFound,
     #[error("System time error: {0}")]
     TimeError(#[from] std::time::SystemTimeError),
+    #[error("Invalid compression level: {0}. Must be between 1 and 21.")]
+    InvalidCompressionLevel(i32),
 }
