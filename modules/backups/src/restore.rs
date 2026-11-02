@@ -1,12 +1,12 @@
 use crate::error::BackupError;
 use crate::models::{FileInfo, Manifest};
-use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Component, Path};
 use tar::Archive;
+use zstd::stream::Decoder as ZstdDecoder;
 
 pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
     archive_path: P1,
@@ -17,8 +17,10 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
         fs::create_dir_all(target_dir)?;
     }
 
+    let canonical_target = fs::canonicalize(target_dir)?;
+
     let file = File::open(archive_path)?;
-    let tar = GzDecoder::new(file);
+    let tar = ZstdDecoder::new(file)?;
     let mut archive = Archive::new(tar);
 
     let mut manifest: Option<Manifest> = None;
@@ -44,7 +46,7 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
                 return Err(BackupError::ManifestNotFound);
             }
 
-            // Check for unsafe paths
+            // Check for unsafe paths in the components
             for component in path.components() {
                 match component {
                     Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
@@ -59,9 +61,21 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
             })?;
 
             let target_path = target_dir.join(&path);
+
+            // To prevent directory climbing via symlinks or absolute path tricks
+            // ensure the resolved path starts with the absolute target_dir.
+            // We cannot canonicalize target_path directly if it doesn't exist yet,
+            // so we will create the parent directory and canonicalize the parent.
             if let Some(parent) = target_path.parent() {
                 fs::create_dir_all(parent)?;
+                let canonical_parent = fs::canonicalize(parent)?;
+                if !canonical_parent.starts_with(&canonical_target) {
+                    return Err(BackupError::UnsafePath(path_str));
+                }
+            } else {
+                return Err(BackupError::UnsafePath(path_str));
             }
+
             let mut dest_file = File::create(&target_path)?;
 
             // Stream and hash simultaneously

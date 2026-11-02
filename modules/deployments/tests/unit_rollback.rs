@@ -1,8 +1,10 @@
-use std::sync::{Arc, Mutex};
-use deployments::rollback::inventory::{ReleaseInventory, Release, Plan, AppliedResult, ObservedState, ReleaseStatus};
-use deployments::rollback::manager::RollbackManager;
-use uuid::Uuid;
 use chrono::Utc;
+use deployments::rollback::inventory::{
+    AppliedResult, ObservedState, Plan, Release, ReleaseInventory, ReleaseStatus,
+};
+use deployments::rollback::manager::RollbackManager;
+use std::sync::{Arc, Mutex};
+use uuid::Uuid;
 
 fn create_release(target_id: &str, status: ReleaseStatus) -> Release {
     Release {
@@ -67,7 +69,10 @@ fn test_fast_rollback() {
 
     let rolled_back_to_release = result.unwrap();
     assert_eq!(rolled_back_to_release.id, healthy_release.id);
-    assert_eq!(rolled_back_to_release.observed_state.status, ReleaseStatus::Active);
+    assert_eq!(
+        rolled_back_to_release.observed_state.status,
+        ReleaseStatus::Active
+    );
 
     let locked = inventory_arc.lock().unwrap();
     let old_active = locked.get_release(target, active_failed.id).unwrap();
@@ -75,7 +80,9 @@ fn test_fast_rollback() {
 }
 
 #[test]
-#[should_panic(expected = "BLOCKED: Deployment execution engine unavailable for physical rollback test")]
+#[should_panic(
+    expected = "BLOCKED: Deployment execution engine unavailable for physical rollback test"
+)]
 fn test_fast_rollback_blocked() {
     let is_deployment_engine_available = false;
 

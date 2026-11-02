@@ -1,6 +1,6 @@
-use std::collections::{HashMap, VecDeque};
-use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, VecDeque};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,7 +61,8 @@ impl ReleaseInventory {
     }
 
     pub fn add_release(&mut self, release: Release) {
-        let target_releases = self.releases_by_target
+        let target_releases = self
+            .releases_by_target
             .entry(release.plan.target_id.clone())
             .or_default();
 
@@ -70,7 +71,9 @@ impl ReleaseInventory {
         let mut healthy_count = 0;
         let mut indices_to_remove = Vec::new();
         for (i, r) in target_releases.iter().enumerate() {
-            if r.observed_state.status == ReleaseStatus::Healthy || r.observed_state.status == ReleaseStatus::Active {
+            if r.observed_state.status == ReleaseStatus::Healthy
+                || r.observed_state.status == ReleaseStatus::Active
+            {
                 healthy_count += 1;
                 if healthy_count > self.max_healthy_retention {
                     indices_to_remove.push(i);

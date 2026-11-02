@@ -1,8 +1,8 @@
+use super::inventory::{ObservedState, Release, ReleaseInventory, ReleaseStatus};
+use chrono::Utc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use thiserror::Error;
-use super::inventory::{ReleaseInventory, Release, ObservedState, ReleaseStatus};
-use chrono::Utc;
 
 #[derive(Debug, Error)]
 pub enum RollbackError {

@@ -25,6 +25,7 @@ fn test_generate_and_validate_configs() {
         domain,
         "/srv/fusionpanel/sites/example.com".into(),
         spec,
+        8080,
     )
     .unwrap();
 
@@ -111,6 +112,7 @@ fn test_validation_rejects_injections() {
         domain.clone(),
         "/srv/fusionpanel/sites/../etc/passwd\0".to_string(),
         HostingSpec::Static(hosting::domain::StaticConfig),
+        8080,
     );
     assert!(doc_res.is_err(), "Should reject invalid document root");
 
@@ -131,4 +133,80 @@ fn test_validation_rejects_injections() {
         .to_string()
         .try_into();
     assert!(bad_upstream.is_err(), "Should reject invalid upstream URL");
+
+    // Test privileged port conflict/detection
+    let port_res = SiteConfig::new(
+        site_id.clone(),
+        tenant_id.clone(),
+        domain.clone(),
+        "/srv/fusionpanel/sites/example.com".to_string(),
+        HostingSpec::Static(hosting::domain::StaticConfig),
+        80, // Privileged port < 1024 should be rejected
+    );
+    assert!(port_res.is_err(), "Should reject privileged ports");
+}
+
+#[test]
+fn test_vhost_collision_and_socket_permissions() {
+    let site_id = SiteId(Uuid::new_v4());
+    let tenant_id = TenantId(Uuid::new_v4());
+    let domain = DomainName::new("example.com").unwrap();
+    let spec = HostingSpec::Php(PhpConfig {
+        version: "8.2".to_string().try_into().unwrap(),
+        pool_name: "example_pool".to_string().try_into().unwrap(),
+        memory_limit: "256M".to_string().try_into().unwrap(),
+    });
+
+    let site1 = SiteConfig::new(
+        site_id.clone(),
+        tenant_id.clone(),
+        domain.clone(),
+        "/srv/fusionpanel/sites/example.com".to_string(),
+        spec.clone(),
+        8080,
+    )
+    .unwrap();
+
+    let nginx_config = hosting::config::generate_nginx_config(&site1).unwrap();
+    let php_fpm_config = hosting::config::generate_php_fpm_config(&site1).unwrap();
+
+    // Check vhost collision setup
+    let site2 = SiteConfig::new(
+        SiteId(Uuid::new_v4()),
+        tenant_id.clone(),
+        domain.clone(), // Same domain
+        "/srv/fusionpanel/sites/example.com".to_string(),
+        spec.clone(),
+        8080, // Same port
+    )
+    .unwrap();
+
+    let mut registry = hosting::domain::HostingRegistry::new();
+    assert!(registry.register(site1.clone()).is_ok());
+
+    // Should return conflict for same domain + same port
+    let collision_err = registry.register(site2);
+    assert!(collision_err.is_err());
+
+    // Check port allocation conflict
+    let site3 = SiteConfig::new(
+        SiteId(Uuid::new_v4()),
+        tenant_id.clone(),
+        DomainName::new("example.org").unwrap(), // Different domain
+        "/srv/fusionpanel/sites/example.org".to_string(),
+        spec.clone(),
+        8080, // Same port
+    )
+    .unwrap();
+    let port_conflict_err = registry.register(site3);
+    assert!(port_conflict_err.is_err());
+
+    // In our test, we just check that the config generated contains the right properties
+    assert!(nginx_config.contains("listen 8080;"));
+    assert!(nginx_config.contains("server_name example.com;"));
+
+    // Check unix socket permissions
+    assert!(php_fpm_config.contains("listen.mode = 0660"));
+    assert!(php_fpm_config.contains(&format!("listen.owner = tenant_{}", tenant_id.0)));
+    assert!(php_fpm_config.contains(&format!("listen.group = tenant_{}", tenant_id.0)));
 }
