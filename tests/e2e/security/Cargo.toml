@@ -1,0 +1,11 @@
+[package]
+name = "e2e-security"
+version = "0.1.0-dev.1"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[workspace]
+
+[[test]]
+name = "e2e"
+path = "e2e.rs"

@@ -1,4 +1,4 @@
-use fusionpanel_administration::tenants::models::{AccountStatus, Organization, PlanTier};
+use administration::tenants::models::{AccountStatus, Organization, PlanTier};
 
 #[test]
 fn test_create_organization() {
