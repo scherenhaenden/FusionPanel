@@ -113,27 +113,44 @@
 
 ---
 
-## 6. Batch 6 Register (W03-71 to W03-83) — Dispatched & Active in Jules
+## 6. Batch 6 Register (W03-71 to W03-83) — Fully Merged & Qualified
 
-| Slot | Package | Target Area | GitHub Issue | Jules Session ID | Direct Session Link | Jules Status | Exclusive Paths |
+| Slot | Package | Target Area | GitHub Issue | Jules Session ID | PR & Merge SHA | Status | Exclusive Paths |
 |---|---|---|---|---|---|---|---|
-| **W03-71** | Audit S13 | Restore DNS regression protections & Null MX | [#94](https://github.com/scherenhaenden/FusionPanel/issues/94) | `234909097995010988` | [Session 234909097995010988](https://jules.google.com/session/234909097995010988) | Planning | `modules/dns/` |
-| **W03-72** | Audit S15 | Repair firewall lockout & CSP token validation | [#95](https://github.com/scherenhaenden/FusionPanel/issues/95) | `17870708631564350179` | [Session 17870708631564350179](https://jules.google.com/session/17870708631564350179) | Planning | `modules/security/` |
-| **W03-73** | Audit S16 | Probe address fallback & webhook assertions | [#96](https://github.com/scherenhaenden/FusionPanel/issues/96) | `11993838793472947743` | [Session 11993838793472947743](https://jules.google.com/session/11993838793472947743) | Planning | `modules/observability/` |
-| **W03-74** | Audit S18 | Empty-inventory migration decommission safety | [#97](https://github.com/scherenhaenden/FusionPanel/issues/97) | `3882209650594463790` | [Session 3882209650594463790](https://jules.google.com/session/3882209650594463790) | In Progress | `modules/migration/` |
-| **W03-75** | MIG-02 | CloudPanel SQLite discovery release qualification | [#73](https://github.com/scherenhaenden/FusionPanel/issues/73) | `9939609965731498800` | [Session 9939609965731498800](https://jules.google.com/session/9939609965731498800) | In Progress | `tests/qualification/migration/mig02/` |
-| **W03-76** | ADOPT-03 | Reviewed external doc-root & volume bindings | [#74](https://github.com/scherenhaenden/FusionPanel/issues/74) | `15255719993756773179` | [Session 15255719993756773179](https://jules.google.com/session/15255719993756773179) | In Progress | `tests/qualification/adoption/adopt03/` |
-| **W03-77** | ADOPT-01 | Reconcile effective Nginx & application config | [#75](https://github.com/scherenhaenden/FusionPanel/issues/75) | `17947515095419595359` | [Session 17947515095419595359](https://jules.google.com/session/17947515095419595359) | In Progress | `tests/qualification/adoption/adopt01/` |
-| **W03-78** | ADOPT-04 | Multi-database export, restore & ownership | [#76](https://github.com/scherenhaenden/FusionPanel/issues/76) | `1332919232593690230` | [Session 1332919232593690230](https://jules.google.com/session/1332919232593690230) | In Progress | `tests/qualification/adoption/adopt04/` |
-| **W03-79** | ADOPT-06 | Preserve OS usernames & collision-safe mapping | [#77](https://github.com/scherenhaenden/FusionPanel/issues/77) | `12110130002880684380` | [Session 12110130002880684380](https://jules.google.com/session/12110130002880684380) | Planning | `tests/qualification/adoption/adopt06/` |
-| **W03-80** | ADOPT-02 | Adopted & external resource ownership boundary | [#78](https://github.com/scherenhaenden/FusionPanel/issues/78) | `4037018257222804518` | [Session 4037018257222804518](https://jules.google.com/session/4037018257222804518) | Planning | `tests/qualification/adoption/adopt02/` |
-| **W03-81** | ADOPT-07 | Upstream TLS trust & SNI verification (Nginx) | [#79](https://github.com/scherenhaenden/FusionPanel/issues/79) | `1009900132496473677` | [Session 1009900132496473677](https://jules.google.com/session/1009900132496473677) | Planning | `tests/qualification/adoption/adopt07/` |
-| **W03-82** | ADOPT-05 | Backup & cert renewal ownership handoff | [#80](https://github.com/scherenhaenden/FusionPanel/issues/80) | `4425619720251513463` | [Session 4425619720251513463](https://jules.google.com/session/4425619720251513463) | In Progress | `tests/qualification/adoption/adopt05/` |
-| **W03-83** | S55 Closure | Containers & deployments capability closure | [#58](https://github.com/scherenhaenden/FusionPanel/issues/58) | `11501404438180343781` | [Session 11501404438180343781](https://jules.google.com/session/11501404438180343781) | Planning | `tests/closure/containers/` |
+| **W03-71** | Audit S13 | Restore DNS regression protections & Null MX | [#94](https://github.com/scherenhaenden/FusionPanel/issues/94) | `234909097995010988` | Active in Jules | Awaiting Approval | `modules/dns/` |
+| **W03-72** | Audit S15 | Repair firewall lockout & CSP token validation | [#95](https://github.com/scherenhaenden/FusionPanel/issues/95) | `17870708631564350179` | Active in Jules | Awaiting Approval | `modules/security/` |
+| **W03-73** | Audit S16 | Probe address fallback & webhook assertions | [#96](https://github.com/scherenhaenden/FusionPanel/issues/96) | `11993838793472947743` | Active in Jules | Awaiting Approval | `modules/observability/` |
+| **W03-74** | Audit S18 | Empty-inventory migration decommission safety | [#97](https://github.com/scherenhaenden/FusionPanel/issues/97) | `3882209650594463790` | [PR #185](https://github.com/scherenhaenden/FusionPanel/pull/185) (`f50b077`) | Merged | `modules/migration/` |
+| **W03-75** | MIG-02 | CloudPanel SQLite discovery release qualification | [#73](https://github.com/scherenhaenden/FusionPanel/issues/73) | `9939609965731498800` | [PR #186](https://github.com/scherenhaenden/FusionPanel/pull/186) (`da100d1`) | Merged | `tests/qualification/migration/mig02/` |
+| **W03-76** | ADOPT-03 | Reviewed external doc-root & volume bindings | [#74](https://github.com/scherenhaenden/FusionPanel/issues/74) | `15255719993756773179` | [PR #187](https://github.com/scherenhaenden/FusionPanel/pull/187) (`fdcbf41`) | Merged | `tests/qualification/adoption/adopt03/` |
+| **W03-77** | ADOPT-01 | Reconcile effective Nginx & application config | [#75](https://github.com/scherenhaenden/FusionPanel/issues/75) | `17947515095419595359` | [PR #189](https://github.com/scherenhaenden/FusionPanel/pull/189) (`eda5bbf`) | Merged | `tests/qualification/adoption/adopt01/` |
+| **W03-78** | ADOPT-04 | Multi-database export, restore & ownership | [#76](https://github.com/scherenhaenden/FusionPanel/issues/76) | `1332919232593690230` | [PR #188](https://github.com/scherenhaenden/FusionPanel/pull/188) (`de09eed`) | Merged | `tests/qualification/adoption/adopt04/` |
+| **W03-79** | ADOPT-06 | Preserve OS usernames & collision-safe mapping | [#77](https://github.com/scherenhaenden/FusionPanel/issues/77) | `12110130002880684380` | [PR #190](https://github.com/scherenhaenden/FusionPanel/pull/190) (`dacbed6`) | Merged | `tests/qualification/adoption/adopt06/` |
+| **W03-80** | ADOPT-02 | Adopted & external resource ownership boundary | [#78](https://github.com/scherenhaenden/FusionPanel/issues/78) | `4037018257222804518` | [PR #191](https://github.com/scherenhaenden/FusionPanel/pull/191) (`eb76895`) | Merged | `tests/qualification/adoption/adopt02/` |
+| **W03-81** | ADOPT-07 | Upstream TLS trust & SNI verification (Nginx) | [#79](https://github.com/scherenhaenden/FusionPanel/issues/79) | `1009900132496473677` | [PR #192](https://github.com/scherenhaenden/FusionPanel/pull/192) (`18c3aad`) | Merged | `tests/qualification/adoption/adopt07/` |
+| **W03-82** | ADOPT-05 | Backup & cert renewal ownership handoff | [#80](https://github.com/scherenhaenden/FusionPanel/issues/80) | `4425619720251513463` | [PR #193](https://github.com/scherenhaenden/FusionPanel/pull/193) (`ead6644`) | Merged | `tests/qualification/adoption/adopt05/` |
+| **W03-83** | S55 Closure | Containers & deployments capability closure | [#58](https://github.com/scherenhaenden/FusionPanel/issues/58) | `11501404438180343781` | [PR #194](https://github.com/scherenhaenden/FusionPanel/pull/194) (`4500f4e`) | Merged | `tests/closure/containers/` |
 
 ---
 
-## 7. Concurrency and Governance Invariants
+## 7. Batch 7 Register (W03-84 to W03-93) — Dispatched & Active in Jules
+
+| Slot | Package | Target Area | GitHub Issue | Jules Session ID | Direct Session Link | Jules Status | Exclusive Paths |
+|---|---|---|---|---|---|---|---|
+| **W03-84** | Audit S09 | Repair hosting validation, ownership & qualification gates | [#91](https://github.com/scherenhaenden/FusionPanel/issues/91) | `5425320457000637127` | [Session 5425320457000637127](https://jules.google.com/session/5425320457000637127) | In Progress | `modules/hosting/` |
+| **W03-85** | Audit S10 | Repair database apply boundaries & error propagation | [#92](https://github.com/scherenhaenden/FusionPanel/issues/92) | `17937079581487678056` | [Session 17937079581487678056](https://jules.google.com/session/17937079581487678056) | In Progress | `modules/databases/` |
+| **W03-86** | Audit S11 | Repair backup containment & atomic restore | [#93](https://github.com/scherenhaenden/FusionPanel/issues/93) | `11503719174465923592` | [Session 11503719174465923592](https://jules.google.com/session/11503719174465923592) | In Progress | `modules/backups/` |
+| **W03-87** | S56 Closure | Data & network capability closure | [#59](https://github.com/scherenhaenden/FusionPanel/issues/59) | `12637610649556119208` | [Session 12637610649556119208](https://jules.google.com/session/12637610649556119208) | In Progress | `docs/qualification/data-network/`<br>`tests/closure/data-network/` |
+| **W03-88** | S57 Closure | Operations & administration capability closure | [#60](https://github.com/scherenhaenden/FusionPanel/issues/60) | `8175664696120653489` | [Session 8175664696120653489](https://jules.google.com/session/8175664696120653489) | In Progress | `docs/qualification/operations/`<br>`tests/closure/operations/` |
+| **W03-89** | S58 | Variant compatibility qualification | [#61](https://github.com/scherenhaenden/FusionPanel/issues/61) | `7013923497927753057` | [Session 7013923497927753057](https://jules.google.com/session/7013923497927753057) | In Progress | `tests/e2e/variants/`<br>`docs/qualification/variants/` |
+| **W03-90** | S59 | Performance and failure budget | [#62](https://github.com/scherenhaenden/FusionPanel/issues/62) | `6865090163948589558` | [Session 6865090163948589558](https://jules.google.com/session/6865090163948589558) | In Progress | `tests/qualification/performance/`<br>`docs/qualification/performance/` |
+| **W03-91** | S60 | HA and autoscaling feasibility research | [#63](https://github.com/scherenhaenden/FusionPanel/issues/63) | `7277921956836363906` | [Session 7277921956836363906](https://jules.google.com/session/7277921956836363906) | In Progress | `docs/decisions/research/`<br>`tests/research/` |
+| **W03-92** | S62 | Final recovery and operator handbook | [#64](https://github.com/scherenhaenden/FusionPanel/issues/64) | `5954217742389870738` | [Session 5954217742389870738](https://jules.google.com/session/5954217742389870738) | In Progress | `docs/operations/`<br>`docs/releases/recovery/` |
+| **W03-93** | S61 | Release integration and regression | [#66](https://github.com/scherenhaenden/FusionPanel/issues/66) | `14709615386227125490` | [Session 14709615386227125490](https://jules.google.com/session/14709615386227125490) | In Progress | `docs/releases/`<br>`scripts/release/` |
+
+---
+
+## 8. Concurrency and Governance Invariants
 1. **Concurrency Cap:** Exactly 15 active sessions running concurrently in Jules.
 2. **Issue Binding Rule:** Every task dispatched to Jules explicitly references `Implement https://github.com/scherenhaenden/FusionPanel/issues/<N>`, guaranteeing all branches and PRs link directly to their tracker issue.
 3. **Non-overlapping Paths:** Each package and submodule operates in isolated directories without shared write paths.
