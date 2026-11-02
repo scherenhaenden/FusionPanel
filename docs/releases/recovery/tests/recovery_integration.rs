@@ -30,6 +30,7 @@ impl Drop for TempDir {
 }
 
 #[test]
+#[ignore = "BLOCKED: fusionpanel-cli recovery restore command missing"]
 fn test_integration_independent_restore() {
     let _temp = TempDir::new("fusionpanel_test_restore");
     println!("BLOCKED: Cannot perform independent restore to another disposable machine because the real backup and restore APIs are not yet available.");
@@ -45,6 +46,7 @@ fn test_integration_independent_restore() {
 }
 
 #[test]
+#[ignore = "BLOCKED: fusionpanel-cli maintenance enable command missing"]
 fn test_e2e_operator_cutover() {
     let _temp = TempDir::new("fusionpanel_test_cutover");
     println!("BLOCKED: Operator cutover cannot be verified because the required CLI cutover scripts and real APIs are not yet implemented.");
