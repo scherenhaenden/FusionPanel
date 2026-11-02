@@ -3,7 +3,7 @@
 #[path = "../src/sftp/mod.rs"]
 mod sftp;
 
-use sftp::{AuthMethod, SftpError, SftpStorageBackend};
+use backup_destinations::sftp::{AuthMethod, SftpError, SftpStorageBackend};
 use std::path::{Path, PathBuf};
 
 #[test]
@@ -107,7 +107,7 @@ fn test_path_normalization_escape() {
 
 #[test]
 fn test_config_builders() {
-    use sftp::{ThrottleConfig, TimeoutConfig};
+    use backup_destinations::sftp::{ThrottleConfig, TimeoutConfig};
     use std::time::Duration;
 
     let backend = SftpStorageBackend::new(
