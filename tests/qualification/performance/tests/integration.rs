@@ -17,6 +17,7 @@ async fn test_basic_load() {
 }
 
 #[tokio::test]
+#[ignore = "BLOCKED: Requires running FusionPanel API on 127.0.0.1:8080"]
 async fn test_failure_budget() {
     // A test that simulates partial failure to ensure we can budget error_count.
     // If the prerequisite API is not available, we explicitly log a BLOCKED requirement.
