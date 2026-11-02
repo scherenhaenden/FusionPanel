@@ -7,8 +7,7 @@ use std::fs::{self, File};
 use std::io::Write;
 use tempfile::TempDir;
 use tar::Builder;
-use flate2::write::GzEncoder;
-use flate2::Compression;
+use zstd::stream::Encoder as ZstdEncoder;
 
 #[test]
 fn test_full_backup_and_restore_cycle() {
@@ -85,9 +84,9 @@ fn test_tamper_detection() {
     let original_manifest = job.execute(&archive_path).expect("Backup failed");
 
     // Corrupt archive by replacing the valid file with malicious content
-    let corrupted_archive_path = dest_dir.path().join("corrupt.tar.gz");
+    let corrupted_archive_path = dest_dir.path().join("corrupt.tar.zst");
     let dest = File::create(&corrupted_archive_path).unwrap();
-    let enc = GzEncoder::new(dest, Compression::default());
+    let enc = ZstdEncoder::new(dest, 3).unwrap();
     let mut tar = Builder::new(enc);
 
     // Write original manifest
