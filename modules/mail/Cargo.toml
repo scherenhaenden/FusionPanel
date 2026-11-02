@@ -1,14 +1,16 @@
+[workspace]
+
 [package]
 name = "mail"
 version = "0.1.0"
 edition = "2021"
 license = "AGPL-3.0-only"
-
-[workspace]
+description = "Mail configuration and domain management"
 
 [dependencies]
-tempfile = "3.10"
 serde = { version = "1.0", features = ["derive"] }
-uuid = { version = "1.0", features = ["v4", "serde"] }
+regex = "1.10"
+uuid = { version = "1.7", features = ["v4", "serde"] }
+tempfile = "3.10"
 
 [dev-dependencies]
