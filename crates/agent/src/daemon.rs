@@ -54,7 +54,9 @@ impl HeartbeatTransport for HmacWsTransport {
             .map_err(|_| DaemonError::TransportFailed)?;
         request.headers_mut().insert(
             "x-hmac-signature",
-            signature.parse().map_err(|_| DaemonError::TransportFailed)?,
+            signature
+                .parse()
+                .map_err(|_| DaemonError::TransportFailed)?,
         );
 
         let (mut ws_stream, _) = connect_async(request)
