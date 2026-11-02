@@ -20,6 +20,24 @@ pub enum BackupError {
     InvalidManifest(String),
     #[error("System time error: {0}")]
     TimeError(#[from] std::time::SystemTimeError),
+    #[error("Source directory does not exist: {0}")]
+    SourceNotFound(String),
+    #[error("Destination path cannot be inside source directory")]
+    DestinationInsideSource,
+    #[error("File size mismatch for {path}: expected {expected}, got {actual}")]
+    SizeMismatch {
+        path: String,
+        expected: u64,
+        actual: u64,
+    },
+    #[error("Duplicate manifest found in archive")]
+    DuplicateManifest,
+    #[error("File in archive not in manifest: {0}")]
+    UnexpectedFile(String),
+    #[error("Missing files from manifest")]
+    MissingFiles,
+    #[error("Duplicate file in archive: {0}")]
+    DuplicateFile(String),
     #[error("Invalid compression level: {0}. Must be between 1 and 21.")]
     InvalidCompressionLevel(i32),
 }

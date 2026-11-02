@@ -3,7 +3,7 @@ use crate::models::{FileInfo, Manifest};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use tar::Archive;
 use zstd::stream::Decoder as ZstdDecoder;
@@ -18,7 +18,10 @@ struct TempRestoreDir {
 impl TempRestoreDir {
     fn new(base_dir: &Path) -> Result<Self, BackupError> {
         let counter = TEMP_DIR_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let path = base_dir.join(format!(".restore_temp_{}_{}", timestamp, counter));
         fs::create_dir_all(&path)?;
 
@@ -56,7 +59,7 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
     let canonical_target = fs::canonicalize(target_dir)?;
 
     // Create a temporary directory in the target dir to avoid cross-device linking issues
-    // and use a secure custom approach because tempfile cannot be added to standard dependencies.
+    // and use a secure custom approach to ensure isolated atomic staging.
     let temp_restore = TempRestoreDir::new(&canonical_target)?;
     let canonical_temp = fs::canonicalize(temp_restore.path())?;
 
@@ -66,7 +69,7 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
 
     let mut manifest: Option<Manifest> = None;
     let mut file_info_map: HashMap<String, FileInfo> = HashMap::new();
-    let mut extracted_files = HashSet::new();
+    let mut extracted_files: HashSet<String> = HashSet::new();
 
     let entries = archive.entries()?;
     for entry in entries {
@@ -75,6 +78,9 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
         let path_str = path.to_string_lossy().into_owned();
 
         if path_str == "manifest.json" {
+            if manifest.is_some() {
+                return Err(BackupError::DuplicateManifest);
+            }
             let mut content = Vec::new();
             entry.read_to_end(&mut content)?;
             let parsed_manifest: Manifest = serde_json::from_slice(&content)?;
@@ -84,7 +90,7 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
             }
             manifest = Some(parsed_manifest);
         } else {
-            // Must have seen manifest first (or we error out for now)
+            // Must have seen manifest first
             if manifest.is_none() {
                 return Err(BackupError::ManifestNotFound);
             }
@@ -100,8 +106,12 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
             }
 
             let expected_info = file_info_map.get(&path_str).ok_or_else(|| {
-                BackupError::Io(io::Error::new(io::ErrorKind::NotFound, "File in archive not in manifest"))
+                BackupError::UnexpectedFile(path_str.clone())
             })?;
+
+            if !extracted_files.insert(path_str.clone()) {
+                return Err(BackupError::DuplicateFile(path_str.clone()));
+            }
 
             let temp_target_path = canonical_temp.join(&path);
 
@@ -119,6 +129,7 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
 
             let mut hasher = Sha256::new();
             let mut buffer = [0; 8192];
+            let mut actual_size: u64 = 0;
             loop {
                 let count = entry.read(&mut buffer)?;
                 if count == 0 {
@@ -126,10 +137,18 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
                 }
                 hasher.update(&buffer[..count]);
                 dest_file.write_all(&buffer[..count])?;
+                actual_size += count as u64;
+            }
+
+            if actual_size != expected_info.size {
+                return Err(BackupError::SizeMismatch {
+                    path: path_str.clone(),
+                    expected: expected_info.size,
+                    actual: actual_size,
+                });
             }
 
             let hash = hex::encode(hasher.finalize());
-
             if hash != expected_info.checksum_sha256 {
                 return Err(BackupError::ChecksumMismatch {
                     path: path_str.clone(),
@@ -137,7 +156,6 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
                     actual: hash,
                 });
             }
-            extracted_files.insert(path_str);
         }
     }
 
@@ -145,17 +163,44 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
 
     for file_info in &manifest.files {
         if !extracted_files.contains(&file_info.path) {
-            return Err(BackupError::InvalidManifest(format!("File in manifest but missing from archive: {}", file_info.path)));
+            return Err(BackupError::MissingFiles);
         }
     }
 
     // Move files atomically from temp to target
-    for path_str in extracted_files {
-        let temp_file_path = canonical_temp.join(&path_str);
-        let final_file_path = canonical_target.join(&path_str);
+    for path_str in &extracted_files {
+        let temp_file_path = canonical_temp.join(path_str);
+        let final_file_path = canonical_target.join(path_str);
+
+        // Carefully handle pre-existing parent symlinks by ensuring each
+        // component is a real directory, deleting if it's a symlink or file
         if let Some(parent) = final_file_path.parent() {
+            let mut current = canonical_target.to_path_buf();
+            let relative_parent = parent.strip_prefix(&canonical_target).unwrap_or(parent);
+            for component in relative_parent.components() {
+                current.push(component);
+                if let Ok(metadata) = current.symlink_metadata() {
+                    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+                        if metadata.is_dir() {
+                            fs::remove_dir_all(&current)?;
+                        } else {
+                            fs::remove_file(&current)?;
+                        }
+                    }
+                }
+            }
             fs::create_dir_all(parent)?;
         }
+
+        // If target file already exists, remove it (could be a symlink or file)
+        if final_file_path.symlink_metadata().is_ok() {
+            if final_file_path.is_dir() {
+                fs::remove_dir_all(&final_file_path)?;
+            } else {
+                fs::remove_file(&final_file_path)?;
+            }
+        }
+
         fs::rename(&temp_file_path, &final_file_path)?;
     }
 
