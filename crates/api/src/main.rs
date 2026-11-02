@@ -206,10 +206,7 @@ mod tests {
         let body_str = String::from_utf8(body.to_vec()).unwrap();
         assert_eq!(
             body_str,
-            format!(
-                r#"{{"status":"ok","service":"fusionpanel-api","version":"{}"}}"#,
-                env!("CARGO_PKG_VERSION")
-            )
+            format!(r#"{{"status":"ok","service":"fusionpanel-api","version":"{}"}}"#, env!("CARGO_PKG_VERSION"))
         );
     }
 
