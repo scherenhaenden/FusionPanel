@@ -1,4 +1,4 @@
-use crate::domain::{error::Result, HostingSpec, SiteConfig};
+use crate::domain::{error::Result, HostingSpec, SiteConfig, UpstreamTlsTrust};
 
 pub fn generate_nginx_config(site: &SiteConfig) -> Result<String> {
     let domain = site.domain.as_str();
@@ -42,14 +42,40 @@ pub fn generate_nginx_config(site: &SiteConfig) -> Result<String> {
             ));
         }
         HostingSpec::ReverseProxy(rp) => {
-            config.push_str(&format!(
+            let mut proxy_config = format!(
                 "\x20\x20\x20\x20location / {{\n\
                  \x20\x20\x20\x20\x20\x20\x20\x20proxy_pass {};\n\
                  \x20\x20\x20\x20\x20\x20\x20\x20proxy_set_header Host $host;\n\
-                 \x20\x20\x20\x20\x20\x20\x20\x20proxy_set_header X-Real-IP $remote_addr;\n\
-                 \x20\x20\x20\x20}}\n",
+                 \x20\x20\x20\x20\x20\x20\x20\x20proxy_set_header X-Real-IP $remote_addr;\n",
                 rp.upstream_url.as_str()
-            ));
+            );
+
+            if let Some(tls) = &rp.tls_policy {
+                match &tls.trust {
+                    UpstreamTlsTrust::SystemCa => {
+                        proxy_config.push_str("        proxy_ssl_verify on;\n");
+                        proxy_config.push_str("        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;\n");
+                    }
+                    UpstreamTlsTrust::InternalCa { ca_cert_path } => {
+                        proxy_config.push_str("        proxy_ssl_verify on;\n");
+                        proxy_config.push_str(&format!("        proxy_ssl_trusted_certificate {};\n", ca_cert_path));
+                    }
+                    UpstreamTlsTrust::InsecureCompatibility { audit_reason } => {
+                        proxy_config.push_str("        proxy_ssl_verify off;\n");
+                        proxy_config.push_str(&format!("        # Insecure compatibility enabled. Reason: {}\n", audit_reason));
+                    }
+                }
+
+                if let Some(expected_name) = &tls.expected_server_name {
+                    proxy_config.push_str("        proxy_ssl_server_name on;\n");
+                    proxy_config.push_str(&format!("        proxy_ssl_name {};\n", expected_name.as_str()));
+                } else {
+                    proxy_config.push_str("        proxy_ssl_server_name off;\n");
+                }
+            }
+
+            proxy_config.push_str("    }\n");
+            config.push_str(&proxy_config);
         }
     }
 
