@@ -83,8 +83,9 @@ fn test_generate_and_validate_configs() {
                     php_conf_path.display()
                 ))
                 .arg("php:fpm-alpine")
-                .arg("php-fpm")
-                .arg("-t")
+                .arg("sh")
+                .arg("-c")
+                .arg(format!("adduser -D {} && php-fpm -t", site.run_as_user.as_str()))
                 .output()
                 .unwrap();
             assert!(
