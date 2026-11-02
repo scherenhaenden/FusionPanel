@@ -6,16 +6,17 @@ pub fn generate_nginx_config(site: &SiteConfig) -> Result<String> {
     let site_id = &site.id.0;
     let tenant_id = &site.tenant_id.0;
 
+    let port = site.port.as_u16();
     let mut config = format!(
         "# Nginx configuration for {}\n\
          # Site ID: {}\n\
          # Tenant ID: {}\n\
          server {{\n\
-         \x20\x20\x20\x20listen 80;\n\
+         \x20\x20\x20\x20listen {};\n\
          \x20\x20\x20\x20server_name {};\n\
          \x20\x20\x20\x20root {};\n\
          \x20\x20\x20\x20index index.php index.html index.htm;\n\n",
-        domain, site_id, tenant_id, domain, root
+        domain, site_id, tenant_id, port, domain, root
     );
 
     match &site.spec {

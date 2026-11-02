@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
-pub mod aliases;
-pub mod config;
-pub mod dns_records;
+pub mod delivery;
 pub mod domain;
+pub mod error;
+pub mod models;
+pub mod plan;
 
-pub use domain::models;
+#[cfg(test)]
+mod tests;

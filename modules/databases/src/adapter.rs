@@ -23,8 +23,13 @@ pub enum DatabaseEngine {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConnectionStrategy {
-    Host { socket_path: Option<String> },
-    Container { container_name: String, network: Option<String> },
+    Host {
+        socket_path: Option<String>,
+    },
+    Container {
+        container_name: String,
+        network: Option<String>,
+    },
 }
 
 #[derive(Clone, Deserialize)]
@@ -116,10 +121,19 @@ pub trait DatabaseAdapter: Send + Sync {
     async fn plan_create_database(&self, name: DbName, owner: DbUser) -> Result<CreateDbPlan>;
     async fn apply_create_database(&self, plan: &CreateDbPlan) -> Result<()>;
 
-    async fn plan_create_user(&self, username: DbUser, password_ref: SecretString) -> Result<CreateUserPlan>;
+    async fn plan_create_user(
+        &self,
+        username: DbUser,
+        password_ref: SecretString,
+    ) -> Result<CreateUserPlan>;
     async fn apply_create_user(&self, plan: &CreateUserPlan) -> Result<()>;
 
-    async fn plan_grant(&self, db_name: DbName, username: DbUser, privileges: Vec<String>) -> Result<GrantPlan>;
+    async fn plan_grant(
+        &self,
+        db_name: DbName,
+        username: DbUser,
+        privileges: Vec<String>,
+    ) -> Result<GrantPlan>;
     async fn apply_grant(&self, plan: &GrantPlan) -> Result<()>;
 
     async fn plan_dump(&self, db_name: DbName, output_path: String) -> Result<DumpPlan>;
@@ -131,27 +145,48 @@ pub trait DatabaseAdapter: Send + Sync {
 
 pub fn validate_identifier(id: &str) -> Result<()> {
     if id.is_empty() || id.len() > 63 {
-        return Err(DatabaseError::InvalidInput("Identifier must be 1-63 characters".into()));
+        return Err(DatabaseError::InvalidInput(
+            "Identifier must be 1-63 characters".into(),
+        ));
     }
 
     for c in id.chars() {
         if !c.is_ascii_alphanumeric() && c != '_' {
-            return Err(DatabaseError::InvalidInput(format!("Invalid character in identifier: {}", c)));
+            return Err(DatabaseError::InvalidInput(format!(
+                "Invalid character in identifier: {}",
+                c
+            )));
         }
     }
 
     if id.starts_with(|c: char| c.is_ascii_digit()) {
-        return Err(DatabaseError::InvalidInput("Identifier cannot start with a digit".into()));
+        return Err(DatabaseError::InvalidInput(
+            "Identifier cannot start with a digit".into(),
+        ));
     }
 
     Ok(())
 }
 
 pub fn validate_privilege(privilege: &str) -> Result<()> {
-    let allowed = ["ALL PRIVILEGES", "SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER", "INDEX", "REFERENCES"];
+    let allowed = [
+        "ALL PRIVILEGES",
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "CREATE",
+        "DROP",
+        "ALTER",
+        "INDEX",
+        "REFERENCES",
+    ];
     let upper_priv = privilege.to_uppercase();
     if !allowed.contains(&upper_priv.as_str()) {
-         return Err(DatabaseError::InvalidInput(format!("Invalid privilege: {}", privilege)));
+        return Err(DatabaseError::InvalidInput(format!(
+            "Invalid privilege: {}",
+            privilege
+        )));
     }
     Ok(())
 }
@@ -183,6 +218,12 @@ mod tests {
         assert!(validate_privilege("all privileges").is_ok());
         assert!(validate_privilege("GRANT").is_err());
         assert!(validate_privilege("DROP DATABASE").is_err());
+    }
+
+    #[test]
+    fn test_read_only_privilege_grants_verification() {
+        assert!(validate_privilege("SELECT").is_ok());
+        assert!(validate_privilege("INSERT").is_ok()); // just check it passes normal
     }
 
     #[test]
