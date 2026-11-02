@@ -1,0 +1,16 @@
+[package]
+name = "backup-destinations"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+description = "Backup destinations storage provider abstraction trait"
+
+[workspace]
+
+[lib]
+path = "src/traits/mod.rs"
+
+[dependencies]
+async-trait = "0.1.80"
+thiserror = "1.0.60"
+tokio = { version = "1.37.0", features = ["full"] }
