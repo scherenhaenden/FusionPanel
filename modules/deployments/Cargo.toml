@@ -1,0 +1,21 @@
+[package]
+name = "deployments"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+publish = false
+
+[workspace]
+
+[dependencies]
+hmac = "0.12.1"
+sha2 = "0.10.6"
+hex = "0.4.3"
+subtle = "2.5.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+
+[lib]
+name = "deployments"
+path = "src/lib.rs"
