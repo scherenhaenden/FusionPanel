@@ -2,6 +2,9 @@ use crate::error::BackupError;
 use crate::models::RetentionPolicy;
 use std::fs;
 use std::path::{Path, PathBuf};
+use flate2::read::GzDecoder;
+use std::fs::File;
+use tar::Archive;
 
 pub fn apply_retention_policy<P: AsRef<Path>>(
     backup_dir: P,
@@ -13,9 +16,25 @@ pub fn apply_retention_policy<P: AsRef<Path>>(
         let entry = entry?;
         let path = entry.path();
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("gz") {
-            let metadata = fs::metadata(&path)?;
-            if let Ok(modified) = metadata.modified() {
-                backups.push((path, modified.into()));
+            // Prove backup ownership: check if it's a valid backup archive with manifest.json
+            let is_valid_backup = (|| -> Result<bool, std::io::Error> {
+                let file = File::open(&path)?;
+                let tar = GzDecoder::new(file);
+                let mut archive = Archive::new(tar);
+
+                if let Some(Ok(entry)) = archive.entries()?.next() {
+                    let entry_path = entry.path()?.to_path_buf();
+                    let path_str = entry_path.to_string_lossy().into_owned();
+                    return Ok(path_str == "manifest.json");
+                }
+                Ok(false)
+            })().unwrap_or(false);
+
+            if is_valid_backup {
+                let metadata = fs::metadata(&path)?;
+                if let Ok(modified) = metadata.modified() {
+                    backups.push((path, modified.into()));
+                }
             }
         }
     }
