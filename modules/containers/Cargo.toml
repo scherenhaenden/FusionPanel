@@ -1,3 +1,5 @@
+[workspace]
+
 [package]
 name = "containers"
 version = "0.1.0"
@@ -8,7 +10,7 @@ license = "AGPL-3.0-only"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 thiserror = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+async-trait = "0.1"
 
 [dev-dependencies]
-
-[workspace]
