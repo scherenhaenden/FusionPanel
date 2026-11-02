@@ -1,7 +1,5 @@
 use crate::error::BackupError;
 use crate::models::{BackupType, DbInfo, FileInfo, Manifest};
-use flate2::write::GzEncoder;
-use flate2::Compression;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -9,12 +7,14 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use tar::Builder;
 use uuid::Uuid;
+use zstd::stream::Encoder as ZstdEncoder;
 
 pub struct BackupJob {
     source_dir: PathBuf,
     backup_type: BackupType,
     db_info: Vec<DbInfo>,
     metadata: HashMap<String, String>,
+    compression_level: i32,
 }
 
 impl BackupJob {
@@ -24,7 +24,16 @@ impl BackupJob {
             backup_type: BackupType::Files,
             db_info: Vec::new(),
             metadata: HashMap::new(),
+            compression_level: 3, // Default zstd compression level
         }
+    }
+
+    pub fn with_compression_level(mut self, level: i32) -> Result<Self, BackupError> {
+        if !(1..=21).contains(&level) {
+            return Err(BackupError::InvalidCompressionLevel(level));
+        }
+        self.compression_level = level;
+        Ok(self)
     }
 
     pub fn with_db(mut self, db_info: DbInfo) -> Self {
@@ -55,12 +64,12 @@ impl BackupJob {
         let manifest_json = serde_json::to_string_pretty(&manifest)?;
 
         let dest = File::create(&dest_file)?;
-        let enc = GzEncoder::new(dest, Compression::default());
+        let enc = ZstdEncoder::new(dest, self.compression_level)?;
         let mut tar = Builder::new(enc);
 
         // Write manifest first
         let mut header = tar::Header::new_gnu();
-        header.set_path("manifest.json").map_err(|e| BackupError::Io(e))?;
+        header.set_path("manifest.json").map_err(BackupError::Io)?;
         header.set_size(manifest_json.len() as u64);
         header.set_mode(0o644);
         header.set_cksum();
@@ -120,11 +129,11 @@ impl BackupJob {
         Ok(())
     }
 
-    fn append_directory(
+    fn append_directory<W: std::io::Write>(
         &self,
         base_dir: &Path,
         current_dir: &Path,
-        tar: &mut Builder<GzEncoder<File>>,
+        tar: &mut Builder<W>,
     ) -> Result<(), BackupError> {
         if !current_dir.is_dir() {
             return Ok(());

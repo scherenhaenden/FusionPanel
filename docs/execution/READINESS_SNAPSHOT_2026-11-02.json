@@ -1,0 +1,4132 @@
+{
+  "baseline": "195a481714eaa16ecbb9ba7e7962ab9622a05a22",
+  "date": "2026-11-02",
+  "timezone": "Europe/Berlin",
+  "method": "Four feature gates: component/integration/E2E/closure, 25 each; partial component 12.5. Five package gates scope/implementation/unit/real integration/E2E, 20 each; partial gate 10. Historical/reported evidence, no fresh test execution.",
+  "features": [
+    {
+      "id": "HOST-01",
+      "name": "PHP sites",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #88 + merged #101; modules/hosting: checked configuration inputs and tenant pool mapping. Open #158/#159/#173 are not accepted runtime evidence.",
+      "remaining": "Complete real provisioning, OS ownership, parser and served-content checks, compensation, API/UI integration and S43/S54 acceptance. Open review queue: #158/#159/#175, #168.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "HOST-02",
+      "name": "Static sites",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #88 + merged #101; modules/hosting: checked configuration inputs and tenant pool mapping. Open #158/#159/#173 are not accepted runtime evidence.",
+      "remaining": "Complete real provisioning, OS ownership, parser and served-content checks, compensation, API/UI integration and S43/S54 acceptance. Open review queue: #158/#159/#175, #168.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "HOST-03",
+      "name": "Node.js and Python hosting",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S26, qualify real E2E S43 and close S54. Open review queue: #158/#159/#175, #168.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "HOST-04",
+      "name": "Nginx and virtual hosts",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #88 + merged #101; modules/hosting: checked configuration inputs and tenant pool mapping. Open #158/#159/#173 are not accepted runtime evidence.",
+      "remaining": "Complete real provisioning, OS ownership, parser and served-content checks, compensation, API/UI integration and S43/S54 acceptance. Open review queue: #158/#159/#175, #168.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "HOST-05",
+      "name": "Per-site PHP-FPM pools",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #88 + merged #101; modules/hosting: checked configuration inputs and tenant pool mapping. Open #158/#159/#173 are not accepted runtime evidence.",
+      "remaining": "Complete real provisioning, OS ownership, parser and served-content checks, compensation, API/UI integration and S43/S54 acceptance. Open review queue: #158/#159/#175, #168.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "HOST-06",
+      "name": "Let's Encrypt TLS",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S26, qualify real E2E S43 and close S54. Open review queue: #158/#159/#175, #168.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "HOST-07",
+      "name": "Wildcard certificates",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S26, qualify real E2E S43 and close S54. Open review queue: #158/#159/#175, #168.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "HOST-08",
+      "name": "Redirects and HSTS",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S26, qualify real E2E S43 and close S54. Open review queue: #158/#159/#175, #168.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "HOST-09",
+      "name": "FastCGI cache",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S26, qualify real E2E S43 and close S54. Open review queue: #158/#159/#175, #168.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "HOST-10",
+      "name": "Redis cache",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S26, qualify real E2E S43 and close S54. Open review queue: #158/#159/#175, #168.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "HOST-11",
+      "name": "File manager",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S26, qualify real E2E S43 and close S54. Open review queue: #158/#159/#175, #168.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "HOST-12",
+      "name": "Cron jobs",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S26, qualify real E2E S43 and close S54. Open review queue: #158/#159/#175, #168.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "HOST-13",
+      "name": "Disk quotas",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #137/#143 resource quota reservation engine and tenant limits; OS disk quota enforcement is absent.",
+      "remaining": "Implement persistent/reconciled actual filesystem quota enforcement and real over-limit/write tests; integrate provisioning, API/UI and closure. Open review queue: #158/#159/#175, #168.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "HOST-14",
+      "name": "Bandwidth limits",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S26, qualify real E2E S43 and close S54. Open review queue: #158/#159/#175, #168.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "HOST-15",
+      "name": "Atomic provisioning with compensation",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S26, qualify real E2E S43 and close S54. Open review queue: #158/#159/#175, #168.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "HOST-16",
+      "name": "Image optimization",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S26, qualify real E2E S43 and close S54. Open review queue: #158/#159/#175, #168.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "HOST-17",
+      "name": "CDN integration",
+      "owners": [
+        "S09",
+        "S26",
+        "S43",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S26, qualify real E2E S43 and close S54. Open review queue: #158/#159/#175, #168.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "CTR-01",
+      "name": "Native Docker management",
+      "owners": [
+        "S12",
+        "S28",
+        "S45",
+        "S55"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PRs #118\u2013#121; modules/containers: domain/engine trait, Compose validation, limits, isolation and health/log primitives. W03 reports component unit evidence; open #163/#164 are pending.",
+      "remaining": "Supply and wire real Docker lifecycle/volume/network execution, authenticated API, cross-tenant negatives, disposable Docker E2E and closure. Domain/trait validation alone is not a working engine. Open review queue: #163/#164.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "CTR-02",
+      "name": "Docker Compose stacks",
+      "owners": [
+        "S12",
+        "S28",
+        "S45",
+        "S55"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PRs #118\u2013#121; modules/containers: domain/engine trait, Compose validation, limits, isolation and health/log primitives. W03 reports component unit evidence; open #163/#164 are pending.",
+      "remaining": "Supply and wire real Docker lifecycle/volume/network execution, authenticated API, cross-tenant negatives, disposable Docker E2E and closure. Domain/trait validation alone is not a working engine. Open review queue: #163/#164.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "CTR-03",
+      "name": "Application templates",
+      "owners": [
+        "S40",
+        "S28",
+        "S45",
+        "S55"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #133/#135; modules/app-catalog: template schemas, interpolation and installer service. W03 reports fixture/unit tests.",
+      "remaining": "Integrate catalog with actual Docker engine and supported templates; qualify real install, failure rollback, persistence, API/UI and closure. Open review queue: #163/#164.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "CTR-04",
+      "name": "Registry and image management",
+      "owners": [
+        "S12",
+        "S28",
+        "S45",
+        "S55"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S28, qualify real E2E S45 and close S55. Open review queue: #163/#164.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "CTR-05",
+      "name": "Container lifecycle",
+      "owners": [
+        "S12",
+        "S28",
+        "S45",
+        "S55"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PRs #118\u2013#121; modules/containers: domain/engine trait, Compose validation, limits, isolation and health/log primitives. W03 reports component unit evidence; open #163/#164 are pending.",
+      "remaining": "Supply and wire real Docker lifecycle/volume/network execution, authenticated API, cross-tenant negatives, disposable Docker E2E and closure. Domain/trait validation alone is not a working engine. Open review queue: #163/#164.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "CTR-06",
+      "name": "CPU and RAM limits",
+      "owners": [
+        "S12",
+        "S28",
+        "S45",
+        "S55"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PRs #118\u2013#121; modules/containers: domain/engine trait, Compose validation, limits, isolation and health/log primitives. W03 reports component unit evidence; open #163/#164 are pending.",
+      "remaining": "Supply and wire real Docker lifecycle/volume/network execution, authenticated API, cross-tenant negatives, disposable Docker E2E and closure. Domain/trait validation alone is not a working engine. Open review queue: #163/#164.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "CTR-07",
+      "name": "GPU passthrough",
+      "owners": [
+        "S12",
+        "S28",
+        "S45",
+        "S55"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S28, qualify real E2E S45 and close S55. Open review queue: #163/#164.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "CTR-08",
+      "name": "Image update detection",
+      "owners": [
+        "S40",
+        "S28",
+        "S45",
+        "S55"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S28, qualify real E2E S45 and close S55. Open review queue: #163/#164.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "CTR-09",
+      "name": "CVE scanning",
+      "owners": [
+        "S40",
+        "S28",
+        "S45",
+        "S55"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #140; modules/app-catalog/src/scanner: Trivy/Grype report parsing and severity gating; W03 reports four unit tests.",
+      "remaining": "Execute actual scanner against pinned images and genuine findings; integrate install/deploy gates, stale/error handling, E2E and closure. JSON parsing does not prove scanning. Open review queue: #163/#164.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "CTR-10",
+      "name": "Per-image SBOM",
+      "owners": [
+        "S40",
+        "S28",
+        "S45",
+        "S55"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S28, qualify real E2E S45 and close S55. Open review queue: #163/#164.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "CTR-11",
+      "name": "Isolation policies",
+      "owners": [
+        "S12",
+        "S28",
+        "S45",
+        "S55"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PRs #118\u2013#121; modules/containers: domain/engine trait, Compose validation, limits, isolation and health/log primitives. W03 reports component unit evidence; open #163/#164 are pending.",
+      "remaining": "Supply and wire real Docker lifecycle/volume/network execution, authenticated API, cross-tenant negatives, disposable Docker E2E and closure. Domain/trait validation alone is not a working engine. Open review queue: #163/#164.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "CTR-12",
+      "name": "Idle container sleep and wake behavior",
+      "owners": [
+        "S12",
+        "S28",
+        "S45",
+        "S55"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S28, qualify real E2E S45 and close S55. Open review queue: #163/#164.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "CTR-13",
+      "name": "Horizontal autoscaling",
+      "owners": [
+        "S60",
+        "S60",
+        "S60",
+        "S60"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S60, qualify real E2E S60 and close S60.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "DEP-01",
+      "name": "Git push-to-deploy",
+      "owners": [
+        "S19",
+        "S30",
+        "S46",
+        "S55"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #134/#136; deployment state machine, signed webhook inputs and pipeline primitives are present.",
+      "remaining": "Implement complete repository checkout-to-running-release journey, authenticated runtime/API and rollback/recovery qualification. Open review queue: #171.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "DEP-02",
+      "name": "Git webhooks",
+      "owners": [
+        "S19",
+        "S30",
+        "S46",
+        "S55"
+      ],
+      "gates": [
+        25,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #136; modules/deployments/src/webhooks: GitHub/GitLab HMAC verification, W03 reports four unit tests.",
+      "remaining": "Wire a real authenticated webhook endpoint, persistence/replay controls, deployment trigger and real delivery E2E; close capability gates. Open review queue: #171.",
+      "readiness": 25,
+      "remaining_percent": 75
+    },
+    {
+      "id": "DEP-03",
+      "name": "Multi-language builds",
+      "owners": [
+        "S19",
+        "S30",
+        "S46",
+        "S55"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #136; bounded build executor, atomic symlink switcher, release inventory/rollback and execution results; W03 reports component tests.",
+      "remaining": "Integrate durable orchestration, actual language builds, served traffic continuity, diagnostics and restart-safe rollback; qualify real release E2E and closure. Open review queue: #171.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "DEP-04",
+      "name": "Blue-green deployments",
+      "owners": [
+        "S19",
+        "S30",
+        "S46",
+        "S55"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #136; bounded build executor, atomic symlink switcher, release inventory/rollback and execution results; W03 reports component tests.",
+      "remaining": "Integrate durable orchestration, actual language builds, served traffic continuity, diagnostics and restart-safe rollback; qualify real release E2E and closure. Open review queue: #171.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "DEP-05",
+      "name": "Per-commit preview environments",
+      "owners": [
+        "S19",
+        "S30",
+        "S46",
+        "S55"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S30, qualify real E2E S46 and close S55. Open review queue: #171.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "DEP-06",
+      "name": "Staging",
+      "owners": [
+        "S19",
+        "S30",
+        "S46",
+        "S55"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S30, qualify real E2E S46 and close S55. Open review queue: #171.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "DEP-07",
+      "name": "Release rollback",
+      "owners": [
+        "S19",
+        "S30",
+        "S46",
+        "S55"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #136; bounded build executor, atomic symlink switcher, release inventory/rollback and execution results; W03 reports component tests.",
+      "remaining": "Integrate durable orchestration, actual language builds, served traffic continuity, diagnostics and restart-safe rollback; qualify real release E2E and closure. Open review queue: #171.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "DEP-08",
+      "name": "Scheduled deployments",
+      "owners": [
+        "S19",
+        "S30",
+        "S46",
+        "S55"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S30, qualify real E2E S46 and close S55. Open review queue: #171.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "DEP-09",
+      "name": "Two-person deployment approval",
+      "owners": [
+        "S19",
+        "S30",
+        "S46",
+        "S55"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S30, qualify real E2E S46 and close S55. Open review queue: #171.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "DEP-10",
+      "name": "Deployment history and progress",
+      "owners": [
+        "S19",
+        "S30",
+        "S46",
+        "S55"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #136; bounded build executor, atomic symlink switcher, release inventory/rollback and execution results; W03 reports component tests.",
+      "remaining": "Integrate durable orchestration, actual language builds, served traffic continuity, diagnostics and restart-safe rollback; qualify real release E2E and closure. Open review queue: #171.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "DEP-11",
+      "name": "Failure diagnostics",
+      "owners": [
+        "S19",
+        "S30",
+        "S46",
+        "S55"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #136; bounded build executor, atomic symlink switcher, release inventory/rollback and execution results; W03 reports component tests.",
+      "remaining": "Integrate durable orchestration, actual language builds, served traffic continuity, diagnostics and restart-safe rollback; qualify real release E2E and closure. Open review queue: #171.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "DEP-12",
+      "name": "GitHub Actions integration",
+      "owners": [
+        "S19",
+        "S30",
+        "S46",
+        "S55"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S30, qualify real E2E S46 and close S55. Open review queue: #171.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "SEC-01",
+      "name": "TOTP two-factor authentication",
+      "owners": [
+        "S08",
+        "S25",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S25, qualify real E2E S52 and close S57. Open review queue: #156/#157, #170.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "SEC-02",
+      "name": "Passkeys and WebAuthn",
+      "owners": [
+        "S08",
+        "S25",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S25, qualify real E2E S52 and close S57. Open review queue: #156/#157, #170.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "SEC-03",
+      "name": "OAuth and SSO",
+      "owners": [
+        "S08",
+        "S25",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S25, qualify real E2E S52 and close S57. Open review queue: #156/#157, #170.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "SEC-04",
+      "name": "Role-based access control",
+      "owners": [
+        "S08",
+        "S25",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        25,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #90; modules/identity: principal-scoped RBAC, bounded sessions, SQLite persistence. README reports 17 unit + 5 real filesystem/SQLite integration tests.",
+      "remaining": "Integrate authenticated API issuance/enforcement, revocation/demotion across processes, real identity E2E and closure. TOTP/SSO/WebAuthn remain separate unsupported capabilities. Open review queue: #156/#157, #170.",
+      "readiness": 25,
+      "remaining_percent": 75
+    },
+    {
+      "id": "SEC-05",
+      "name": "Firewall management",
+      "owners": [
+        "S15",
+        "S37",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        25,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #71 + #99: firewall recovery policy and CSP parsing repairs; tracker reports 34 unit tests. Required host fixtures remain BLOCKED.",
+      "remaining": "Verify actual effective firewall/recovery access and emitted CSP with real services; integrate runtime and closure. Open review queue: #170.",
+      "readiness": 25,
+      "remaining_percent": 75
+    },
+    {
+      "id": "SEC-06",
+      "name": "Brute-force protection",
+      "owners": [
+        "S15",
+        "S37",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S37, qualify real E2E S52 and close S57. Open review queue: #170.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "SEC-07",
+      "name": "Web application firewall",
+      "owners": [
+        "S15",
+        "S37",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        25.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #71 merged: policy validation and inert previews, with 29 unit tests. Host application, real parsers, traffic, rollback, and emergency-access evidence are still required. Next owners: S37 / S52 / S57.",
+      "remaining": "Complete and requalify this component slice; integrate S37, prove real E2E S52 and closure S57. Prior evidence is carried forward, not rerun. Open review queue: #170.",
+      "readiness": 25.0,
+      "remaining_percent": 75.0
+    },
+    {
+      "id": "SEC-08",
+      "name": "Bot protection",
+      "owners": [
+        "S15",
+        "S37",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S37, qualify real E2E S52 and close S57. Open review queue: #170.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "SEC-09",
+      "name": "SSH hardening",
+      "owners": [
+        "S15",
+        "S37",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        25.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #71 merged: policy validation and inert previews, with 29 unit tests. Host application, real parsers, traffic, rollback, and emergency-access evidence are still required. Next owners: S37 / S52 / S57.",
+      "remaining": "Complete and requalify this component slice; integrate S37, prove real E2E S52 and closure S57. Prior evidence is carried forward, not rerun. Open review queue: #170.",
+      "readiness": 25.0,
+      "remaining_percent": 75.0
+    },
+    {
+      "id": "SEC-10",
+      "name": "Per-user isolation",
+      "owners": [
+        "S15",
+        "S37",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S37, qualify real E2E S52 and close S57. Open review queue: #170.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "SEC-11",
+      "name": "Safe command execution",
+      "owners": [
+        "S15",
+        "S37",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PRs #129/#130/#142; crates/agent provides transport/heartbeat, executor and atomic file primitives in a standalone library. Root workspace and product API are not wired.",
+      "remaining": "Integrate runnable agent and control-plane transport; qualify signing/replay/revocation, privilege boundary, filesystem containment, restart/reconnect and real E2E/closure. Open review queue: #170.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "SEC-12",
+      "name": "Revocable sessions",
+      "owners": [
+        "S08",
+        "S25",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        25,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #90; modules/identity: principal-scoped RBAC, bounded sessions, SQLite persistence. README reports 17 unit + 5 real filesystem/SQLite integration tests.",
+      "remaining": "Integrate authenticated API issuance/enforcement, revocation/demotion across processes, real identity E2E and closure. TOTP/SSO/WebAuthn remain separate unsupported capabilities. Open review queue: #156/#157, #170.",
+      "readiness": 25,
+      "remaining_percent": 75
+    },
+    {
+      "id": "SEC-13",
+      "name": "Tamper-evident audit integrity",
+      "owners": [
+        "S15",
+        "S37",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #137/#144; modules/administration/src/audit maintains a hash-linked in-memory Vec. This is not durable immutable logging.",
+      "remaining": "Persist and protect append-only audit records, anchor integrity and actor context, verify tamper/truncation/restart behavior; integrate runtime and close acceptance. Open review queue: #170.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "SEC-14",
+      "name": "Vulnerability scanning",
+      "owners": [
+        "S15",
+        "S37",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #140; modules/app-catalog/src/scanner: Trivy/Grype report parsing and severity gating; W03 reports four unit tests.",
+      "remaining": "Execute actual scanner against pinned images and genuine findings; integrate install/deploy gates, stale/error handling, E2E and closure. JSON parsing does not prove scanning. Open review queue: #170.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "SEC-15",
+      "name": "Credential encryption",
+      "owners": [
+        "S23",
+        "S37",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #102; modules/secrets: AEAD, scoped file storage and rotation; tracker reports nine tests. Service injection E2E remains BLOCKED; full rotation failure qualification remains required.",
+      "remaining": "Qualify authorization, authenticated metadata, interrupted rotation/recovery, restricted permissions and actual service injection; integrate API/UI and closure. Open review queue: #170.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "SEC-16",
+      "name": "Content Security Policy controls",
+      "owners": [
+        "S15",
+        "S37",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        25,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #71 + #99: firewall recovery policy and CSP parsing repairs; tracker reports 34 unit tests. Required host fixtures remain BLOCKED.",
+      "remaining": "Verify actual effective firewall/recovery access and emitted CSP with real services; integrate runtime and closure. Open review queue: #170.",
+      "readiness": 25,
+      "remaining_percent": 75
+    },
+    {
+      "id": "SEC-17",
+      "name": "Release integrity and provenance",
+      "owners": [
+        "S15",
+        "S37",
+        "S52",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #131 updater includes Ed25519 signature verification and rollback helpers with reported mock-server tests; release publishing/provenance is not qualified.",
+      "remaining": "Deliver signed artifacts, establish trusted release keys and provenance, prove real install/update/recovery and tamper rejection through release E2E/closure. Open review queue: #170.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "BAK-01",
+      "name": "Scheduled backups",
+      "owners": [
+        "S11",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S27, qualify real E2E S44 and close S56. Open review queue: #160/#162/#165, #169.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "BAK-02",
+      "name": "File backups",
+      "owners": [
+        "S11",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        25.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #86 merged: file archive, checksum or retention component; 1 unit and 3 filesystem integration tests reported passing. Runtime integration and independent real-system E2E remain.",
+      "remaining": "Complete and requalify this component slice; integrate S27, prove real E2E S44 and closure S56. Prior evidence is carried forward, not rerun. Open review queue: #160/#162/#165, #169.",
+      "readiness": 25.0,
+      "remaining_percent": 75.0
+    },
+    {
+      "id": "BAK-03",
+      "name": "Database backups",
+      "owners": [
+        "S11",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #86 merged: database information is metadata only; one isolated file restore cycle was tested. Real database dumps or operator restore drills are not qualified.",
+      "remaining": "Complete and requalify this component slice; integrate S27, prove real E2E S44 and closure S56. Prior evidence is carried forward, not rerun. Open review queue: #160/#162/#165, #169.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "BAK-04",
+      "name": "S3 destinations",
+      "owners": [
+        "S39",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #139; S3 multipart HTTP skeleton exists, but SigV4 signing is absent and upload IDs/ETags include mock fallbacks. Open #154 is not additional delivery.",
+      "remaining": "Implement authenticated protocol-correct S3/R2 operations, actual UploadId/ETag parsing, abort/retry/restore verification against real object storage; integrate E2E/closure. Open review queue: #160/#162/#165, #169.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "BAK-05",
+      "name": "SFTP and FTPS destinations",
+      "owners": [
+        "S39",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S27, qualify real E2E S44 and close S56. Open review queue: #160/#162/#165, #169.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "BAK-06",
+      "name": "Backblaze B2 and Google Cloud Storage destinations",
+      "owners": [
+        "S39",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S27, qualify real E2E S44 and close S56. Open review queue: #160/#162/#165, #169.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "BAK-07",
+      "name": "Backup encryption",
+      "owners": [
+        "S11",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S27, qualify real E2E S44 and close S56. Open review queue: #160/#162/#165, #169.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "BAK-08",
+      "name": "Retention policies",
+      "owners": [
+        "S11",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        25.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #86 merged: file archive, checksum or retention component; 1 unit and 3 filesystem integration tests reported passing. Runtime integration and independent real-system E2E remain.",
+      "remaining": "Complete and requalify this component slice; integrate S27, prove real E2E S44 and closure S56. Prior evidence is carried forward, not rerun. Open review queue: #160/#162/#165, #169.",
+      "readiness": 25.0,
+      "remaining_percent": 75.0
+    },
+    {
+      "id": "BAK-09",
+      "name": "Selective restore",
+      "owners": [
+        "S11",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S27, qualify real E2E S44 and close S56. Open review queue: #160/#162/#165, #169.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "BAK-10",
+      "name": "Backup verification",
+      "owners": [
+        "S11",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        25.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #86 merged: file archive, checksum or retention component; 1 unit and 3 filesystem integration tests reported passing. Runtime integration and independent real-system E2E remain.",
+      "remaining": "Complete and requalify this component slice; integrate S27, prove real E2E S44 and closure S56. Prior evidence is carried forward, not rerun. Open review queue: #160/#162/#165, #169.",
+      "readiness": 25.0,
+      "remaining_percent": 75.0
+    },
+    {
+      "id": "BAK-11",
+      "name": "Restore drills",
+      "owners": [
+        "S11",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #86 merged: database information is metadata only; one isolated file restore cycle was tested. Real database dumps or operator restore drills are not qualified.",
+      "remaining": "Complete and requalify this component slice; integrate S27, prove real E2E S44 and closure S56. Prior evidence is carried forward, not rerun. Open review queue: #160/#162/#165, #169.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "BAK-12",
+      "name": "Restic snapshots",
+      "owners": [
+        "S11",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S27, qualify real E2E S44 and close S56. Open review queue: #160/#162/#165, #169.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "BAK-13",
+      "name": "Pre-update backups",
+      "owners": [
+        "S11",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S27, qualify real E2E S44 and close S56. Open review queue: #160/#162/#165, #169.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "BAK-14",
+      "name": "Restore to another domain",
+      "owners": [
+        "S11",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S27, qualify real E2E S44 and close S56. Open review queue: #160/#162/#165, #169.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "BAK-15",
+      "name": "Restore confidence dashboard",
+      "owners": [
+        "S11",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S27, qualify real E2E S44 and close S56. Open review queue: #160/#162/#165, #169.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "DB-01",
+      "name": "MariaDB and MySQL management",
+      "owners": [
+        "S10",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #87 merged: adapter operations and 4 unit tests; database daemon integration is ignored/BLOCKED. Real grants, dump and independent restore require S27/S44.",
+      "remaining": "Complete and requalify this component slice; integrate S27, prove real E2E S44 and closure S56. Prior evidence is carried forward, not rerun. Open review queue: #160/#162/#165, #169.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "DB-02",
+      "name": "PostgreSQL management",
+      "owners": [
+        "S10",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #87 merged: adapter operations and 4 unit tests; database daemon integration is ignored/BLOCKED. Real grants, dump and independent restore require S27/S44.",
+      "remaining": "Complete and requalify this component slice; integrate S27, prove real E2E S44 and closure S56. Prior evidence is carried forward, not rerun. Open review queue: #160/#162/#165, #169.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "DB-03",
+      "name": "Database creation",
+      "owners": [
+        "S10",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #87 merged: adapter operations and 4 unit tests; database daemon integration is ignored/BLOCKED. Real grants, dump and independent restore require S27/S44.",
+      "remaining": "Complete and requalify this component slice; integrate S27, prove real E2E S44 and closure S56. Prior evidence is carried forward, not rerun. Open review queue: #160/#162/#165, #169.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "DB-04",
+      "name": "Database users and passwords",
+      "owners": [
+        "S10",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #87 merged: adapter operations and 4 unit tests; database daemon integration is ignored/BLOCKED. Real grants, dump and independent restore require S27/S44.",
+      "remaining": "Complete and requalify this component slice; integrate S27, prove real E2E S44 and closure S56. Prior evidence is carried forward, not rerun. Open review queue: #160/#162/#165, #169.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "DB-05",
+      "name": "SQL browser",
+      "owners": [
+        "S10",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S27, qualify real E2E S44 and close S56. Open review queue: #160/#162/#165, #169.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "DB-06",
+      "name": "Schema explorer",
+      "owners": [
+        "S10",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S27, qualify real E2E S44 and close S56. Open review queue: #160/#162/#165, #169.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "DB-07",
+      "name": "Protected phpMyAdmin access",
+      "owners": [
+        "S10",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S27, qualify real E2E S44 and close S56. Open review queue: #160/#162/#165, #169.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "DB-08",
+      "name": "Database backups",
+      "owners": [
+        "S10",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #87 merged: adapter operations and 4 unit tests; database daemon integration is ignored/BLOCKED. Real grants, dump and independent restore require S27/S44.",
+      "remaining": "Complete and requalify this component slice; integrate S27, prove real E2E S44 and closure S56. Prior evidence is carried forward, not rerun. Open review queue: #160/#162/#165, #169.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "DB-09",
+      "name": "Site and database provisioning integration",
+      "owners": [
+        "S10",
+        "S27",
+        "S44",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S27, qualify real E2E S44 and close S56. Open review queue: #160/#162/#165, #169.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "WP-01",
+      "name": "Automatic installation",
+      "owners": [
+        "S22",
+        "S33",
+        "S47",
+        "S54"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #138; modules/wordpress: download/checksum installer, WP-CLI wrapper, plugin/theme commands and hardening configuration helpers. W03 reports unit/fixture tests.",
+      "remaining": "Run actual WordPress plus independent database, real WP-CLI plugin/theme operations, failure compensation, authenticated runtime/UI and lifecycle E2E/closure. Open review queue: #176.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "WP-02",
+      "name": "Plugin management",
+      "owners": [
+        "S22",
+        "S33",
+        "S47",
+        "S54"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #138; modules/wordpress: download/checksum installer, WP-CLI wrapper, plugin/theme commands and hardening configuration helpers. W03 reports unit/fixture tests.",
+      "remaining": "Run actual WordPress plus independent database, real WP-CLI plugin/theme operations, failure compensation, authenticated runtime/UI and lifecycle E2E/closure. Open review queue: #176.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "WP-03",
+      "name": "Theme management",
+      "owners": [
+        "S22",
+        "S33",
+        "S47",
+        "S54"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #138; modules/wordpress: download/checksum installer, WP-CLI wrapper, plugin/theme commands and hardening configuration helpers. W03 reports unit/fixture tests.",
+      "remaining": "Run actual WordPress plus independent database, real WP-CLI plugin/theme operations, failure compensation, authenticated runtime/UI and lifecycle E2E/closure. Open review queue: #176.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "WP-04",
+      "name": "Automatic updates",
+      "owners": [
+        "S22",
+        "S33",
+        "S47",
+        "S54"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #138 includes plugin/theme update command helpers; automated policy/scheduler and core lifecycle are not qualified.",
+      "remaining": "Complete automatic updates including backups, core updates, scheduling, failure rollback and real WordPress verification; integrate runtime and closure. Open review queue: #176.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "WP-05",
+      "name": "WordPress staging and production push",
+      "owners": [
+        "S22",
+        "S33",
+        "S47",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S33, qualify real E2E S47 and close S54. Open review queue: #176.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "WP-06",
+      "name": "Vulnerability scanning",
+      "owners": [
+        "S22",
+        "S33",
+        "S47",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S33, qualify real E2E S47 and close S54. Open review queue: #176.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "WP-07",
+      "name": "Core repair",
+      "owners": [
+        "S22",
+        "S33",
+        "S47",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S33, qualify real E2E S47 and close S54. Open review queue: #176.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "WP-08",
+      "name": "Plugin failure diagnostics",
+      "owners": [
+        "S22",
+        "S33",
+        "S47",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S33, qualify real E2E S47 and close S54. Open review queue: #176.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "WP-09",
+      "name": "Restore with URL rewrite",
+      "owners": [
+        "S22",
+        "S33",
+        "S47",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S33, qualify real E2E S47 and close S54. Open review queue: #176.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "WP-10",
+      "name": "Redis object cache",
+      "owners": [
+        "S22",
+        "S33",
+        "S47",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S33, qualify real E2E S47 and close S54. Open review queue: #176.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "WP-11",
+      "name": "WordPress hardening",
+      "owners": [
+        "S22",
+        "S33",
+        "S47",
+        "S54"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #138; modules/wordpress: download/checksum installer, WP-CLI wrapper, plugin/theme commands and hardening configuration helpers. W03 reports unit/fixture tests.",
+      "remaining": "Run actual WordPress plus independent database, real WP-CLI plugin/theme operations, failure compensation, authenticated runtime/UI and lifecycle E2E/closure. Open review queue: #176.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "WP-12",
+      "name": "Multiple installation management",
+      "owners": [
+        "S22",
+        "S33",
+        "S47",
+        "S54"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S33, qualify real E2E S47 and close S54. Open review queue: #176.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "OBS-01",
+      "name": "CPU, RAM and disk metrics",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        25,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #72 and #129; observability primitives plus procfs metrics collector in crates/agent; W03 reports one collector test.",
+      "remaining": "Wire agent transport, collection scheduler, history/API/UI, real resource changes and outage/recovery E2E; close acceptance gates.",
+      "readiness": 25,
+      "remaining_percent": 75
+    },
+    {
+      "id": "OBS-02",
+      "name": "Metrics history",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S31, qualify real E2E S48 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "OBS-03",
+      "name": "Live network traffic",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        25.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #72 merged: module primitives; 9 tests pass. Loopback HTTP/TCP and webhook boundaries are exercised; webhook payload assertions, live collection, scheduling, durable history and outage-to-recovery E2E remain incomplete. Next owners: S31 / S48 / S57.",
+      "remaining": "Complete and requalify this component slice; integrate S31, prove real E2E S48 and closure S57. Prior evidence is carried forward, not rerun.",
+      "readiness": 25.0,
+      "remaining_percent": 75.0
+    },
+    {
+      "id": "OBS-04",
+      "name": "Per-site metrics",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #72 merged: module primitives; 9 tests pass. Loopback HTTP/TCP and webhook boundaries are exercised; webhook payload assertions, live collection, scheduling, durable history and outage-to-recovery E2E remain incomplete. Next owners: S31 / S48 / S57.",
+      "remaining": "Complete and requalify this component slice; integrate S31, prove real E2E S48 and closure S57. Prior evidence is carried forward, not rerun.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "OBS-05",
+      "name": "Per-container metrics",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #72 merged: module primitives; 9 tests pass. Loopback HTTP/TCP and webhook boundaries are exercised; webhook payload assertions, live collection, scheduling, durable history and outage-to-recovery E2E remain incomplete. Next owners: S31 / S48 / S57.",
+      "remaining": "Complete and requalify this component slice; integrate S31, prove real E2E S48 and closure S57. Prior evidence is carried forward, not rerun.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "OBS-06",
+      "name": "HTTP uptime checks",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        25.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #72 merged: module primitives; 9 tests pass. Loopback HTTP/TCP and webhook boundaries are exercised; webhook payload assertions, live collection, scheduling, durable history and outage-to-recovery E2E remain incomplete. Next owners: S31 / S48 / S57.",
+      "remaining": "Complete and requalify this component slice; integrate S31, prove real E2E S48 and closure S57. Prior evidence is carried forward, not rerun.",
+      "readiness": 25.0,
+      "remaining_percent": 75.0
+    },
+    {
+      "id": "OBS-07",
+      "name": "TCP and ping checks",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #72 merged: module primitives; 9 tests pass. Loopback HTTP/TCP and webhook boundaries are exercised; webhook payload assertions, live collection, scheduling, durable history and outage-to-recovery E2E remain incomplete. Next owners: S31 / S48 / S57.",
+      "remaining": "Complete and requalify this component slice; integrate S31, prove real E2E S48 and closure S57. Prior evidence is carried forward, not rerun.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "OBS-08",
+      "name": "Prometheus endpoint",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        25.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #72 merged: module primitives; 9 tests pass. Loopback HTTP/TCP and webhook boundaries are exercised; webhook payload assertions, live collection, scheduling, durable history and outage-to-recovery E2E remain incomplete. Next owners: S31 / S48 / S57.",
+      "remaining": "Complete and requalify this component slice; integrate S31, prove real E2E S48 and closure S57. Prior evidence is carried forward, not rerun.",
+      "readiness": 25.0,
+      "remaining_percent": 75.0
+    },
+    {
+      "id": "OBS-09",
+      "name": "Configurable alerts",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        25.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #72 merged: module primitives; 9 tests pass. Loopback HTTP/TCP and webhook boundaries are exercised; webhook payload assertions, live collection, scheduling, durable history and outage-to-recovery E2E remain incomplete. Next owners: S31 / S48 / S57.",
+      "remaining": "Complete and requalify this component slice; integrate S31, prove real E2E S48 and closure S57. Prior evidence is carried forward, not rerun.",
+      "readiness": 25.0,
+      "remaining_percent": 75.0
+    },
+    {
+      "id": "OBS-10",
+      "name": "PagerDuty notifications",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S31, qualify real E2E S48 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "OBS-11",
+      "name": "Slack notifications",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S31, qualify real E2E S48 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "OBS-12",
+      "name": "Automatic recovery actions",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S31, qualify real E2E S48 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "OBS-13",
+      "name": "System diagnostics",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S31, qualify real E2E S48 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "OBS-14",
+      "name": "Public status page",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S31, qualify real E2E S48 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "OBS-15",
+      "name": "Incident management",
+      "owners": [
+        "S16",
+        "S31",
+        "S48",
+        "S57"
+      ],
+      "gates": [
+        25.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #72 merged: module primitives; 9 tests pass. Loopback HTTP/TCP and webhook boundaries are exercised; webhook payload assertions, live collection, scheduling, durable history and outage-to-recovery E2E remain incomplete. Next owners: S31 / S48 / S57.",
+      "remaining": "Complete and requalify this component slice; integrate S31, prove real E2E S48 and closure S57. Prior evidence is carried forward, not rerun.",
+      "readiness": 25.0,
+      "remaining_percent": 75.0
+    },
+    {
+      "id": "NODE-01",
+      "name": "Rust core",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #83 merged; in-memory node lifecycle and placement plans, 11 unit tests passed. Real signed transport, persistence and integration/E2E drivers remain blocked.",
+      "remaining": "Complete and requalify this component slice; integrate S34, prove real E2E S49 and closure S57. Prior evidence is carried forward, not rerun. Open review queue: #172.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NODE-02",
+      "name": "Lightweight frontend",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PRs #104/#105/#107/#126\u2013#128; React shell, typed/mock API client and website/database/backup/security views. App remains placeholder; /v1/auth is absent from main API.",
+      "remaining": "Wire navigation, real authentication and actual control-plane operations; prove browser-to-service journeys, accessibility, resource behavior and closure. Open review queue: #172.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NODE-03",
+      "name": "Agent separation",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PRs #129/#130/#142; crates/agent provides transport/heartbeat, executor and atomic file primitives in a standalone library. Root workspace and product API are not wired.",
+      "remaining": "Integrate runnable agent and control-plane transport; qualify signing/replay/revocation, privilege boundary, filesystem containment, restart/reconnect and real E2E/closure. Open review queue: #172.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NODE-04",
+      "name": "Restricted privileged surface",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PRs #129/#130/#142; crates/agent provides transport/heartbeat, executor and atomic file primitives in a standalone library. Root workspace and product API are not wired.",
+      "remaining": "Integrate runnable agent and control-plane transport; qualify signing/replay/revocation, privilege boundary, filesystem containment, restart/reconnect and real E2E/closure. Open review queue: #172.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NODE-05",
+      "name": "Authenticated RPC",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PRs #129/#130/#142; crates/agent provides transport/heartbeat, executor and atomic file primitives in a standalone library. Root workspace and product API are not wired.",
+      "remaining": "Integrate runnable agent and control-plane transport; qualify signing/replay/revocation, privilege boundary, filesystem containment, restart/reconnect and real E2E/closure. Open review queue: #172.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NODE-06",
+      "name": "Master and worker node management",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #83 merged; in-memory node lifecycle and placement plans, 11 unit tests passed. Real signed transport, persistence and integration/E2E drivers remain blocked.",
+      "remaining": "Complete and requalify this component slice; integrate S34, prove real E2E S49 and closure S57. Prior evidence is carried forward, not rerun. Open review queue: #172.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NODE-07",
+      "name": "Move and copy sites between nodes",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #83 merged; in-memory node lifecycle and placement plans, 11 unit tests passed. Real signed transport, persistence and integration/E2E drivers remain blocked.",
+      "remaining": "Complete and requalify this component slice; integrate S34, prove real E2E S49 and closure S57. Prior evidence is carried forward, not rerun. Open review queue: #172.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NODE-08",
+      "name": "Load-aware placement",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "PR #83 merged; in-memory node lifecycle and placement plans, 11 unit tests passed. Real signed transport, persistence and integration/E2E drivers remain blocked.",
+      "remaining": "Complete and requalify this component slice; integrate S34, prove real E2E S49 and closure S57. Prior evidence is carried forward, not rerun. Open review queue: #172.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NODE-09",
+      "name": "LIFO provisioning compensation",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S34, qualify real E2E S49 and close S57. Open review queue: #172.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "NODE-10",
+      "name": "Control-state persistence",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged identity SQLite storage (PR #90) and existing jobs store persist parts of control state; global configuration/resources are not integrated.",
+      "remaining": "Persist the complete resource/control model and prove consistent multi-process restart, reconciliation, upgrades and closure. Open review queue: #172.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NODE-11",
+      "name": "Durable jobs",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        25,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Existing merged PR #9 SQLite job store; prior audit reports persistence/reopen/concurrency tests. This snapshot corrects previously omitted component credit.",
+      "remaining": "Connect actual workers and operations; prove interruption/reconciliation without duplicate side effects and close runtime/E2E gates. Open review queue: #172.",
+      "readiness": 25,
+      "remaining_percent": 75
+    },
+    {
+      "id": "NODE-12",
+      "name": "Highly available control plane",
+      "owners": [
+        "S60",
+        "S60",
+        "S60",
+        "S60"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S60, qualify real E2E S60 and close S60.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "NODE-13",
+      "name": "OpenAPI contract",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S34, qualify real E2E S49 and close S57. Open review queue: #172.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "NODE-14",
+      "name": "Operational and recovery CLI",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S34, qualify real E2E S49 and close S57. Open review queue: #172.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "NODE-15",
+      "name": "AGPL licensing and source compliance",
+      "owners": [
+        "S21",
+        "S34",
+        "S49",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S34, qualify real E2E S49 and close S57. Open review queue: #172.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "NET-01",
+      "name": "DNS zone management",
+      "owners": [
+        "S13/S14",
+        "S29",
+        "S50",
+        "S56"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #85 + #100; DNS invariant repairs restored; tracker reports 11 unit tests and nonzero BLOCKED fixture E2E. Open #166 is pending.",
+      "remaining": "Implement authoritative DNS backend; prove update/query/export/restore and DNSSEC against real disposable services, then closure. Open review queue: #166/#167.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NET-02",
+      "name": "DNSSEC",
+      "owners": [
+        "S13/S14",
+        "S29",
+        "S50",
+        "S56"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #85 + #100; DNS invariant repairs restored; tracker reports 11 unit tests and nonzero BLOCKED fixture E2E. Open #166 is pending.",
+      "remaining": "Implement authoritative DNS backend; prove update/query/export/restore and DNSSEC against real disposable services, then closure. Open review queue: #166/#167.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NET-03",
+      "name": "DNS templates",
+      "owners": [
+        "S13/S14",
+        "S29",
+        "S50",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S29, qualify real E2E S50 and close S56. Open review queue: #166/#167.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "NET-04",
+      "name": "Hosted mailboxes",
+      "owners": [
+        "S14",
+        "S29",
+        "S50",
+        "S56"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PRs #122\u2013#125; modules/mail contains mailbox/domain models, Postfix/Dovecot renderers, MX/SPF/DMARC/DKIM record generation and alias routing; W03 reports unit tests.",
+      "remaining": "Wire real isolated mail services and authentication, prove inbound/outbound delivery, signing and DNS records; integrate API/UI and S50 E2E/closure. Configuration strings do not qualify mail delivery. Open review queue: #166/#167.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NET-05",
+      "name": "Webmail",
+      "owners": [
+        "S14",
+        "S29",
+        "S50",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S29, qualify real E2E S50 and close S56. Open review queue: #166/#167.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "NET-06",
+      "name": "Outgoing SMTP",
+      "owners": [
+        "S14",
+        "S29",
+        "S50",
+        "S56"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PRs #122\u2013#125; modules/mail contains mailbox/domain models, Postfix/Dovecot renderers, MX/SPF/DMARC/DKIM record generation and alias routing; W03 reports unit tests.",
+      "remaining": "Wire real isolated mail services and authentication, prove inbound/outbound delivery, signing and DNS records; integrate API/UI and S50 E2E/closure. Configuration strings do not qualify mail delivery. Open review queue: #166/#167.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NET-07",
+      "name": "DKIM and SPF controls",
+      "owners": [
+        "S14",
+        "S29",
+        "S50",
+        "S56"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PRs #122\u2013#125; modules/mail contains mailbox/domain models, Postfix/Dovecot renderers, MX/SPF/DMARC/DKIM record generation and alias routing; W03 reports unit tests.",
+      "remaining": "Wire real isolated mail services and authentication, prove inbound/outbound delivery, signing and DNS records; integrate API/UI and S50 E2E/closure. Configuration strings do not qualify mail delivery. Open review queue: #166/#167.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "NET-08",
+      "name": "Antispam",
+      "owners": [
+        "S14",
+        "S29",
+        "S50",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S29, qualify real E2E S50 and close S56. Open review queue: #166/#167.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "NET-09",
+      "name": "Mail logs",
+      "owners": [
+        "S14",
+        "S29",
+        "S50",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S29, qualify real E2E S50 and close S56. Open review queue: #166/#167.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "NET-10",
+      "name": "SMTP relay",
+      "owners": [
+        "S14",
+        "S29",
+        "S50",
+        "S56"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S29, qualify real E2E S50 and close S56. Open review queue: #166/#167.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "ADM-01",
+      "name": "Web SSH terminal",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S36/S38, qualify real E2E S51 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "ADM-02",
+      "name": "Systemd service management",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S36/S38, qualify real E2E S51 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "ADM-03",
+      "name": "Operating system updates",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S36/S38, qualify real E2E S51 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "ADM-04",
+      "name": "Panel updates and recovery",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #131/#132/#141; updater library/signature/rollback primitives and systemd definitions exist. Installer merely touches an empty binary; /opt vs /usr/bin paths disagree.",
+      "remaining": "Deliver genuine signed release installation, executable service units, complete update/recovery and real host E2E. No installer success credit until a real binary starts.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "ADM-05",
+      "name": "User and role management",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #90/#137: user/RBAC persistence, tenant models and team invitations; no unified authenticated administration API yet.",
+      "remaining": "Wire invitation/user/role operations to principal-scoped API/UI; enforce tenant boundary and revocation in real processes; complete E2E and closure.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "ADM-06",
+      "name": "Reseller hierarchy",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S36/S38, qualify real E2E S51 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "ADM-07",
+      "name": "White-label branding",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S36/S38, qualify real E2E S51 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "ADM-08",
+      "name": "HTTP API",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Existing merged API exposes only /v1/health and /v1/capabilities; domain operation APIs remain unintegrated/open PRs.",
+      "remaining": "Publish and wire the administrative HTTP contract, authentication/authorization, resource operations and error semantics; complete real API E2E and closure.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "ADM-09",
+      "name": "API keys",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S36/S38, qualify real E2E S51 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "ADM-10",
+      "name": "API IP allowlists and rate limits",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S36/S38, qualify real E2E S51 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "ADM-11",
+      "name": "Recovery CLI",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S36/S38, qualify real E2E S51 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "ADM-12",
+      "name": "Secret management",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #102; modules/secrets: AEAD, scoped file storage and rotation; tracker reports nine tests. Service injection E2E remains BLOCKED; full rotation failure qualification remains required.",
+      "remaining": "Qualify authorization, authenticated metadata, interrupted rotation/recovery, restricted permissions and actual service injection; integrate API/UI and closure.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "ADM-13",
+      "name": "Infrastructure as Code",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S36/S38, qualify real E2E S51 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "ADM-14",
+      "name": "Care plans",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S36/S38, qualify real E2E S51 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "ADM-15",
+      "name": "Monthly client reports",
+      "owners": [
+        "S20/S23",
+        "S36/S38",
+        "S51",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S36/S38, qualify real E2E S51 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "MIG-01",
+      "name": "CloudPanel import",
+      "owners": [
+        "S18",
+        "S35",
+        "S53",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S35, qualify real E2E S53 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "MIG-02",
+      "name": "CloudPanel SQLite discovery",
+      "owners": [
+        "S18",
+        "S35",
+        "S53",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #69; read-only fixture discovery/planner, prior 20 unit + one synthetic SQLite negative test evidence. Exact-source registry remains empty.",
+      "remaining": "Verify fail-closed empty inventory and exact source-release compatibility; qualify sanitized real exports, migration/rollback execution and closure. Synthetic SQLite is not source compatibility.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "MIG-03",
+      "name": "HestiaCP import",
+      "owners": [
+        "S18",
+        "S35",
+        "S53",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S35, qualify real E2E S53 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "MIG-04",
+      "name": "cPanel import",
+      "owners": [
+        "S18",
+        "S35",
+        "S53",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S35, qualify real E2E S53 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "MIG-05",
+      "name": "Plesk import",
+      "owners": [
+        "S18",
+        "S35",
+        "S53",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S35, qualify real E2E S53 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "MIG-06",
+      "name": "SSH migration",
+      "owners": [
+        "S18",
+        "S35",
+        "S53",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S35, qualify real E2E S53 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "MIG-07",
+      "name": "Exporter-based migration",
+      "owners": [
+        "S18",
+        "S35",
+        "S53",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S35, qualify real E2E S53 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "MIG-08",
+      "name": "Migration dry-run",
+      "owners": [
+        "S18",
+        "S35",
+        "S53",
+        "S57"
+      ],
+      "gates": [
+        12.5,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #69; read-only fixture discovery/planner, prior 20 unit + one synthetic SQLite negative test evidence. Exact-source registry remains empty.",
+      "remaining": "Verify fail-closed empty inventory and exact source-release compatibility; qualify sanitized real exports, migration/rollback execution and closure. Synthetic SQLite is not source compatibility.",
+      "readiness": 12.5,
+      "remaining_percent": 87.5
+    },
+    {
+      "id": "MIG-09",
+      "name": "Same-server migration",
+      "owners": [
+        "S18",
+        "S35",
+        "S53",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S35, qualify real E2E S53 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "MIG-10",
+      "name": "Whole-server migration rollback",
+      "owners": [
+        "S18",
+        "S35",
+        "S53",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S35, qualify real E2E S53 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "MIG-11",
+      "name": "DNS and mail migration",
+      "owners": [
+        "S18",
+        "S35",
+        "S53",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S35, qualify real E2E S53 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    },
+    {
+      "id": "MIG-12",
+      "name": "Migration downtime control",
+      "owners": [
+        "S18",
+        "S35",
+        "S53",
+        "S57"
+      ],
+      "gates": [
+        0.0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "No reviewed feature-specific component behavior credited at this baseline; package-level presence does not establish this feature.",
+      "remaining": "Implement this specific component behavior; then integrate S35, qualify real E2E S53 and close S57.",
+      "readiness": 0.0,
+      "remaining_percent": 100.0
+    }
+  ],
+  "packages": [
+    {
+      "id": "S01",
+      "name": "Domain model",
+      "gates": [
+        20,
+        20,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged. Merged PR #67 / issue #3 closed; 10 unit tests and formatting/diff checks pass. Lifecycle-through-integrated-API E2E remains.",
+      "readiness": 60,
+      "remaining_percent": 40
+    },
+    {
+      "id": "S02",
+      "name": "Control-plane API",
+      "gates": [
+        20,
+        20,
+        20,
+        20,
+        20
+      ],
+      "evidence": "Merged. Merged PRs #7 and #82 / issue #1 closed; 5 API tests pass. S07 verified the real API/CLI process journey, including valid and invalid credentials.",
+      "readiness": 100,
+      "remaining_percent": 0
+    },
+    {
+      "id": "S03",
+      "name": "Agent protocol",
+      "gates": [
+        20,
+        20,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged. Merged PR #8 / issue #2 closed; protocol serialization/validation tests pass. Signed/authenticated agent transport waits for S24.",
+      "readiness": 60,
+      "remaining_percent": 40
+    },
+    {
+      "id": "S04",
+      "name": "Persistent jobs",
+      "gates": [
+        20,
+        20,
+        20,
+        20,
+        0
+      ],
+      "evidence": "Merged. Merged PR #9 / issue #5 closed; SQLite persistence, reopen, and concurrency evidence pass. Worker kill/restart recovery E2E remains.",
+      "readiness": 80,
+      "remaining_percent": 20
+    },
+    {
+      "id": "S05",
+      "name": "Administrative CLI",
+      "gates": [
+        20,
+        20,
+        20,
+        20,
+        20
+      ],
+      "evidence": "Merged. Merged PR #68 / issue #4 closed; local HTTP fixture tests pass, and S07 exercised the real CLI against the API process.",
+      "readiness": 100,
+      "remaining_percent": 0
+    },
+    {
+      "id": "S06",
+      "name": "Foundation integration",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Implementation pending. Issue #6 remains open. S01\u2013S05 are now merged, but root workspace/lockfile reconciliation, CI, and integrated acceptance have no delivered implementation.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S07",
+      "name": "Real test laboratory",
+      "gates": [
+        20,
+        20,
+        20,
+        20,
+        20
+      ],
+      "evidence": "Merged. Merged PR #70 / issue #10 closed; 13/13 passed (8 unit, 4 real-service integration, 1 API/CLI E2E); blocked-prerequisite probes fail closed.",
+      "readiness": 100,
+      "remaining_percent": 0
+    },
+    {
+      "id": "S08",
+      "name": "Identity and permissions",
+      "gates": [
+        20,
+        20,
+        20,
+        20,
+        0
+      ],
+      "evidence": "Merged #90; README reports 17 unit + 5 SQLite/filesystem integration tests including reopen and tenant isolation. Runtime/API auth and E2E pending.",
+      "readiness": 80,
+      "remaining_percent": 20
+    },
+    {
+      "id": "S09",
+      "name": "Hosting plans and configuration",
+      "gates": [
+        20,
+        20,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #88/#101; checked config fields and tenant mapping. Real ownership/provisioning qualification pending; #173/#158/#159 open.",
+      "readiness": 60,
+      "remaining_percent": 40
+    },
+    {
+      "id": "S10",
+      "name": "Database adapters",
+      "gates": [
+        20,
+        20,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #87 / S10 issue #13 open. Four unit tests reported passing; real database integration is ignored/BLOCKED. Live grants, dump/restore and independent target E2E remain.",
+      "readiness": 60,
+      "remaining_percent": 40
+    },
+    {
+      "id": "S11",
+      "name": "Backup and recovery core",
+      "gates": [
+        20,
+        20,
+        20,
+        20,
+        0
+      ],
+      "evidence": "Merged PR #86 / issue #15 currently closed. One unit and three real filesystem integration tests reported passing. Real database backup/restore, remote destinations and full E2E remain; closure does not establish capability acceptance.",
+      "readiness": 80,
+      "remaining_percent": 20
+    },
+    {
+      "id": "S12",
+      "name": "Container management",
+      "gates": [
+        20,
+        20,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #118\u2013#121; engine/domain/Compose/limits/health/log primitives; W03 reports unit evidence. Real Docker engine and #163/#164 integration pending.",
+      "readiness": 60,
+      "remaining_percent": 40
+    },
+    {
+      "id": "S13",
+      "name": "DNS management",
+      "gates": [
+        20,
+        20,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #85/#100; tracker reports 11 unit tests after regression repairs. Authoritative backend and E2E remain BLOCKED.",
+      "readiness": 60,
+      "remaining_percent": 40
+    },
+    {
+      "id": "S14",
+      "name": "Mail management",
+      "gates": [
+        20,
+        20,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #122\u2013#125; mail domain/config/DNS/alias logic with W03 unit evidence. Live Postfix/Dovecot delivery unqualified; #179/#167 open.",
+      "readiness": 60,
+      "remaining_percent": 40
+    },
+    {
+      "id": "S15",
+      "name": "Host security controls",
+      "gates": [
+        20,
+        20,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #71/#99; tracker reports 34 unit tests; required host qualification reports nonzero BLOCKED.",
+      "readiness": 60,
+      "remaining_percent": 40
+    },
+    {
+      "id": "S16",
+      "name": "Metrics, alerts and incidents",
+      "gates": [
+        20,
+        20,
+        20,
+        10,
+        0
+      ],
+      "evidence": "Merged. Merged PR #72; 9 module tests pass. Loopback HTTP/TCP probes and a webhook receiver earn partial integration credit; webhook request payload is not asserted and no scheduler/collector or outage E2E exists. GitHub issue #22 is closed, but technical acceptance remains incomplete.",
+      "readiness": 70,
+      "remaining_percent": 30
+    },
+    {
+      "id": "S17",
+      "name": "Unified administration frontend",
+      "gates": [
+        20,
+        10,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #104/#105/#107/#126\u2013#128; UI/client and mock tests reported in W03. Main app placeholder and auth endpoint mismatch; partial implementation only.",
+      "readiness": 50,
+      "remaining_percent": 50
+    },
+    {
+      "id": "S18",
+      "name": "Migration discovery and planner",
+      "gates": [
+        20,
+        10,
+        20,
+        0,
+        0
+      ],
+      "evidence": "PR #69 merged. Preserve partial implementation credit: exact source registry empty and actual migration unqualified. Previously reported fixture tests only.",
+      "readiness": 50,
+      "remaining_percent": 50
+    },
+    {
+      "id": "S19",
+      "name": "Deployment workflows",
+      "gates": [
+        20,
+        20,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #134/#136; domain, signed webhook, build, switch and rollback modules. W03 reports component tests. Full real deployment runtime/E2E not qualified.",
+      "readiness": 60,
+      "remaining_percent": 40
+    },
+    {
+      "id": "S20",
+      "name": "Administration and customer workflows",
+      "gates": [
+        20,
+        10,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #137/#143/#144; tenants, quotas, audit and invitations. W03 reports unit tests; audit/inventory in memory, authenticated admin runtime absent.",
+      "readiness": 50,
+      "remaining_percent": 50
+    },
+    {
+      "id": "S21",
+      "name": "Node management",
+      "gates": [
+        20,
+        20,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged PR #83 / issue #24 open; 11 unit tests passed. Signed transport, node persistence, integration and E2E fixture drivers remain unavailable.",
+      "readiness": 60,
+      "remaining_percent": 40
+    },
+    {
+      "id": "S22",
+      "name": "WordPress management",
+      "gates": [
+        20,
+        10,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #138; installer/WP-CLI/plugin/theme/maintenance/hardening primitives with W03 fixture/unit tests. Real WordPress lifecycle not qualified.",
+      "readiness": 50,
+      "remaining_percent": 50
+    },
+    {
+      "id": "S23",
+      "name": "Secrets and encryption",
+      "gates": [
+        20,
+        10,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #102; tracker reports nine tests, including file-based behaviors; detailed independent qualification not rerun. Service injection E2E BLOCKED; integration credit withheld.",
+      "readiness": 50,
+      "remaining_percent": 50
+    },
+    {
+      "id": "S24",
+      "name": "Real node runtime",
+      "gates": [
+        20,
+        10,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #129/#130/#142; metrics, transport, executor and atomic files. W03 reports unit tests; standalone agent library not root-integrated or runnable as packaged service.",
+      "readiness": 50,
+      "remaining_percent": 50
+    },
+    {
+      "id": "S25",
+      "name": "Identity/API integration",
+      "gates": [
+        20,
+        10,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Open PR artifacts #156/#157; not merged or independently qualified at capture. No unit/integration/E2E credit from a title or session completion.",
+      "readiness": 30,
+      "remaining_percent": 70
+    },
+    {
+      "id": "S26",
+      "name": "Hosting runtime/API",
+      "gates": [
+        20,
+        10,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Open PR artifacts #158/#159/#175; not merged or independently qualified at capture. No unit/integration/E2E credit from a title or session completion.",
+      "readiness": 30,
+      "remaining_percent": 70
+    },
+    {
+      "id": "S27",
+      "name": "Database/backup runtime",
+      "gates": [
+        20,
+        10,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Open PR artifacts #160/#162/#165; not merged or independently qualified at capture. No unit/integration/E2E credit from a title or session completion.",
+      "readiness": 30,
+      "remaining_percent": 70
+    },
+    {
+      "id": "S28",
+      "name": "Container runtime/API",
+      "gates": [
+        20,
+        10,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Open PR artifacts #163/#164; not merged or independently qualified at capture. No unit/integration/E2E credit from a title or session completion.",
+      "readiness": 30,
+      "remaining_percent": 70
+    },
+    {
+      "id": "S29",
+      "name": "DNS/mail runtime/API",
+      "gates": [
+        20,
+        10,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Open PR artifacts #166/#167; not merged or independently qualified at capture. No unit/integration/E2E credit from a title or session completion.",
+      "readiness": 30,
+      "remaining_percent": 70
+    },
+    {
+      "id": "S30",
+      "name": "Deployments runtime/API",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Dependency-gated. No runtime implementation PR found. Required prerequisites are S19, S28; this package has not passed integration or E2E.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S31",
+      "name": "Monitoring runtime/API",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Dependency-gated. No runtime implementation PR found. Required prerequisites are S16, S24, S25; this package has not passed integration or E2E.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S32",
+      "name": "Frontend live workflows",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Dependency-gated. No runtime implementation PR found. Required prerequisites are S17, S25, S26, S28; this package has not passed integration or E2E.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S33",
+      "name": "WordPress runtime",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Dependency-gated. No runtime implementation PR found. Required prerequisites are S22, S26, S27; this package has not passed integration or E2E.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S34",
+      "name": "Multi-node runtime",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Dependency-gated. No runtime implementation PR found. Required prerequisites are S21, S24; this package has not passed integration or E2E.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S35",
+      "name": "Migration execution",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Dependency-gated. No runtime implementation PR found. Required prerequisites are S18, S26, S27; this package has not passed integration or E2E.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S36",
+      "name": "Administration runtime",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Dependency-gated. No runtime implementation PR found. Required prerequisites are S20, S25; this package has not passed integration or E2E.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S37",
+      "name": "Security runtime",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Dependency-gated. No runtime implementation PR found. Required prerequisites are S15, S24, S25; this package has not passed integration or E2E.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S38",
+      "name": "Installer, update and recovery",
+      "gates": [
+        20,
+        10,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #131/#132/#141; updater tests, shell/systemd checks reported in W03. Installer creates empty binary and service paths mismatch. Real install/update/recovery acceptance blocked.",
+      "readiness": 50,
+      "remaining_percent": 50
+    },
+    {
+      "id": "S39",
+      "name": "Remote backup destinations",
+      "gates": [
+        20,
+        10,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #139; abstraction, mock backend, incomplete S3 HTTP skeleton, SFTP path/config validation, sync helpers. W03 reports unit tests; real remote transfer/restore not qualified.",
+      "readiness": 50,
+      "remaining_percent": 50
+    },
+    {
+      "id": "S40",
+      "name": "Application templates and image scanning",
+      "gates": [
+        20,
+        10,
+        20,
+        0,
+        0
+      ],
+      "evidence": "Merged #133/#135/#140; template/installer helpers and report parsers, W03 fixture/unit tests. Real scanner execution and Docker installation acceptance pending.",
+      "readiness": 50,
+      "remaining_percent": 50
+    },
+    {
+      "id": "S41",
+      "name": "CI and build qualification",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Qualification pending. Qualification work has not run. Required prerequisites are S06, S07; no real acceptance evidence is recorded.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S42",
+      "name": "Foundation and identity E2E",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Qualification pending. Qualification work has not run. Required prerequisites are S07, S24, S25; no real acceptance evidence is recorded.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S43",
+      "name": "Hosting and runtime E2E",
+      "gates": [
+        20,
+        10,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Open PR artifacts #168; not merged or independently qualified at capture. No unit/integration/E2E credit from a title or session completion.",
+      "readiness": 30,
+      "remaining_percent": 70
+    },
+    {
+      "id": "S44",
+      "name": "Database and restore E2E",
+      "gates": [
+        20,
+        10,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Open PR artifacts #169; not merged or independently qualified at capture. No unit/integration/E2E credit from a title or session completion.",
+      "readiness": 30,
+      "remaining_percent": 70
+    },
+    {
+      "id": "S45",
+      "name": "Containers and app catalog E2E",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Qualification pending. Qualification work has not run. Required prerequisites are S07, S28, S40; no real acceptance evidence is recorded.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S46",
+      "name": "CI/CD release E2E",
+      "gates": [
+        20,
+        10,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Open PR artifacts #171; not merged or independently qualified at capture. No unit/integration/E2E credit from a title or session completion.",
+      "readiness": 30,
+      "remaining_percent": 70
+    },
+    {
+      "id": "S47",
+      "name": "WordPress E2E",
+      "gates": [
+        20,
+        10,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Open PR artifacts #176; not merged or independently qualified at capture. No unit/integration/E2E credit from a title or session completion.",
+      "readiness": 30,
+      "remaining_percent": 70
+    },
+    {
+      "id": "S48",
+      "name": "Observability E2E",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Qualification pending. Qualification work has not run. Required prerequisites are S07, S31; no real acceptance evidence is recorded.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S49",
+      "name": "Multi-node failure E2E",
+      "gates": [
+        20,
+        10,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Open PR artifacts #172; not merged or independently qualified at capture. No unit/integration/E2E credit from a title or session completion.",
+      "readiness": 30,
+      "remaining_percent": 70
+    },
+    {
+      "id": "S50",
+      "name": "DNS and mail E2E",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Qualification pending. Qualification work has not run. Required prerequisites are S07, S29; no real acceptance evidence is recorded.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S51",
+      "name": "Administration and update E2E",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Qualification pending. Qualification work has not run. Required prerequisites are S07, S36, S38; no real acceptance evidence is recorded.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S52",
+      "name": "Security and secrets qualification",
+      "gates": [
+        20,
+        10,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Open PR artifacts #170; not merged or independently qualified at capture. No unit/integration/E2E credit from a title or session completion.",
+      "readiness": 30,
+      "remaining_percent": 70
+    },
+    {
+      "id": "S53",
+      "name": "Migration and rollback qualification",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Qualification pending. Qualification work has not run. Required prerequisites are S07, S35, S38; no real acceptance evidence is recorded.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S54",
+      "name": "Hosting/WordPress capability closure",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Closure/research pending. Closure/research gate has not run. Required prerequisites are S43, S47; do not infer readiness from earlier package merges.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S55",
+      "name": "Containers/deployments capability closure",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Closure/research pending. Closure/research gate has not run. Required prerequisites are S45, S46; do not infer readiness from earlier package merges.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S56",
+      "name": "Data/network capability closure",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Closure/research pending. Closure/research gate has not run. Required prerequisites are S44, S50; do not infer readiness from earlier package merges.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S57",
+      "name": "Operations/administration capability closure",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Closure/research pending. Closure/research gate has not run. Required prerequisites are S48, S49, S51, S52; do not infer readiness from earlier package merges.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S58",
+      "name": "Variant compatibility qualification",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Closure/research pending. Closure/research gate has not run. Required prerequisites are S32, S43, S44, S45, S46, S50; do not infer readiness from earlier package merges.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S59",
+      "name": "Performance and failure budget",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Closure/research pending. Closure/research gate has not run. Required prerequisites are S42, S43, S44, S45, S49; do not infer readiness from earlier package merges.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S60",
+      "name": "HA and autoscaling feasibility",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Closure/research pending. Closure/research gate has not run. Required prerequisites are S34, S49; do not infer readiness from earlier package merges.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S61",
+      "name": "Release integration and regression",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Reserve; not started. Release/handoff work has not run. Required prerequisites are S54, S55, S56, S57, S58, S59; no release or recovery acceptance is evidenced.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S62",
+      "name": "Final recovery and operator handbook",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Reserve; not started. Release/handoff work has not run. Required prerequisites are S53, S61; no release or recovery acceptance is evidenced.",
+      "readiness": 20,
+      "remaining_percent": 80
+    },
+    {
+      "id": "S63",
+      "name": "Final Jules correction reserve",
+      "gates": [
+        20,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence": "Reserve; not started. Correction reserve; prerequisites are S61, S62. No defect is assigned and no readiness evidence exists.",
+      "readiness": 20,
+      "remaining_percent": 80
+    }
+  ]
+}

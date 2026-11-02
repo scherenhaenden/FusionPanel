@@ -222,6 +222,35 @@ impl MemoryLimit {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "u16", into = "u16")]
+pub struct Port(u16);
+
+impl TryFrom<u16> for Port {
+    type Error = DomainError;
+
+    fn try_from(p: u16) -> Result<Self> {
+        if p < 1024 {
+            return Err(DomainError::InvalidInput(
+                "Port must be >= 1024 to avoid privileged ports".into(),
+            ));
+        }
+        Ok(Self(p))
+    }
+}
+
+impl From<Port> for u16 {
+    fn from(val: Port) -> Self {
+        val.0
+    }
+}
+
+impl Port {
+    pub fn as_u16(&self) -> u16 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct UpstreamUrl(String);
 
