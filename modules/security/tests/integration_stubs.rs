@@ -60,6 +60,7 @@ fn test_waf_config_parser_case_reports_blocked_dependencies() {
     println!("Required: nginx -t, libmodsecurity v3, the Nginx ModSecurity connector, and OWASP CRS 3.x.");
     print_runtime_probe_results();
     println!("Fixture teardown: none; no config fixture or service was created or started.");
+    panic!("BLOCKED: Missing required real test dependencies.");
 }
 
 #[test]
@@ -68,6 +69,7 @@ fn test_waf_benign_and_malicious_traffic_cases_report_blocked_dependencies() {
     println!("Required: isolated Nginx + ModSecurity v3 + OWASP CRS 3.x container/namespace, a fixture config, and a loopback HTTP client.");
     print_runtime_probe_results();
     println!("Fixture teardown: none; no container, network namespace, or service was started.");
+    panic!("BLOCKED: Missing required real test dependencies.");
 }
 
 #[test]
@@ -76,6 +78,7 @@ fn test_emergency_ssh_access_case_reports_blocked_dependencies() {
     println!("Required: disposable sshd, an isolated firewall adapter, a fixture network namespace/container, and an independently reachable recovery path.");
     print_runtime_probe_results();
     println!("Fixture teardown: none; no firewall or SSH configuration was applied and no service was started.");
+    panic!("BLOCKED: Missing required real test dependencies.");
 }
 
 #[test]
