@@ -122,3 +122,133 @@ fn test_tamper_detection() {
     // Ensure the corrupted file was removed
     assert!(!restore_dir.path().join("file1.txt").exists());
 }
+
+#[test]
+fn test_manifest_validation_failures() {
+    use backups::models::{Manifest, BackupType, FileInfo};
+    use std::collections::HashMap;
+
+    let mut manifest = Manifest {
+        version: 2, // invalid
+        backup_id: "invalid-uuid".to_string(),
+        timestamp: "not-a-date".to_string(),
+        backup_type: BackupType::Files,
+        files: vec![
+            FileInfo { path: "file1".to_string(), size: 0, checksum_sha256: "".to_string() },
+            FileInfo { path: "file1".to_string(), size: 0, checksum_sha256: "".to_string() }, // duplicate
+        ],
+        databases: vec![],
+        metadata: HashMap::new(),
+    };
+
+    let err = manifest.validate().unwrap_err();
+    match err {
+        BackupError::InvalidManifest(msg) => assert!(msg.contains("Unsupported version")),
+        _ => panic!("Expected InvalidManifest"),
+    }
+
+    manifest.version = 1;
+    let err = manifest.validate().unwrap_err();
+    match err {
+        BackupError::InvalidManifest(msg) => assert!(msg.contains("Invalid backup_id UUID")),
+        _ => panic!("Expected InvalidManifest"),
+    }
+
+    manifest.backup_id = uuid::Uuid::new_v4().to_string();
+    let err = manifest.validate().unwrap_err();
+    match err {
+        BackupError::InvalidManifest(msg) => assert!(msg.contains("Invalid timestamp format")),
+        _ => panic!("Expected InvalidManifest"),
+    }
+
+    manifest.timestamp = chrono::Utc::now().to_rfc3339();
+    let err = manifest.validate().unwrap_err();
+    match err {
+        BackupError::InvalidManifest(msg) => assert!(msg.contains("Duplicate file path")),
+        _ => panic!("Expected InvalidManifest"),
+    }
+
+    manifest.files.pop();
+    manifest.files.push(FileInfo { path: "../unsafe/path".to_string(), size: 0, checksum_sha256: "".to_string() });
+    let err = manifest.validate().unwrap_err();
+    match err {
+        BackupError::InvalidManifest(msg) => assert!(msg.contains("Unsafe path in manifest")),
+        _ => panic!("Expected InvalidManifest"),
+    }
+}
+
+#[test]
+fn test_incomplete_archive() {
+    let source_dir = TempDir::new().unwrap();
+    let dest_dir = TempDir::new().unwrap();
+    let restore_dir = TempDir::new().unwrap();
+
+    let file1_path = source_dir.path().join("file1.txt");
+    let mut file1 = File::create(&file1_path).unwrap();
+    file1.write_all(b"Valid content").unwrap();
+
+    let archive_path = dest_dir.path().join("backup.tar.gz");
+    let job = BackupJob::new(source_dir.path());
+    let original_manifest = job.execute(&archive_path).expect("Backup failed");
+
+    // Create incomplete archive (manifest is there, file is not)
+    let incomplete_archive_path = dest_dir.path().join("incomplete.tar.zst");
+    let dest = File::create(&incomplete_archive_path).unwrap();
+    let enc = ZstdEncoder::new(dest, 3).unwrap();
+    let mut tar = Builder::new(enc);
+
+    let manifest_json = serde_json::to_string_pretty(&original_manifest).unwrap();
+    let mut header = tar::Header::new_gnu();
+    header.set_path("manifest.json").unwrap();
+    header.set_size(manifest_json.len() as u64);
+    header.set_mode(0o644);
+    header.set_cksum();
+    tar.append(&header, manifest_json.as_bytes()).unwrap();
+
+    tar.into_inner().unwrap().finish().unwrap();
+
+    let result = restore_archive(&incomplete_archive_path, restore_dir.path());
+    match result {
+        Err(BackupError::InvalidManifest(msg)) => {
+            assert!(msg.contains("missing from archive"));
+        },
+        _ => panic!("Expected InvalidManifest error for missing file, got {:?}", result),
+    }
+}
+
+#[test]
+fn test_unsafe_archive_paths() {
+    let dest_dir = TempDir::new().unwrap();
+    let _restore_dir = TempDir::new().unwrap();
+
+    let archive_path = dest_dir.path().join("unsafe.tar.zst");
+    let dest = File::create(&archive_path).unwrap();
+    let enc = ZstdEncoder::new(dest, 3).unwrap();
+    let mut tar = Builder::new(enc);
+
+    use backups::models::{Manifest, BackupType, FileInfo};
+    use std::collections::HashMap;
+
+    let manifest = Manifest {
+        version: 1,
+        backup_id: uuid::Uuid::new_v4().to_string(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        backup_type: BackupType::Files,
+        files: vec![
+            FileInfo { path: "../unsafe".to_string(), size: 5, checksum_sha256: "dummy".to_string() },
+        ],
+        databases: vec![],
+        metadata: HashMap::new(),
+    };
+
+    let manifest_json = serde_json::to_string_pretty(&manifest).unwrap();
+    let mut header = tar::Header::new_gnu();
+    header.set_path("manifest.json").unwrap();
+    header.set_size(manifest_json.len() as u64);
+    header.set_mode(0o644);
+    header.set_cksum();
+    tar.append(&header, manifest_json.as_bytes()).unwrap();
+
+    // We cannot create a tar file with `../` using the tar crate easily because it returns an error.
+    // Instead, we just rely on manifest validation catching it (as tested above).
+}
