@@ -1,0 +1,162 @@
+[
+  {
+    "id": "W02-01",
+    "package": "S06",
+    "issue": 6,
+    "title": "Integrate foundation contracts and reproducible workspace",
+    "paths": [
+      "Cargo.toml",
+      "Cargo.lock",
+      ".gitignore",
+      "crates/",
+      "tests/foundation/",
+      ".github/workflows/foundation.yml",
+      "docs/foundation-integration/"
+    ],
+    "detail": "The tracked root Cargo.lock is stale: cargo test --workspace --offline --locked exits101. Regenerating only a disposable copy yields49 passing package tests (protocol14/API5/CLI11/domain10/jobs9). Integrate checked UUID/String job-ID adapters and canonical domain validation across domain/protocol, validate response version/request correlation, commit a reviewed root lock, and add locked workspace build/test/fmt/clippy CI plus real API/CLI and process interruption/reopen job-store evidence. Preserve current wire string formats. Do not invent a successful privileged agent/worker or new hosting behavior. Reconcile running jobs explicitly, never auto-retry unknown work.",
+    "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
+    "status": "DISPATCHED",
+    "session": "7302772204230979493",
+    "session_url": "https://jules.google.com/session/7302772204230979493"
+  },
+  {
+    "id": "W02-02",
+    "package": "S09",
+    "parent": 12,
+    "title": "Repair hosting validation, ownership and qualification gates",
+    "paths": [
+      "modules/hosting/"
+    ],
+    "detail": "Fix raw Nginx/PHP-FPM config injection through unchecked public/deserializable PHP/proxy fields and document-root strings (domain/validation.rs57, domain/site.rs12-41, config/nginx.rs16,46, php_fpm.rs18-32). Make construction/deserialization/rendering enforce safe validated tokens and paths. Use explicit validated tenant identity mapping instead of silently emitting shared www-data for all pools. Missing Docker currently returns success; E2E prints BLOCKED then assert!(true). Replace false-green cases with executable nonzero dependency gates and meaningful real disposable parser/provision tests when actual prerequisites exist; test adversarial input and invariant bypass.",
+    "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
+    "status": "DISPATCHED",
+    "session": "7764619453540187587",
+    "issue": 91,
+    "issue_url": "https://github.com/scherenhaenden/FusionPanel/issues/91",
+    "session_url": "https://jules.google.com/session/7764619453540187587"
+  },
+  {
+    "id": "W02-03",
+    "package": "S10",
+    "parent": 13,
+    "title": "Repair database apply boundaries and restore error propagation",
+    "paths": [
+      "modules/databases/"
+    ],
+    "detail": "Public deserializable plans bypass planning validation; revalidate all SQL identifiers/privileges at apply or make invariant-bearing types checked. PostgreSQL stdin SQL must set ON_ERROR_STOP and propagate SQL failures; current process status can report successful partial restores. Correct engine-specific database/schema/table grant semantics; do not use MariaDB table privileges in GRANT ON DATABASE. Fix ignored integration lane swallowing DependencyUnavailable and helper discarding results. Use disposable separate source/restore instances with real inserted records and grant authorization assertions; missing prerequisites must exit nonzero BLOCKED. Protect dumps/secrets and sanitized errors.",
+    "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
+    "status": "DISPATCHED",
+    "session": "1885562045966245180",
+    "issue": 92,
+    "issue_url": "https://github.com/scherenhaenden/FusionPanel/issues/92",
+    "session_url": "https://jules.google.com/session/1885562045966245180"
+  },
+  {
+    "id": "W02-04",
+    "package": "S11",
+    "parent": 15,
+    "title": "Repair backup containment, complete manifests and atomic restore",
+    "paths": [
+      "modules/backups/"
+    ],
+    "detail": "restore.rs validates lexical paths but follows pre-existing parent/leaf symlinks, may write outside target, truncates valid destination before checksum and deletes it on failure. It returns success when manifest-listed members are absent and ignores expected sizes/duplicate manifests/members. Stage and validate complete archives before committing target changes, preserve existing data on failure, enforce symlink/source containment, reject nonexistent sources and output paths within source tree. Retention must prove backup ownership instead of deleting arbitrary .gz files. Add real filesystem tests for malicious links, missing/duplicate entries, corruption rollback, existing target preservation, source/output boundaries and retention ownership. DB metadata alone is not a DB backup; no encryption/selective restore/Restic claims without implementation.",
+    "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
+    "status": "DISPATCHED",
+    "session": "1116061198015020496",
+    "issue": 93,
+    "issue_url": "https://github.com/scherenhaenden/FusionPanel/issues/93",
+    "session_url": "https://jules.google.com/session/1116061198015020496"
+  },
+  {
+    "id": "W02-05",
+    "package": "S13",
+    "parent": 16,
+    "title": "Restore DNS regression protections lost in refined merge",
+    "paths": [
+      "modules/dns/"
+    ],
+    "detail": "Compare current merged PR85 with reviewed PR84 source f6df6f202323ec32a46cad5db353a4cd2e5a5ca0. Restore additively TTL0 support; valid Null MX priority/target and exclusion with other MX; distinct typed DNSKEY/DS key material; private invariant-bearing Record/Zone fields; numeric IPv4 alias/trailing-dot rejection. Preserve valid refined deserialization changes; do not overwrite the entire module with old code. Current domain.rs89,140,165,183,211,256/provider.rs6 show regressions. E2E must actually create/update/query/export/restore a disposable authoritative fixture, not merely check NOERROR from a hypothetical daemon; missing fixture is nonzero BLOCKED. Add focused regression cases.",
+    "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
+    "status": "DISPATCHED",
+    "session": "3274795259823328621",
+    "issue": 94,
+    "issue_url": "https://github.com/scherenhaenden/FusionPanel/issues/94",
+    "session_url": "https://jules.google.com/session/3274795259823328621"
+  },
+  {
+    "id": "W02-06",
+    "package": "S15",
+    "parent": 23,
+    "title": "Repair firewall lockout and CSP token validation",
+    "paths": [
+      "modules/security/"
+    ],
+    "detail": "Firewall lockout check ignores Deny rules/order/source: defaultAllow + Deny configuredSSH port passes; defaultDeny with earlier deny-all then allowSSH also passes. Define rule evaluation/administrator emergency-source semantics consistent with rendering. CSP validator checks exact unsafe-inline string; trailing whitespace/combined tokens bypass it; arbitrary nonce-/hash prefixes count as mitigation. Enforce grammar per token and complete valid nonce/hash syntax. Three integration_stubs.rs58-79 print BLOCKED and pass; change required qualification missing dependencies to nonzero BLOCKED and add actual isolated parser/traffic/emergency-access tests where available. No host firewall/SSH/service changes.",
+    "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
+    "status": "DISPATCHED",
+    "session": "14127040891990959948",
+    "issue": 95,
+    "issue_url": "https://github.com/scherenhaenden/FusionPanel/issues/95",
+    "session_url": "https://jules.google.com/session/14127040891990959948"
+  },
+  {
+    "id": "W02-07",
+    "package": "S16",
+    "parent": 22,
+    "title": "Repair probe address fallback and assert webhook delivery",
+    "paths": [
+      "modules/observability/"
+    ],
+    "detail": "TCP probe currently uses only first resolved address (probes.rs43-44,67); try bounded candidates so reachable alternate addresses do not cause false incidents. Make timeout budgets deterministic and bounded across attempts. Existing integration.rs109-136 DOES use a loopback webhook receiver; preserve it and assert HTTP method/path/headers and JSON alert payload plus failure/recovery behavior. Do not claim unbounded default reqwest blocking timeout (it is30seconds). Add real local socket regressions and failure cases. Preserve explicit scheduler/collector/persistence/E2E gaps instead of inventing live metrics.",
+    "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
+    "status": "QUEUED_NOT_DISPATCHED",
+    "session": null,
+    "issue": 96,
+    "issue_url": "https://github.com/scherenhaenden/FusionPanel/issues/96"
+  },
+  {
+    "id": "W02-08",
+    "package": "S18",
+    "parent": 19,
+    "title": "Repair empty-inventory migration decommission safety",
+    "paths": [
+      "modules/migration/"
+    ],
+    "detail": "Continue existing OPEN PR69 instead of starting another competing implementation. Fetch branch issue-19-migration-discovery-2421886187897473093 at exact1a16791752fb7f42f5d475cb6472c5d915bbba40; preserve all commits and add only scoped fixes, merge verified master base normally if needed. Planner::create_review_plan can allow decommission for empty inventory through vacuous all(). Fail closed for empty/unknown/unqualified source inventory even when handoff attestations are all true; add explicit blockers and regressions. Keep exact-source registry empty until genuine version-matched sanitized source evidence exists. No guessed CloudPanel schema/support, no actual apply/decommission. Update existing PR69 with additive commits and evidence (no force push); do not duplicate it solely for delivery.",
+    "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
+    "status": "QUEUED_NOT_DISPATCHED",
+    "session": null,
+    "issue": 97,
+    "issue_url": "https://github.com/scherenhaenden/FusionPanel/issues/97"
+  },
+  {
+    "id": "W02-09",
+    "package": "S08",
+    "issue": 11,
+    "title": "Qualify recovered identity module and principal boundaries",
+    "paths": [
+      "modules/identity/"
+    ],
+    "detail": "A recovered S08 result is being published separately from session3198712460135711531. Continue draft PR90 branch recovery/s08-identity-3198712460135711531 at exact ff4caef9a7eba8f9f60b8e570e182a92fdefd325. Preserve original source commits, apply additive changes, update PR90 without force-push or merge. Repair principal-scoped RBAC, checked session expiry and private validated invariants; add real tests rather than0-test cargo success. Verify huge/negative/zero TTL without panic, caller/user binding filtering, revocation/demotion/session expiration, actual SQLite persistence reopen and tenant isolation. Do not fabricate authenticated API integration; expose explicit boundaries for S25. Continue recovered source additively and update its existing PR when possible; no duplicate rerun to request PR delivery.",
+    "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
+    "status": "QUEUED_NOT_DISPATCHED",
+    "session": null,
+    "recovery_head": "ff4caef9a7eba8f9f60b8e570e182a92fdefd325",
+    "recovery_branch": "recovery/s08-identity-3198712460135711531"
+  },
+  {
+    "id": "W02-10",
+    "package": "S23",
+    "issue": 25,
+    "title": "Qualify recovered secrets storage and rotation",
+    "paths": [
+      "modules/secrets/"
+    ],
+    "base": "3a8bf9ef39c35a43b36771c575dbc3b11bc601ba",
+    "status": "QUEUED_NOT_DISPATCHED",
+    "session": null,
+    "detail": "Continue draft PR98 branch recovery/s23-secrets-1788723557430535400 at exact18c65b8e5a1e84c03a34791540d2dbd2acf9e034, preserving source/history with additive fixes and updating the existing PR without force push or merge. Repair raw-key Debug disclosure, unchecked ID path traversal, tenant/scope delimiter collisions, unauthenticated metadata and get_state authorization, non-atomic key rotation/store writes and unsafe permissions. Bind tenant/scope/ID/version cryptographically as authenticated context, validate opaque identifiers, redact all key material, stage atomic restricted-permission writes, and preserve recoverability on interrupted rotation. Eight crypto/filesystem tests passed, but one E2E placeholder printed BLOCKED and returned success; remove false-green qualification. Add meaningful isolation/adversarial/path/metadata and crash/rotation tests proving new-key reopen, old-key rejection, no partial store loss and actual secret-injection/recovery outcome or nonzero BLOCKED. Do not invent S25 API authorization or production KMS. Real crypto dependencies only, no homemade algorithms.",
+    "recovery_head": "18c65b8e5a1e84c03a34791540d2dbd2acf9e034",
+    "recovery_branch": "recovery/s23-secrets-1788723557430535400"
+  }
+]
