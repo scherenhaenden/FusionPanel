@@ -32,6 +32,8 @@ This register lists reviewed package PRs and directly related documentation or c
 | [#101](https://github.com/scherenhaenden/FusionPanel/pull/101) | [S09](sessions/S09.md) Hosting plans and configuration | [#91](https://github.com/scherenhaenden/FusionPanel/issues/91) | Prevent hosting config injection and isolate tenants | Merged 2026-11-02 via regular merge commit; SafeDocumentRoot/SafePoolName validation and tenant isolation | Close #91 manually; keep #12 parent open |
 | [#102](https://github.com/scherenhaenden/FusionPanel/pull/102) | [S23](sessions/S23.md) Secrets | [#25](https://github.com/scherenhaenden/FusionPanel/issues/25) | Independent secrets module (S23) | Merged 2026-11-02 via regular merge commit; AEAD ChaCha20-Poly1305, zeroize, rotation and atomic storage; 9 tests pass | Close #25 manually with test evidence |
 
+| [#180](https://github.com/scherenhaenden/FusionPanel/pull/180) | Readiness milestone coordination | [#6](https://github.com/scherenhaenden/FusionPanel/issues/6) (direct coordination reference) | Atomic snapshot for all 162 features and 63 packages; ledger synchronization | Open documentation PR, based on master `195a481714eaa16ecbb9ba7e7962ab9622a05a22`; feature maturity 7.18%, package maturity 39.84%; no new product test execution | Keep #6 open; workspace implementation and CI are outside this documentation change |
+
 ## W02 dispatch register
 
 | Task | Package | Issue | Session and base | Dispatch state |
