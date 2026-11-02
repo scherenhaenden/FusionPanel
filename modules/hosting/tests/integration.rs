@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::process::Command;
 use uuid::Uuid;
 
@@ -26,6 +25,9 @@ fn test_generate_and_validate_configs() {
         "/srv/fusionpanel/sites/example.com".into(),
         spec,
         8080,
+        hosting::domain::ResourceOwner::PanelOwned { tenant_id: tenant_id.clone() },
+        "test-user".to_string().try_into().unwrap(),
+        vec![],
     )
     .unwrap();
 
@@ -81,8 +83,9 @@ fn test_generate_and_validate_configs() {
                     php_conf_path.display()
                 ))
                 .arg("php:fpm-alpine")
-                .arg("php-fpm")
-                .arg("-t")
+                .arg("sh")
+                .arg("-c")
+                .arg(format!("adduser -D {} && php-fpm -t", site.run_as_user.as_str()))
                 .output()
                 .unwrap();
             assert!(
@@ -93,6 +96,7 @@ fn test_generate_and_validate_configs() {
             );
         } else {
             panic!("BLOCKED: Docker is present but fails to run basic containers.");
+
         }
     } else {
         panic!("BLOCKED: Docker not available, skipping actual syntax verification.");
@@ -113,6 +117,9 @@ fn test_validation_rejects_injections() {
         "/srv/fusionpanel/sites/../etc/passwd\0".to_string(),
         HostingSpec::Static(hosting::domain::StaticConfig),
         8080,
+        hosting::domain::ResourceOwner::PanelOwned { tenant_id: tenant_id.clone() },
+        "test-user".to_string().try_into().unwrap(),
+        vec![],
     );
     assert!(doc_res.is_err(), "Should reject invalid document root");
 
@@ -141,7 +148,10 @@ fn test_validation_rejects_injections() {
         domain.clone(),
         "/srv/fusionpanel/sites/example.com".to_string(),
         HostingSpec::Static(hosting::domain::StaticConfig),
-        80, // Privileged port < 1024 should be rejected
+        80, // Privileged port
+        hosting::domain::ResourceOwner::PanelOwned { tenant_id: tenant_id.clone() },
+        "test-user".to_string().try_into().unwrap(),
+        vec![], // < 1024 should be rejected
     );
     assert!(port_res.is_err(), "Should reject privileged ports");
 }
@@ -164,6 +174,9 @@ fn test_vhost_collision_and_socket_permissions() {
         "/srv/fusionpanel/sites/example.com".to_string(),
         spec.clone(),
         8080,
+        hosting::domain::ResourceOwner::PanelOwned { tenant_id: tenant_id.clone() },
+        "test-user".to_string().try_into().unwrap(),
+        vec![],
     )
     .unwrap();
 
@@ -177,7 +190,10 @@ fn test_vhost_collision_and_socket_permissions() {
         domain.clone(), // Same domain
         "/srv/fusionpanel/sites/example.com".to_string(),
         spec.clone(),
-        8080, // Same port
+        8080,
+        hosting::domain::ResourceOwner::PanelOwned { tenant_id: tenant_id.clone() },
+        "test-user".to_string().try_into().unwrap(),
+        vec![], // Same port
     )
     .unwrap();
 
@@ -195,7 +211,10 @@ fn test_vhost_collision_and_socket_permissions() {
         DomainName::new("example.org").unwrap(), // Different domain
         "/srv/fusionpanel/sites/example.org".to_string(),
         spec.clone(),
-        8080, // Same port
+        8080,
+        hosting::domain::ResourceOwner::PanelOwned { tenant_id: tenant_id.clone() },
+        "test-user".to_string().try_into().unwrap(),
+        vec![], // Same port
     )
     .unwrap();
     let port_conflict_err = registry.register(site3);
@@ -207,6 +226,65 @@ fn test_vhost_collision_and_socket_permissions() {
 
     // Check unix socket permissions
     assert!(php_fpm_config.contains("listen.mode = 0660"));
-    assert!(php_fpm_config.contains(&format!("listen.owner = tenant_{}", tenant_id.0)));
-    assert!(php_fpm_config.contains(&format!("listen.group = tenant_{}", tenant_id.0)));
+    assert!(php_fpm_config.contains("listen.owner = test-user"));
+    assert!(php_fpm_config.contains("listen.group = test-user"));
+}
+
+#[test]
+fn test_external_binding_validation() {
+    use hosting::domain::{TenantId, ExternalBinding};
+    use hosting::domain::validation::BindingReadWritePolicy;
+    use hosting::domain::ResourceOwner;
+    use uuid::Uuid;
+
+    let tenant_id = TenantId(Uuid::new_v4());
+
+    // Test Path Traversal
+    let bad_binding = ExternalBinding::new(
+        "/src/../secret",
+        "/canon",
+        "/target",
+        ResourceOwner::PanelOwned { tenant_id: tenant_id.clone() },
+        "test",
+        BindingReadWritePolicy::ReadOnly,
+        "REQ-123"
+    );
+    assert!(bad_binding.is_err(), "Should reject traversal in bindings");
+
+    // Test Protected Path
+    let bad_binding2 = ExternalBinding::new(
+        "/src",
+        "/etc/passwd",
+        "/target",
+        ResourceOwner::PanelOwned { tenant_id: tenant_id.clone() },
+        "test",
+        BindingReadWritePolicy::ReadOnly,
+        "REQ-123"
+    );
+    assert!(bad_binding2.is_err(), "Should reject protected paths");
+
+    // Test Missing Review Ref
+    let bad_binding3 = ExternalBinding::new(
+        "/src",
+        "/canon",
+        "/target",
+        ResourceOwner::PanelOwned { tenant_id: tenant_id.clone() },
+        "test",
+        BindingReadWritePolicy::ReadOnly,
+        ""
+    );
+    assert!(bad_binding3.is_err(), "Should require review reference");
+
+    // Valid binding
+    let good_binding = ExternalBinding::new(
+        "/src",
+        "/canon",
+        "/target",
+        ResourceOwner::PanelOwned { tenant_id: tenant_id.clone() },
+        "test",
+        BindingReadWritePolicy::ReadOnly,
+        "REQ-123"
+    ).unwrap();
+
+    assert_eq!(good_binding.source_path, "/src");
 }
