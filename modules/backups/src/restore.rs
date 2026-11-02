@@ -1,12 +1,49 @@
 use crate::error::BackupError;
 use crate::models::{FileInfo, Manifest};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 use tar::Archive;
 use zstd::stream::Decoder as ZstdDecoder;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static TEMP_DIR_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+struct TempRestoreDir {
+    path: PathBuf,
+}
+
+impl TempRestoreDir {
+    fn new(base_dir: &Path) -> Result<Self, BackupError> {
+        let counter = TEMP_DIR_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let path = base_dir.join(format!(".restore_temp_{}_{}", timestamp, counter));
+        fs::create_dir_all(&path)?;
+
+        // Ensure atomic file creation with specific POSIX permissions to prevent TOCTOU
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700))?;
+        }
+
+        Ok(Self { path })
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TempRestoreDir {
+    fn drop(&mut self) {
+        if self.path.exists() {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+}
 
 pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
     archive_path: P1,
@@ -16,8 +53,12 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
     if !target_dir.exists() {
         fs::create_dir_all(target_dir)?;
     }
-
     let canonical_target = fs::canonicalize(target_dir)?;
+
+    // Create a temporary directory in the target dir to avoid cross-device linking issues
+    // and use a secure custom approach because tempfile cannot be added to standard dependencies.
+    let temp_restore = TempRestoreDir::new(&canonical_target)?;
+    let canonical_temp = fs::canonicalize(temp_restore.path())?;
 
     let file = File::open(archive_path)?;
     let tar = ZstdDecoder::new(file)?;
@@ -25,6 +66,7 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
 
     let mut manifest: Option<Manifest> = None;
     let mut file_info_map: HashMap<String, FileInfo> = HashMap::new();
+    let mut extracted_files = HashSet::new();
 
     let entries = archive.entries()?;
     for entry in entries {
@@ -36,6 +78,7 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
             let mut content = Vec::new();
             entry.read_to_end(&mut content)?;
             let parsed_manifest: Manifest = serde_json::from_slice(&content)?;
+            parsed_manifest.validate()?;
             for file_info in &parsed_manifest.files {
                 file_info_map.insert(file_info.path.clone(), file_info.clone());
             }
@@ -60,25 +103,20 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
                 BackupError::Io(io::Error::new(io::ErrorKind::NotFound, "File in archive not in manifest"))
             })?;
 
-            let target_path = target_dir.join(&path);
+            let temp_target_path = canonical_temp.join(&path);
 
-            // To prevent directory climbing via symlinks or absolute path tricks
-            // ensure the resolved path starts with the absolute target_dir.
-            // We cannot canonicalize target_path directly if it doesn't exist yet,
-            // so we will create the parent directory and canonicalize the parent.
-            if let Some(parent) = target_path.parent() {
+            if let Some(parent) = temp_target_path.parent() {
                 fs::create_dir_all(parent)?;
                 let canonical_parent = fs::canonicalize(parent)?;
-                if !canonical_parent.starts_with(&canonical_target) {
+                if !canonical_parent.starts_with(&canonical_temp) {
                     return Err(BackupError::UnsafePath(path_str));
                 }
             } else {
                 return Err(BackupError::UnsafePath(path_str));
             }
 
-            let mut dest_file = File::create(&target_path)?;
+            let mut dest_file = File::create(&temp_target_path)?;
 
-            // Stream and hash simultaneously
             let mut hasher = Sha256::new();
             let mut buffer = [0; 8192];
             loop {
@@ -93,16 +131,33 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
             let hash = hex::encode(hasher.finalize());
 
             if hash != expected_info.checksum_sha256 {
-                // Remove invalid file
-                let _ = fs::remove_file(&target_path);
                 return Err(BackupError::ChecksumMismatch {
                     path: path_str.clone(),
                     expected: expected_info.checksum_sha256.clone(),
                     actual: hash,
                 });
             }
+            extracted_files.insert(path_str);
         }
     }
 
-    manifest.ok_or(BackupError::ManifestNotFound)
+    let manifest = manifest.ok_or(BackupError::ManifestNotFound)?;
+
+    for file_info in &manifest.files {
+        if !extracted_files.contains(&file_info.path) {
+            return Err(BackupError::InvalidManifest(format!("File in manifest but missing from archive: {}", file_info.path)));
+        }
+    }
+
+    // Move files atomically from temp to target
+    for path_str in extracted_files {
+        let temp_file_path = canonical_temp.join(&path_str);
+        let final_file_path = canonical_target.join(&path_str);
+        if let Some(parent) = final_file_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::rename(&temp_file_path, &final_file_path)?;
+    }
+
+    Ok(manifest)
 }
