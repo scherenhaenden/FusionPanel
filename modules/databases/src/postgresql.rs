@@ -72,6 +72,8 @@ impl DatabaseAdapter for PostgresAdapter {
     }
 
     async fn apply_create_database(&self, plan: &CreateDbPlan) -> Result<()> {
+        validate_identifier(&plan.db_name.0)?;
+        validate_identifier(&plan.owner.0)?;
         let sql = format!(
             "CREATE DATABASE \"{}\" OWNER \"{}\" ENCODING 'UTF8';",
             plan.db_name.0, plan.owner.0
@@ -107,6 +109,7 @@ impl DatabaseAdapter for PostgresAdapter {
     }
 
     async fn apply_create_user(&self, plan: &CreateUserPlan) -> Result<()> {
+        validate_identifier(&plan.username.0)?;
         let escaped_pwd = plan.password_ref.0.replace("'", "''");
         let sql = format!(
             "CREATE USER \"{}\" WITH PASSWORD '{}';",
@@ -114,7 +117,7 @@ impl DatabaseAdapter for PostgresAdapter {
         );
 
         let mut cmd = self.build_cmd("psql");
-        cmd.args(["-d", "postgres"]);
+        cmd.args(["-v", "ON_ERROR_STOP=1", "-d", "postgres"]);
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -142,7 +145,7 @@ impl DatabaseAdapter for PostgresAdapter {
                     plan.username.0, escaped_pwd
                 );
                 let mut alter_cmd = self.build_cmd("psql");
-                alter_cmd.args(["-d", "postgres"]);
+                alter_cmd.args(["-v", "ON_ERROR_STOP=1", "-d", "postgres"]);
                 alter_cmd
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
@@ -165,13 +168,14 @@ impl DatabaseAdapter for PostgresAdapter {
                     DatabaseError::OperationFailed(format!("Failed to wait for psql alter: {}", e))
                 })?;
                 if !alter_output.status.success() {
-                    return Err(DatabaseError::OperationFailed(
-                        String::from_utf8_lossy(&alter_output.stderr).to_string(),
-                    ));
+                    let alter_err = String::from_utf8_lossy(&alter_output.stderr).to_string();
+                    let safe_err = alter_err.replace(&plan.password_ref.0, "[REDACTED]").replace(&escaped_pwd, "[REDACTED]");
+                    return Err(DatabaseError::OperationFailed(safe_err));
                 }
                 return Ok(());
             }
-            return Err(DatabaseError::OperationFailed(stderr));
+            let safe_err = stderr.replace(&plan.password_ref.0, "[REDACTED]").replace(&escaped_pwd, "[REDACTED]");
+            return Err(DatabaseError::OperationFailed(safe_err));
         }
         Ok(())
     }
@@ -195,18 +199,45 @@ impl DatabaseAdapter for PostgresAdapter {
     }
 
     async fn apply_grant(&self, plan: &GrantPlan) -> Result<()> {
+        validate_identifier(&plan.db_name.0)?;
+        validate_identifier(&plan.username.0)?;
+        for priv_str in &plan.privileges {
+            validate_privilege(priv_str)?;
+        }
+
         let privs = if plan.privileges.is_empty() {
-            "ALL PRIVILEGES".to_string()
+            "ALL".to_string() // In postgres, ALL PRIVILEGES is also valid but ALL is standard
         } else {
             plan.privileges.join(", ")
         };
+
+        // Connect to the specific database to grant table privileges on schema public
+        // First grant CONNECT to the database
+        let connect_sql = format!(
+            "GRANT CONNECT ON DATABASE \"{}\" TO \"{}\";",
+            plan.db_name.0, plan.username.0
+        );
+        let mut cmd_connect = self.build_cmd("psql");
+        cmd_connect.args(["-d", "postgres", "-c", &connect_sql, "-v", "ON_ERROR_STOP=1"]);
+
+        let output_connect = cmd_connect.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute psql for grant connect: {}", e))
+        })?;
+
+        if !output_connect.status.success() {
+            return Err(DatabaseError::OperationFailed(
+                String::from_utf8_lossy(&output_connect.stderr).to_string(),
+            ));
+        }
+
+        // Then grant privileges on all tables in public schema
         let sql = format!(
-            "GRANT {} ON DATABASE \"{}\" TO \"{}\";",
-            privs, plan.db_name.0, plan.username.0
+            "GRANT {} ON ALL TABLES IN SCHEMA public TO \"{}\";",
+            privs, plan.username.0
         );
 
         let mut cmd = self.build_cmd("psql");
-        cmd.args(["-d", "postgres", "-c", &sql]);
+        cmd.args(["-d", &plan.db_name.0, "-c", &sql, "-v", "ON_ERROR_STOP=1"]);
 
         let output = cmd.output().await.map_err(|e| {
             DatabaseError::OperationFailed(format!("Failed to execute psql: {}", e))
@@ -229,10 +260,21 @@ impl DatabaseAdapter for PostgresAdapter {
     }
 
     async fn apply_dump(&self, plan: &DumpPlan) -> Result<()> {
+        validate_identifier(&plan.db_name.0)?;
         let mut cmd = self.build_cmd("pg_dump");
         cmd.arg("-d").arg(&plan.db_name.0);
 
-        let file = std::fs::File::create(&plan.output_path).map_err(|e| {
+        // Ensure dump is protected using standard library mechanisms
+        let mut file_options = std::fs::OpenOptions::new();
+        file_options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            file_options.mode(0o600); // Only owner can read/write
+        }
+
+        let file = file_options.open(&plan.output_path).map_err(|e| {
             DatabaseError::OperationFailed(format!("Failed to create dump file: {}", e))
         })?;
 
@@ -259,7 +301,9 @@ impl DatabaseAdapter for PostgresAdapter {
     }
 
     async fn apply_restore(&self, plan: &RestorePlan) -> Result<()> {
+        validate_identifier(&plan.db_name.0)?;
         let mut cmd = self.build_cmd("psql");
+        cmd.args(["-v", "ON_ERROR_STOP=1"]);
         cmd.arg("-d").arg(&plan.db_name.0);
 
         let file = std::fs::File::open(&plan.input_path).map_err(|e| {
