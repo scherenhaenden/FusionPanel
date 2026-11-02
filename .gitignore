@@ -12,3 +12,4 @@ Cargo.lock
 __pycache__/
 *.py[cod]
 modules/migration/target/
+node_modules/
