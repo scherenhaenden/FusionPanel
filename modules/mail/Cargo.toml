@@ -11,5 +11,6 @@ description = "Mail configuration and domain management"
 serde = { version = "1.0", features = ["derive"] }
 regex = "1.10"
 uuid = { version = "1.7", features = ["v4", "serde"] }
+tempfile = "3.10"
 
 [dev-dependencies]
