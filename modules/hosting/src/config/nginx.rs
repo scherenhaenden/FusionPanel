@@ -1,8 +1,8 @@
-use crate::domain::{SiteConfig, HostingSpec, error::Result};
+use crate::domain::{error::Result, HostingSpec, SiteConfig};
 
 pub fn generate_nginx_config(site: &SiteConfig) -> Result<String> {
     let domain = site.domain.as_str();
-    let root = &site.document_root;
+    let root = site.document_root.as_str();
     let site_id = &site.id.0;
     let tenant_id = &site.tenant_id.0;
 
@@ -23,9 +23,9 @@ pub fn generate_nginx_config(site: &SiteConfig) -> Result<String> {
             config.push_str(
                 "\x20\x20\x20\x20location / {\n\
                  \x20\x20\x20\x20\x20\x20\x20\x20try_files $uri $uri/ =404;\n\
-                 \x20\x20\x20\x20}\n"
+                 \x20\x20\x20\x20}\n",
             );
-        },
+        }
         HostingSpec::Php(_php) => {
             // Need a valid PHP-FPM upstream here. We'll use a unix socket for the site.
             let socket_path = format!("/run/php/php-fpm-{}.sock", site_id);
@@ -39,14 +39,15 @@ pub fn generate_nginx_config(site: &SiteConfig) -> Result<String> {
                  \x20\x20\x20\x20\x20\x20\x20\x20fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;\n\
                  \x20\x20\x20\x20}}\n", socket_path
             ));
-        },
+        }
         HostingSpec::ReverseProxy(rp) => {
             config.push_str(&format!(
                 "\x20\x20\x20\x20location / {{\n\
                  \x20\x20\x20\x20\x20\x20\x20\x20proxy_pass {};\n\
                  \x20\x20\x20\x20\x20\x20\x20\x20proxy_set_header Host $host;\n\
                  \x20\x20\x20\x20\x20\x20\x20\x20proxy_set_header X-Real-IP $remote_addr;\n\
-                 \x20\x20\x20\x20}}\n", rp.upstream_url
+                 \x20\x20\x20\x20}}\n",
+                rp.upstream_url.as_str()
             ));
         }
     }

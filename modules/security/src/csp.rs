@@ -49,16 +49,31 @@ impl CspPolicy {
                     ));
                 }
 
-                if value == "'unsafe-inline'" {
-                    has_unsafe_inline = true;
-                }
+                for token in value.split_whitespace() {
+                    if token == "'unsafe-inline'" {
+                        has_unsafe_inline = true;
+                    }
 
-                if value.starts_with("'nonce-")
-                    || value.starts_with("'sha256-")
-                    || value.starts_with("'sha384-")
-                    || value.starts_with("'sha512-")
-                {
-                    has_nonce_or_hash = true;
+                    if token.starts_with("'nonce-") {
+                        if !token.ends_with('\'') || token.len() <= 8 {
+                            return Err(CspError::InvalidCharacters(
+                                value.clone(),
+                                directive.name.clone(),
+                            ));
+                        }
+                        has_nonce_or_hash = true;
+                    } else if token.starts_with("'sha256-")
+                        || token.starts_with("'sha384-")
+                        || token.starts_with("'sha512-")
+                    {
+                        if !token.ends_with('\'') || token.len() <= 10 {
+                            return Err(CspError::InvalidCharacters(
+                                value.clone(),
+                                directive.name.clone(),
+                            ));
+                        }
+                        has_nonce_or_hash = true;
+                    }
                 }
             }
 
@@ -289,6 +304,54 @@ mod tests {
             directives: vec![CspDirective {
                 name: "default-src".into(),
                 values: vec!["'self'; attack".into()],
+            }],
+            report_only: false,
+            report_uri: None,
+        };
+        assert!(matches!(
+            policy.validate(),
+            Err(CspError::InvalidCharacters(_, _))
+        ));
+    }
+
+    #[test]
+    fn test_unsafe_inline_with_trailing_whitespace_is_caught() {
+        let policy = CspPolicy {
+            directives: vec![CspDirective {
+                name: "script-src".into(),
+                values: vec!["'unsafe-inline'   ".into()],
+            }],
+            report_only: false,
+            report_uri: None,
+        };
+        assert!(matches!(
+            policy.validate(),
+            Err(CspError::UnsafeInline(_, _))
+        ));
+    }
+
+    #[test]
+    fn test_invalid_nonce_syntax_rejected() {
+        let policy = CspPolicy {
+            directives: vec![CspDirective {
+                name: "script-src".into(),
+                values: vec!["'nonce-123".into()], // Missing closing quote
+            }],
+            report_only: false,
+            report_uri: None,
+        };
+        assert!(matches!(
+            policy.validate(),
+            Err(CspError::InvalidCharacters(_, _))
+        ));
+    }
+
+    #[test]
+    fn test_invalid_hash_syntax_rejected() {
+        let policy = CspPolicy {
+            directives: vec![CspDirective {
+                name: "script-src".into(),
+                values: vec!["'sha256-abc".into()], // Missing closing quote
             }],
             report_only: false,
             report_uri: None,

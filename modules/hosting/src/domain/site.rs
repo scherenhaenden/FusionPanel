@@ -1,5 +1,7 @@
+use crate::domain::validation::{DocumentRoot, MemoryLimit, PhpVersion, PoolName, UpstreamUrl};
+use crate::domain::{error::Result, DomainName, SiteId, TenantId};
 use serde::{Deserialize, Serialize};
-use crate::domain::{TenantId, SiteId, DomainName, validate_document_root, error::Result};
+use std::convert::TryInto;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -11,14 +13,14 @@ pub enum SiteKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PhpConfig {
-    pub version: String,
-    pub pool_name: String,
-    pub memory_limit: String,
+    pub version: PhpVersion,
+    pub pool_name: PoolName,
+    pub memory_limit: MemoryLimit,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReverseProxyConfig {
-    pub upstream_url: String,
+    pub upstream_url: UpstreamUrl,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,18 +39,24 @@ pub struct SiteConfig {
     pub id: SiteId,
     pub tenant_id: TenantId,
     pub domain: DomainName,
-    pub document_root: String,
+    pub document_root: DocumentRoot,
     pub spec: HostingSpec,
 }
 
 impl SiteConfig {
-    pub fn new(id: SiteId, tenant_id: TenantId, domain: DomainName, document_root: String, spec: HostingSpec) -> Result<Self> {
-        validate_document_root(&document_root)?;
+    pub fn new(
+        id: SiteId,
+        tenant_id: TenantId,
+        domain: DomainName,
+        document_root: String,
+        spec: HostingSpec,
+    ) -> Result<Self> {
+        let doc_root = document_root.try_into()?;
         Ok(Self {
             id,
             tenant_id,
             domain,
-            document_root,
+            document_root: doc_root,
             spec,
         })
     }
