@@ -1,10 +1,10 @@
-/target/
-.env
-.env.*
-!.env.example
-*.db
-*.db-shm
-*.db-wal
+target/
+Cargo.lock
+**/*.rs.bk
+*.orig
+*.rej
+.DS_Store
+*.swp
 *.sqlite
 *.sqlite3
 *.pem
