@@ -1,0 +1,28 @@
+[package]
+name = "e2e-foundation"
+version = "0.1.0-dev.1"
+edition = "2021"
+license = "AGPL-3.0-only"
+publish = false
+
+# Do not include a workspace section to avoid conflicting with the root workspace.
+# However, we must bypass the root workspace validation.
+# A standard approach is to use standard crate inclusion in the root workspace or ignore it.
+# We are told NOT to touch root Cargo.toml.
+# So we need to put an empty workspace section to keep it isolated.
+[workspace]
+
+[[test]]
+name = "identity_auth"
+path = "identity_auth.rs"
+
+[dependencies]
+identity = { path = "../../../modules/identity" }
+fusionpanel-domain = { path = "../../../crates/domain" }
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+uuid = { version = "1.7", features = ["v4"] }
+tempfile = "3.8"
+chrono = "0.4"
