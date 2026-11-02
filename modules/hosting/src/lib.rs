@@ -2,14 +2,10 @@
 
 pub mod domain;
 
-
 // Adding a basic test suite for domain validations
 #[cfg(test)]
 mod tests {
-    use crate::domain::{
-        DomainName, validate_document_root, ResourceState
-
-    };
+    use crate::domain::{validate_document_root, DomainName, ResourceState};
 
     #[test]
     fn test_valid_domain() {
@@ -33,17 +29,24 @@ mod tests {
         assert!(validate_document_root("/var/www/html").is_err());
         assert!(validate_document_root("/srv/fusionpanel/sites/../secret").is_err());
         assert!(validate_document_root("/srv/fusionpanel/sites/foo\0bar").is_err());
-        assert!(validate_document_root("srv/fusionpanel/sites/example").is_err()); // Not absolute
+        assert!(validate_document_root("srv/fusionpanel/sites/example").is_err());
+        // Not absolute
     }
 
     #[test]
     fn test_resource_state_transitions() {
         let state = ResourceState::Pending;
-        assert_eq!(state.transition_to(ResourceState::Active).unwrap(), ResourceState::Active);
+        assert_eq!(
+            state.transition_to(ResourceState::Active).unwrap(),
+            ResourceState::Active
+        );
 
         let state = ResourceState::Active;
         assert!(state.transition_to(ResourceState::Pending).is_err());
-        assert_eq!(state.transition_to(ResourceState::Suspended).unwrap(), ResourceState::Suspended);
+        assert_eq!(
+            state.transition_to(ResourceState::Suspended).unwrap(),
+            ResourceState::Suspended
+        );
     }
 }
 pub mod config;
