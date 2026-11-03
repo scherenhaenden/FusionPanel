@@ -13,7 +13,9 @@ use std::sync::Arc;
 
 use identity::error::IdentityError;
 use identity::session::Session;
-use identity::types::SessionId;
+use identity::types::{SessionId, UserId};
+use identity::rbac::RoleBinding;
+use crate::extractors::AuthenticatedUser;
 
 #[async_trait::async_trait]
 pub trait IdentityStore: Send + Sync + 'static {
@@ -23,6 +25,8 @@ pub trait IdentityStore: Send + Sync + 'static {
         id: SessionId,
         now: chrono::DateTime<Utc>,
     ) -> Result<(), IdentityError>;
+    async fn get_user_role_bindings(&self, user_id: UserId) -> Result<Vec<RoleBinding>, IdentityError>;
+    async fn is_revoked(&self, session: &Session) -> Result<bool, IdentityError>;
 }
 
 #[derive(Serialize)]
@@ -91,6 +95,10 @@ pub async fn auth_middleware<S: IdentityStore>(
         Err(_) => return unauthorized("Authentication required"),
     };
 
+    if store.is_revoked(&session).await.unwrap_or(true) {
+        return unauthorized("Authentication required");
+    }
+
     let now = Utc::now();
     if session.validate_and_touch(now).is_err() {
         return unauthorized("Authentication required");
@@ -100,6 +108,13 @@ pub async fn auth_middleware<S: IdentityStore>(
         return unauthorized("Authentication required");
     }
 
+    let bindings = store.get_user_role_bindings(session.user_id()).await.unwrap_or_default();
+    let auth_user = AuthenticatedUser {
+        user_id: session.user_id(),
+        bindings,
+    };
+
     req.extensions_mut().insert(session);
+    req.extensions_mut().insert(auth_user);
     next.run(req).await
 }
