@@ -1,0 +1,26 @@
+[workspace]
+
+[package]
+name = "integration-nodes"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[dependencies]
+nodes = { path = "../../modules/nodes" }
+rusqlite = { version = "0.31", features = ["bundled"] }
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+axum = { version = "0.7.5" }
+tokio = { version = "1.40", features = ["full"] }
+
+[[bin]]
+name = "fusionpanel-api"
+path = "src/api_main.rs"
+
+[[bin]]
+name = "fusionpanel-agent"
+path = "src/agent_main.rs"
