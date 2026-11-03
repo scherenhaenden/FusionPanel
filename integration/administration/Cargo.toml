@@ -1,0 +1,28 @@
+[package]
+name = "integration-administration"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[workspace]
+
+[dependencies]
+axum = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1.10", features = ["v4", "serde"] }
+thiserror = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+administration = { path = "../../modules/administration" }
+
+[dev-dependencies]
+tempfile = "3.12"
+tower = { version = "0.5.3", features = ["util"] }
+http-body-util = "0.1.5"
+futures = "0.3"
+
+[[test]]
+name = "integration_test"
+path = "tests/integration_test.rs"

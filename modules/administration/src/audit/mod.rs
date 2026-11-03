@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use uuid::Uuid;
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, Write, Error as IoError};
+use std::path::PathBuf;
+use std::os::unix::fs::OpenOptionsExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AuditEvent {
@@ -29,10 +33,15 @@ pub enum AuditError {
     TamperDetected(Uuid),
     #[error("tamper detected: previous hash mismatch at event {0}")]
     ChainBroken(Uuid),
+    #[error("IO error: {0}")]
+    Io(#[from] IoError),
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
 }
 
 pub struct AuditLog {
     records: Vec<AuditRecord>,
+    path: Option<PathBuf>,
 }
 
 impl Default for AuditLog {
@@ -45,7 +54,32 @@ impl AuditLog {
     pub fn new() -> Self {
         Self {
             records: Vec::new(),
+            path: None,
         }
+    }
+
+    pub fn with_path(path: impl Into<PathBuf>) -> Result<Self, AuditError> {
+        let path = path.into();
+        let mut records = Vec::new();
+
+        if path.exists() {
+            let file = File::open(&path)?;
+            let reader = BufReader::new(file);
+
+            for line in reader.lines() {
+                let line = line?;
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let record: AuditRecord = serde_json::from_str(&line)?;
+                records.push(record);
+            }
+        }
+
+        Ok(Self {
+            records,
+            path: Some(path),
+        })
     }
 
     pub fn append(&mut self, event: AuditEvent) -> AuditRecord {
@@ -74,6 +108,21 @@ impl AuditLog {
         };
 
         self.records.push(record.clone());
+
+        if let Some(path) = &self.path {
+            // Memory rule: explicit restrictive storage permissions
+            if let Ok(mut file) = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .mode(0o600)
+                .open(path)
+            {
+                if let Ok(json_line) = serde_json::to_string(&record) {
+                    let _ = writeln!(file, "{}", json_line);
+                }
+            }
+        }
+
         record
     }
 
@@ -124,6 +173,7 @@ mod tests {
     use super::*;
     use chrono::Utc;
     use uuid::Uuid;
+    use tempfile::NamedTempFile;
 
     fn create_test_event(action: &str) -> AuditEvent {
         AuditEvent {
@@ -214,5 +264,22 @@ mod tests {
                 verification_result
             );
         }
+    }
+
+    #[test]
+    fn test_durable_append_and_load() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path().to_path_buf();
+
+        {
+            let mut log = AuditLog::with_path(&path).unwrap();
+            log.append(create_test_event("CREATE"));
+            log.append(create_test_event("UPDATE"));
+        }
+
+        // Re-load
+        let log = AuditLog::with_path(&path).unwrap();
+        assert_eq!(log.records().len(), 2);
+        assert!(log.verify().is_ok());
     }
 }
