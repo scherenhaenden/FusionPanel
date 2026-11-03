@@ -268,6 +268,107 @@ impl ControlStore {
         tx.commit()?;
         Ok(new_revision)
     }
+
+    pub fn get_tenant_resource(
+        &self,
+        tenant_id: Uuid,
+        resource_id: Uuid,
+    ) -> Result<ResourceRecord, StoreError> {
+        let mut stmt = self.conn.prepare(
+            r#"
+            SELECT tenant_id, ownership_mode, revision, desired_state, observed_state
+            FROM resources
+            WHERE resource_id = ?1 AND tenant_id = ?2
+            "#,
+        )?;
+
+        let row = stmt
+            .query_row(
+                params![resource_id.to_string(), tenant_id.to_string()],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, u64>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, Option<String>>(4)?,
+                    ))
+                },
+            )
+            .optional()?
+            .ok_or(StoreError::NotFound(resource_id))?;
+
+        let tenant_id = Uuid::parse_str(&row.0).map_err(|e| StoreError::Parse(e.to_string()))?;
+        let ownership_mode = serde_json::from_str(&row.1)?;
+        let desired_state = serde_json::from_str(&row.3)?;
+        let observed_state = row.4.map(|s| serde_json::from_str(&s)).transpose()?;
+
+        Ok(ResourceRecord {
+            tenant_id,
+            resource_id,
+            ownership_mode,
+            revision: row.2,
+            desired_state,
+            observed_state,
+        })
+    }
+
+    pub fn update_tenant_desired_state(
+        &mut self,
+        tenant_id: Uuid,
+        resource_id: Uuid,
+        expected_revision: u64,
+        new_state: serde_json::Value,
+    ) -> Result<u64, StoreError> {
+        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+
+        let current_revision: u64 = tx
+            .query_row(
+                "SELECT revision FROM resources WHERE resource_id = ?1 AND tenant_id = ?2",
+                params![resource_id.to_string(), tenant_id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?
+            .ok_or(StoreError::NotFound(resource_id))?;
+
+        if current_revision != expected_revision {
+            return Err(StoreError::Conflict {
+                expected: expected_revision,
+                actual: current_revision,
+            });
+        }
+
+        let new_revision = current_revision + 1;
+        let new_state_str = serde_json::to_string(&new_state)?;
+
+        tx.execute(
+            r#"
+            UPDATE resources
+            SET revision = ?1, desired_state = ?2
+            WHERE resource_id = ?3 AND tenant_id = ?4
+            "#,
+            params![new_revision, new_state_str, resource_id.to_string(), tenant_id.to_string()],
+        )?;
+
+        tx.commit()?;
+        Ok(new_revision)
+    }
+
+    pub fn delete_tenant_resource(
+        &mut self,
+        tenant_id: Uuid,
+        resource_id: Uuid,
+    ) -> Result<(), StoreError> {
+        let rows = self.conn.execute(
+            "DELETE FROM resources WHERE resource_id = ?1 AND tenant_id = ?2",
+            params![resource_id.to_string(), tenant_id.to_string()],
+        )?;
+        if rows == 0 {
+            Err(StoreError::NotFound(resource_id))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -462,5 +563,40 @@ mod tests {
             let user_version: u32 = conn.query_row("PRAGMA user_version", [], |row| row.get(0)).unwrap();
             assert_eq!(user_version, 1);
         }
+    }
+
+    #[test]
+    fn test_tenant_isolation_boundary() {
+        let mut store = ControlStore::new_in_memory().unwrap();
+        let tenant_a = Uuid::new_v4();
+        let tenant_b = Uuid::new_v4();
+        let resource_id = Uuid::new_v4();
+
+        store.create_resource(tenant_a, resource_id, OwnershipMode::TenantOwned, json!({"config": "secret_a"})).unwrap();
+
+        // Tenant A can access and update
+        let res_a = store.get_tenant_resource(tenant_a, resource_id).unwrap();
+        assert_eq!(res_a.desired_state, json!({"config": "secret_a"}));
+
+        // Tenant B CANNOT read resource_id
+        let err_read = store.get_tenant_resource(tenant_b, resource_id).unwrap_err();
+        assert!(matches!(err_read, StoreError::NotFound(_)));
+
+        // Tenant B CANNOT update resource_id
+        let err_update = store.update_tenant_desired_state(tenant_b, resource_id, 1, json!({"config": "hacked"})).unwrap_err();
+        assert!(matches!(err_update, StoreError::NotFound(_)));
+
+        // Tenant B CANNOT delete resource_id
+        let err_delete = store.delete_tenant_resource(tenant_b, resource_id).unwrap_err();
+        assert!(matches!(err_delete, StoreError::NotFound(_)));
+
+        // State for Tenant A is completely untouched
+        let res_a_after = store.get_tenant_resource(tenant_a, resource_id).unwrap();
+        assert_eq!(res_a_after.revision, 1);
+        assert_eq!(res_a_after.desired_state, json!({"config": "secret_a"}));
+
+        // Tenant A deletes successfully
+        store.delete_tenant_resource(tenant_a, resource_id).unwrap();
+        assert!(store.get_tenant_resource(tenant_a, resource_id).is_err());
     }
 }
