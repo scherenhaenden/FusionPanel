@@ -31,7 +31,10 @@ pub struct UpdateConfig {
     pub health_check_timeout: Duration,
 }
 
-pub fn run_update(config: &UpdateConfig) -> Result<(), UpdaterError> {
+use std::os::unix::fs::PermissionsExt;
+use std::process::Command;
+
+pub fn run_update(config: &UpdateConfig) -> Result<std::process::Child, UpdaterError> {
     let client = reqwest::blocking::Client::new();
 
     // 1. Download binary
@@ -76,10 +79,15 @@ pub fn run_update(config: &UpdateConfig) -> Result<(), UpdaterError> {
     // 4. Atomic swap
     let backup_path = config.target_path.with_extension("backup");
     let temp_path = config.target_path.with_extension("tmp");
+    let recovery_marker = config.target_path.with_extension("recovery-marker");
 
     fs::write(&temp_path, &bin_data)?;
+    fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o755))?;
 
     let has_backup = config.target_path.exists();
+
+    fs::write(&recovery_marker, b"")?;
+
     if has_backup {
         fs::rename(&config.target_path, &backup_path)?;
     }
@@ -89,14 +97,35 @@ pub fn run_update(config: &UpdateConfig) -> Result<(), UpdaterError> {
             let _ = fs::rename(&backup_path, &config.target_path);
         }
         let _ = fs::remove_file(&temp_path);
+        let _ = fs::remove_file(&recovery_marker);
         return Err(e.into());
     }
 
-    // 5. Health check
+    // 5. Spawn candidate
+    let mut child = match Command::new(&config.target_path).spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            // Rollback immediately if spawn fails
+            if has_backup {
+                let _ = fs::rename(&backup_path, &config.target_path);
+            } else {
+                let _ = fs::remove_file(&config.target_path);
+            }
+            let _ = fs::remove_file(&recovery_marker);
+            return Err(UpdaterError::Io(e));
+        }
+    };
+
+    // 6. Health check
     let start_time = Instant::now();
     let mut healthy = false;
 
     while start_time.elapsed() < config.health_check_timeout {
+        if let Ok(Some(_status)) = child.try_wait() {
+            // Process exited prematurely
+            break;
+        }
+
         if let Ok(resp) = client.get(&config.health_check_url).send() {
             if resp.status().is_success() {
                 healthy = true;
@@ -107,6 +136,9 @@ pub fn run_update(config: &UpdateConfig) -> Result<(), UpdaterError> {
     }
 
     if !healthy {
+        let _ = child.kill();
+        let _ = child.wait();
+
         // Rollback
         if has_backup {
             if let Err(e) = fs::rename(&backup_path, &config.target_path) {
@@ -115,6 +147,7 @@ pub fn run_update(config: &UpdateConfig) -> Result<(), UpdaterError> {
         } else {
             let _ = fs::remove_file(&config.target_path);
         }
+        let _ = fs::remove_file(&recovery_marker);
         return Err(UpdaterError::HealthCheckFailed);
     }
 
@@ -122,6 +155,7 @@ pub fn run_update(config: &UpdateConfig) -> Result<(), UpdaterError> {
     if has_backup {
         let _ = fs::remove_file(backup_path);
     }
+    let _ = fs::remove_file(&recovery_marker);
 
-    Ok(())
+    Ok(child)
 }

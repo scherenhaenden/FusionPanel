@@ -1,0 +1,301 @@
+# Operations/Administration Capability Closure (OBS, NODE, ADM, SEC, MIG)
+
+This document tracks the closure of operations and administration capabilities for OBS, NODE, ADM, SEC, and MIG domains.
+
+## SEC
+- SEC-01: TOTP two-factor authentication
+  - Status: BLOCKED (Missing core implementation for TOTP two-factor authentication)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-02: Passkeys and WebAuthn
+  - Status: BLOCKED (Missing core implementation for Passkeys and WebAuthn)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-03: OAuth and SSO
+  - Status: BLOCKED (Missing core implementation for OAuth and SSO)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-04: Role-based access control
+  - Status: BLOCKED (Missing core implementation for Role-based access control)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-05: Firewall management
+  - Status: BLOCKED (Missing core implementation for Firewall management)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-06: Brute-force protection
+  - Status: BLOCKED (Missing core implementation for Brute-force protection)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-07: Web application firewall
+  - Status: BLOCKED (Missing core implementation for Web application firewall)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-08: Bot protection
+  - Status: BLOCKED (Missing core implementation for Bot protection)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-09: SSH hardening
+  - Status: BLOCKED (Missing core implementation for SSH hardening)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-10: Per-user isolation
+  - Status: BLOCKED (Missing core implementation for Per-user isolation)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-11: Safe command execution
+  - Status: BLOCKED (Missing core implementation for Safe command execution)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-12: Revocable sessions
+  - Status: BLOCKED (Missing core implementation for Revocable sessions)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-13: Tamper-evident audit integrity
+  - Status: BLOCKED (Missing core implementation for Tamper-evident audit integrity)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-14: Vulnerability scanning
+  - Status: BLOCKED (Missing core implementation for Vulnerability scanning)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-15: Credential encryption
+  - Status: BLOCKED (Missing core implementation for Credential encryption)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-16: Content Security Policy controls
+  - Status: BLOCKED (Missing core implementation for Content Security Policy controls)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- SEC-17: Release integrity and provenance
+  - Status: BLOCKED (Missing core implementation for Release integrity and provenance)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+## OBS
+- OBS-01: CPU, RAM and disk metrics
+  - Status: BLOCKED (Missing core implementation for CPU, RAM and disk metrics)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-02: Metrics history
+  - Status: BLOCKED (Missing core implementation for Metrics history)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-03: Live network traffic
+  - Status: BLOCKED (Missing core implementation for Live network traffic)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-04: Per-site metrics
+  - Status: BLOCKED (Missing core implementation for Per-site metrics)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-05: Per-container metrics
+  - Status: BLOCKED (Missing core implementation for Per-container metrics)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-06: HTTP uptime checks
+  - Status: BLOCKED (Missing core implementation for HTTP uptime checks)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-07: TCP and ping checks
+  - Status: BLOCKED (Missing core implementation for TCP and ping checks)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-08: Prometheus endpoint
+  - Status: BLOCKED (Missing core implementation for Prometheus endpoint)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-09: Configurable alerts
+  - Status: BLOCKED (Missing core implementation for Configurable alerts)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-10: PagerDuty notifications
+  - Status: BLOCKED (Missing core implementation for PagerDuty notifications)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-11: Slack notifications
+  - Status: BLOCKED (Missing core implementation for Slack notifications)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-12: Automatic recovery actions
+  - Status: BLOCKED (Missing core implementation for Automatic recovery actions)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-13: System diagnostics
+  - Status: BLOCKED (Missing core implementation for System diagnostics)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-14: Public status page
+  - Status: BLOCKED (Missing core implementation for Public status page)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- OBS-15: Incident management
+  - Status: BLOCKED (Missing core implementation for Incident management)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+## NODE
+- NODE-01: Rust core
+  - Status: BLOCKED (Missing core implementation for Rust core)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-02: Lightweight frontend
+  - Status: BLOCKED (Missing core implementation for Lightweight frontend)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-03: Agent separation
+  - Status: BLOCKED (Missing core implementation for Agent separation)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-04: Restricted privileged surface
+  - Status: BLOCKED (Missing core implementation for Restricted privileged surface)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-05: Authenticated RPC
+  - Status: BLOCKED (Missing core implementation for Authenticated RPC)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-06: Master and worker node management
+  - Status: BLOCKED (Missing core implementation for Master and worker node management)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-07: Move and copy sites between nodes
+  - Status: BLOCKED (Missing core implementation for Move and copy sites between nodes)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-08: Load-aware placement
+  - Status: BLOCKED (Missing core implementation for Load-aware placement)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-09: LIFO provisioning compensation
+  - Status: BLOCKED (Missing core implementation for LIFO provisioning compensation)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-10: Control-state persistence
+  - Status: BLOCKED (Missing core implementation for Control-state persistence)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-11: Durable jobs
+  - Status: BLOCKED (Missing core implementation for Durable jobs)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-13: OpenAPI contract
+  - Status: BLOCKED (Missing core implementation for OpenAPI contract)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-14: Operational and recovery CLI
+  - Status: BLOCKED (Missing core implementation for Operational and recovery CLI)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-15: AGPL licensing and source compliance
+  - Status: BLOCKED (Missing core implementation for AGPL licensing and source compliance)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+## ADM
+- ADM-01: Web SSH terminal
+  - Status: BLOCKED (Missing core implementation for Web SSH terminal)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-02: Systemd service management
+  - Status: BLOCKED (Missing core implementation for Systemd service management)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-03: Operating system updates
+  - Status: BLOCKED (Missing core implementation for Operating system updates)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-04: Panel updates and recovery
+  - Status: BLOCKED (Missing core implementation for Panel updates and recovery)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-05: User and role management
+  - Status: BLOCKED (Missing core implementation for User and role management)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-06: Reseller hierarchy
+  - Status: BLOCKED (Missing core implementation for Reseller hierarchy)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-07: White-label branding
+  - Status: BLOCKED (Missing core implementation for White-label branding)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-08: HTTP API
+  - Status: BLOCKED (Missing core implementation for HTTP API)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-09: API keys
+  - Status: BLOCKED (Missing core implementation for API keys)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-10: API IP allowlists and rate limits
+  - Status: BLOCKED (Missing core implementation for API IP allowlists and rate limits)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-11: Recovery CLI
+  - Status: BLOCKED (Missing core implementation for Recovery CLI)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-12: Secret management
+  - Status: BLOCKED (Missing core implementation for Secret management)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-13: Infrastructure as Code
+  - Status: BLOCKED (Missing core implementation for Infrastructure as Code)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-14: Care plans
+  - Status: BLOCKED (Missing core implementation for Care plans)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- ADM-15: Monthly client reports
+  - Status: BLOCKED (Missing core implementation for Monthly client reports)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+## MIG
+- MIG-01: CloudPanel import
+  - Status: BLOCKED (Missing core implementation for CloudPanel import)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- MIG-02: CloudPanel SQLite discovery
+  - Status: BLOCKED (Missing core implementation for CloudPanel SQLite discovery)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- MIG-03: HestiaCP import
+  - Status: BLOCKED (Missing core implementation for HestiaCP import)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- MIG-04: cPanel import
+  - Status: BLOCKED (Missing core implementation for cPanel import)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- MIG-05: Plesk import
+  - Status: BLOCKED (Missing core implementation for Plesk import)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- MIG-06: SSH migration
+  - Status: BLOCKED (Missing core implementation for SSH migration)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- MIG-07: Exporter-based migration
+  - Status: BLOCKED (Missing core implementation for Exporter-based migration)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- MIG-08: Migration dry-run
+  - Status: BLOCKED (Missing core implementation for Migration dry-run)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- MIG-09: Same-server migration
+  - Status: BLOCKED (Missing core implementation for Same-server migration)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- MIG-10: Whole-server migration rollback
+  - Status: BLOCKED (Missing core implementation for Whole-server migration rollback)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- MIG-11: DNS and mail migration
+  - Status: BLOCKED (Missing core implementation for DNS and mail migration)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- MIG-12: Migration downtime control
+  - Status: BLOCKED (Missing core implementation for Migration downtime control)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release

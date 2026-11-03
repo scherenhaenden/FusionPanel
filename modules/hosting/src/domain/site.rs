@@ -19,8 +19,23 @@ pub struct PhpConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum UpstreamTlsTrust {
+    SystemCa,
+    InternalCa { ca_cert_path: String },
+    InsecureCompatibility { audit_reason: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpstreamTlsPolicy {
+    pub trust: UpstreamTlsTrust,
+    pub expected_server_name: Option<DomainName>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReverseProxyConfig {
     pub upstream_url: UpstreamUrl,
+    pub tls_policy: Option<UpstreamTlsPolicy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -34,7 +49,8 @@ pub enum HostingSpec {
     ReverseProxy(ReverseProxyConfig),
 }
 
-use crate::domain::validation::Port;
+use crate::domain::identity::ResourceOwner;
+use crate::domain::validation::{OsUsername, Port};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SiteConfig {
@@ -44,6 +60,9 @@ pub struct SiteConfig {
     pub document_root: DocumentRoot,
     pub spec: HostingSpec,
     pub port: Port,
+    pub owner: ResourceOwner,
+    pub run_as_user: OsUsername,
+    pub external_bindings: Vec<ExternalBinding>,
 }
 
 use crate::domain::error::DomainError;
@@ -64,6 +83,7 @@ pub struct HostingRegistry {
     sites: HashMap<SiteId, SiteConfig>,
     vhosts: HashSet<(String, u16)>,
     allocated_ports: HashSet<u16>,
+    allocated_users: HashSet<String>,
 }
 
 impl HostingRegistry {
@@ -72,6 +92,7 @@ impl HostingRegistry {
             sites: HashMap::new(),
             vhosts: HashSet::new(),
             allocated_ports: HashSet::new(),
+            allocated_users: HashSet::new(),
         }
     }
 
@@ -108,6 +129,15 @@ impl HostingRegistry {
             )));
         }
 
+        let normalized_user = config.run_as_user.normalized();
+        if self.allocated_users.contains(&normalized_user) {
+            return Err(DomainError::Conflict(format!(
+                "OS username collision: {} is already in use (normalized)",
+                normalized_user
+            )));
+        }
+
+        self.allocated_users.insert(normalized_user);
         self.allocated_ports.insert(port_val);
         self.vhosts.insert(vhost_key);
         self.sites.insert(config.id, config);
@@ -123,6 +153,9 @@ impl SiteConfig {
         document_root: String,
         spec: HostingSpec,
         port: u16,
+        owner: ResourceOwner,
+        run_as_user: OsUsername,
+        external_bindings: Vec<ExternalBinding>,
     ) -> Result<Self> {
         let doc_root = document_root.try_into()?;
         let port_val = port.try_into()?;
@@ -133,6 +166,63 @@ impl SiteConfig {
             document_root: doc_root,
             spec,
             port: port_val,
+            owner,
+            run_as_user,
+            external_bindings,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExternalBinding {
+    pub source_path: String,
+    pub canonical_path: String,
+    pub target_path: String,
+    pub owner: ResourceOwner,
+    pub purpose: String,
+    pub policy: crate::domain::validation::BindingReadWritePolicy,
+    pub operator_review_reference: String,
+}
+
+impl ExternalBinding {
+    pub fn new(
+        source_path: impl Into<String>,
+        canonical_path: impl Into<String>,
+        target_path: impl Into<String>,
+        owner: ResourceOwner,
+        purpose: impl Into<String>,
+        policy: crate::domain::validation::BindingReadWritePolicy,
+        operator_review_reference: impl Into<String>,
+    ) -> Result<Self> {
+        let source_path = source_path.into();
+        let canonical_path = canonical_path.into();
+        let target_path = target_path.into();
+
+        for path in [&source_path, &canonical_path, &target_path] {
+            if path.contains("..") {
+                return Err(DomainError::InvalidInput("Path traversal detected in binding".into()));
+            }
+            if path.contains('\0') {
+                return Err(DomainError::InvalidInput("Path contains NUL byte".into()));
+            }
+            if path.starts_with("/etc") || path.starts_with("/proc") || path.starts_with("/sys") {
+                return Err(DomainError::InvalidInput("Binding to protected system path is forbidden".into()));
+            }
+        }
+
+        let review_ref = operator_review_reference.into();
+        if review_ref.is_empty() {
+            return Err(DomainError::InvalidInput("Operator review reference is required for external bindings".into()));
+        }
+
+        Ok(Self {
+            source_path,
+            canonical_path,
+            target_path,
+            owner,
+            purpose: purpose.into(),
+            policy,
+            operator_review_reference: review_ref,
         })
     }
 }

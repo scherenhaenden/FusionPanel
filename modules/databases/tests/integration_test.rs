@@ -30,10 +30,10 @@ async fn test_mariadb_adapter() -> Result<()> {
     let config = DatabaseConfig {
         engine: DatabaseEngine::MariaDB,
         strategy: ConnectionStrategy::Host { socket_path: None },
-        host,
+        host: host.clone(),
         port,
-        admin_user: user,
-        admin_password_ref: SecretString(pass),
+        admin_user: user.clone(),
+        admin_password_ref: SecretString(pass.clone()),
     };
 
     let adapter = MariaDbAdapter::new(config);
@@ -64,6 +64,26 @@ async fn test_mariadb_adapter() -> Result<()> {
         .await?;
     adapter.apply_grant(&plan).await?;
 
+    // Connect as the new user to create a table and insert a record
+    let user_mysql = tokio::process::Command::new("mysql")
+        .arg(&db_name.0)
+        .arg(format!("--user={}", user_name.0))
+        .arg(format!("--password={}", temp_pass.0))
+        .arg(format!("--host={}", host))
+        .arg(format!("--port={}", port))
+        .arg("-e")
+        .arg("CREATE TABLE test_table (id INT); INSERT INTO test_table VALUES (42);")
+        .output()
+        .await
+        .map_err(|e| DatabaseError::OperationFailed(format!("Failed to connect as user: {}", e)))?;
+
+    if !user_mysql.status.success() {
+        return Err(DatabaseError::OperationFailed(format!(
+            "User failed to insert record: {}",
+            String::from_utf8_lossy(&user_mysql.stderr)
+        )));
+    }
+
     let dump_path = format!("/tmp/{}.sql", db_name.0);
     let plan = adapter
         .plan_dump(db_name.clone(), dump_path.clone())
@@ -84,6 +104,29 @@ async fn test_mariadb_adapter() -> Result<()> {
         .plan_restore(new_db_name.clone(), dump_path.clone())
         .await?;
     adapter.apply_restore(&plan_restore).await?;
+
+    // Verify the data in the restored DB
+    let verify_mysql = tokio::process::Command::new("mysql")
+        .arg(&new_db_name.0)
+        .arg(format!("--user={}", user)) // check as admin
+        .env("MYSQL_PWD", &pass)
+        .arg(format!("--host={}", host))
+        .arg(format!("--port={}", port))
+        .arg("-e")
+        .arg("SELECT * FROM test_table;")
+        .output()
+        .await
+        .map_err(|e| DatabaseError::OperationFailed(format!("Failed to verify restored data: {}", e)))?;
+
+    if !verify_mysql.status.success() {
+        return Err(DatabaseError::OperationFailed(format!(
+            "Failed to read restored data: {}",
+            String::from_utf8_lossy(&verify_mysql.stderr)
+        )));
+    }
+
+    let out_str = String::from_utf8_lossy(&verify_mysql.stdout);
+    assert!(out_str.contains("42"), "Restored database did not contain the inserted record");
 
     let _ = fs::remove_file(dump_path);
 
@@ -115,10 +158,10 @@ async fn test_postgres_adapter() -> Result<()> {
     let config = DatabaseConfig {
         engine: DatabaseEngine::PostgreSQL,
         strategy: ConnectionStrategy::Host { socket_path: None },
-        host,
+        host: host.clone(),
         port,
-        admin_user: user,
-        admin_password_ref: SecretString(pass),
+        admin_user: user.clone(),
+        admin_password_ref: SecretString(pass.clone()),
     };
 
     let adapter = PostgresAdapter::new(config);
@@ -149,6 +192,30 @@ async fn test_postgres_adapter() -> Result<()> {
         .await?;
     adapter.apply_grant(&plan).await?;
 
+    // Connect as the new user to create a table and insert a record
+    let user_psql = tokio::process::Command::new("psql")
+        .arg("-d")
+        .arg(&db_name.0)
+        .arg("-U")
+        .arg(&user_name.0)
+        .arg("-h")
+        .arg(&host)
+        .arg("-p")
+        .arg(&port.to_string())
+        .arg("-c")
+        .arg("CREATE TABLE test_table (id INT); INSERT INTO test_table VALUES (42);")
+        .env("PGPASSWORD", &temp_pass.0)
+        .output()
+        .await
+        .map_err(|e| DatabaseError::OperationFailed(format!("Failed to connect as user: {}", e)))?;
+
+    if !user_psql.status.success() {
+        return Err(DatabaseError::OperationFailed(format!(
+            "User failed to insert record: {}",
+            String::from_utf8_lossy(&user_psql.stderr)
+        )));
+    }
+
     let dump_path = format!("/tmp/{}.sql", db_name.0);
     let plan = adapter
         .plan_dump(db_name.clone(), dump_path.clone())
@@ -169,6 +236,33 @@ async fn test_postgres_adapter() -> Result<()> {
         .plan_restore(new_db_name.clone(), dump_path.clone())
         .await?;
     adapter.apply_restore(&plan_restore).await?;
+
+    // Verify the data in the restored DB
+    let verify_psql = tokio::process::Command::new("psql")
+        .arg("-d")
+        .arg(&new_db_name.0)
+        .arg("-U")
+        .arg(&user) // Admin
+        .arg("-h")
+        .arg(&host)
+        .arg("-p")
+        .arg(&port.to_string())
+        .arg("-c")
+        .arg("SELECT * FROM test_table;")
+        .env("PGPASSWORD", &pass)
+        .output()
+        .await
+        .map_err(|e| DatabaseError::OperationFailed(format!("Failed to verify restored data: {}", e)))?;
+
+    if !verify_psql.status.success() {
+        return Err(DatabaseError::OperationFailed(format!(
+            "Failed to read restored data: {}",
+            String::from_utf8_lossy(&verify_psql.stderr)
+        )));
+    }
+
+    let out_str = String::from_utf8_lossy(&verify_psql.stdout);
+    assert!(out_str.contains("42"), "Restored database did not contain the inserted record");
 
     let _ = fs::remove_file(dump_path);
 
@@ -203,23 +297,30 @@ async fn test_mariadb_container_adapter() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore = "BLOCKED dependencies require environment setup for full real integration. Manual or specific CI lane only."]
 async fn run_integration_tests() {
     let r1 = test_mariadb_adapter().await;
     if let Err(DatabaseError::DependencyUnavailable(msg)) = r1 {
-        println!("BLOCKED: {}", msg);
+        // Exit nonzero BLOCKED on missing prerequisite
+        panic!("BLOCKED: {}", msg);
     } else {
         r1.unwrap();
     }
 
     let r2 = test_postgres_adapter().await;
     if let Err(DatabaseError::DependencyUnavailable(msg)) = r2 {
-        println!("BLOCKED: {}", msg);
+        // Exit nonzero BLOCKED on missing prerequisite
+        panic!("BLOCKED: {}", msg);
     } else {
         r2.unwrap();
     }
 
-    let _ = test_mariadb_container_adapter().await;
+    let r3 = test_mariadb_container_adapter().await;
+    // We expect this one to fail connection because there's no container
+    // But since it's testing missing container strategy, let's not panic BLOCKED if it fails dependency, just ignore
+    // wait, if we call check_connection and it returns DependencyUnavailable (or ConnectionFailed), that's fine.
+    if let Err(DatabaseError::DependencyUnavailable(_msg)) = r3 {
+        // Ok
+    }
 
     test_transaction_boundary_integrity().await;
 }
