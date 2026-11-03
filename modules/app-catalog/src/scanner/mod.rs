@@ -61,11 +61,42 @@ struct GrypeArtifact {
     name: String,
 }
 
+use std::process::Command;
+
 pub struct ImageScanner;
 
 impl ImageScanner {
     pub fn new() -> Self {
         Self
+    }
+
+    pub fn scan_image(image: &str) -> Result<Vec<VulnerabilityReport>, String> {
+        let output = Command::new("docker")
+            .args(&[
+                "run",
+                "--rm",
+                "-v",
+                "trivy-cache:/root/.cache/",
+                "aquasec/trivy:0.48.0",
+                "image",
+                "--no-progress",
+                "--format",
+                "json",
+                image,
+            ])
+            .output()
+            .map_err(|e| format!("Failed to run docker: {}", e))?;
+
+        if !output.status.success() {
+            let err = String::from_utf8_lossy(&output.stderr);
+            if err.contains("failed to download vulnerability DB") {
+                return Err(format!("Trivy DB download failed: {}", err));
+            }
+            return Err(format!("Trivy execution failed: {}", err));
+        }
+
+        let json = String::from_utf8_lossy(&output.stdout);
+        Self::parse_trivy_json(&json).map_err(|e| format!("Failed to parse Trivy JSON: {}", e))
     }
 
     pub fn parse_trivy_json(json: &str) -> Result<Vec<VulnerabilityReport>, serde_json::Error> {
