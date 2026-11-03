@@ -80,12 +80,14 @@ pub fn check_tcp(address: &str, timeout_secs: u64) -> ProbeResult {
         let attempt_budget = remaining / remaining_attempts;
 
         match TcpStream::connect_timeout(addr, attempt_budget) {
-            Ok(_) => return ProbeResult {
-                success: true,
-                latency_ms: start.elapsed().as_millis() as u64,
-                status_code: None,
-                error: None,
-            },
+            Ok(_) => {
+                return ProbeResult {
+                    success: true,
+                    latency_ms: start.elapsed().as_millis() as u64,
+                    status_code: None,
+                    error: None,
+                }
+            }
             Err(e) => last_error = Some(e),
         }
     }
