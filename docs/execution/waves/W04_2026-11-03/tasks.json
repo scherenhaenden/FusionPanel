@@ -281,7 +281,7 @@
       "merged_sha": "5071477",
       "prompt_file": "prompts/W04-08.md",
       "prompt_sha256": "3235400473540daef5d1f775799373b17da055d3a23e772878d3bd3eb0809804",
-      "review_notes": "Restored integration-hosting manifest, added failure marker (.restart-marker), safe rollback compensation, dynamic port binding, all 15 tests pass"
+      "review_notes": "Merged in commit 60998b4 (PR #255)"
     },
     {
       "id": "W04-09",
@@ -1136,13 +1136,14 @@
         "MIG-12",
         "ADM-04"
       ],
-      "status": "DISPATCHED",
+      "status": "MERGED",
       "base_sha": null,
       "session_id": "12832774195288887299",
       "session_url": null,
       "pr_url": null,
       "prompt_file": "prompts/W04-33.md",
-      "prompt_sha256": "60cdb04edd997740124e51f7fc1618daf13a06a9d25678a3b32983a23cbac6b4"
+      "prompt_sha256": "60cdb04edd997740124e51f7fc1618daf13a06a9d25678a3b32983a23cbac6b4",
+      "review_notes": "Merged in commit 54f7de2 from feat/w04-33-adoption"
     },
     {
       "id": "W04-34",
@@ -1236,13 +1237,14 @@
         "ADM-08",
         "ADM-09"
       ],
-      "status": "DISPATCHED",
+      "status": "MERGED",
       "base_sha": null,
       "session_id": "1949149614020794422",
       "session_url": null,
       "pr_url": null,
       "prompt_file": "prompts/W04-36.md",
-      "prompt_sha256": "9f826b3133591196a9eef14e9e63912b994e9434e625e8f64d9b1f883a4a463f"
+      "prompt_sha256": "9f826b3133591196a9eef14e9e63912b994e9434e625e8f64d9b1f883a4a463f",
+      "review_notes": "Merged in commit 071ca8a from feat/w04-36-e2e-identity"
     },
     {
       "id": "W04-37",
@@ -1274,13 +1276,14 @@
         "HOST-13",
         "HOST-15"
       ],
-      "status": "DISPATCHED",
+      "status": "MERGED",
       "base_sha": null,
       "session_id": "15936794995529881735",
       "session_url": null,
       "pr_url": null,
       "prompt_file": "prompts/W04-37.md",
-      "prompt_sha256": "23a3f03db33a4fd8cb9b7219bd8934cfb854f340f4dfba7b39f7eac2847ecd03"
+      "prompt_sha256": "23a3f03db33a4fd8cb9b7219bd8934cfb854f340f4dfba7b39f7eac2847ecd03",
+      "review_notes": "Merged in commit 4804512 from feat/w04-37-e2e-hosting"
     },
     {
       "id": "W04-38",
@@ -1314,13 +1317,14 @@
         "BAK-11",
         "BAK-14"
       ],
-      "status": "DISPATCHED",
+      "status": "MERGED",
       "base_sha": null,
       "session_id": "11712230962197907175",
       "session_url": null,
       "pr_url": null,
       "prompt_file": "prompts/W04-38.md",
-      "prompt_sha256": "982df76fbf32826addb30dbbe3060b15385f3aaffc6c99ff86646e7dedab3ad5"
+      "prompt_sha256": "982df76fbf32826addb30dbbe3060b15385f3aaffc6c99ff86646e7dedab3ad5",
+      "review_notes": "Merged in commit 40ea69c from feat/w04-38-e2e-data"
     },
     {
       "id": "W04-39",
@@ -1569,13 +1573,14 @@
         "SEC-13",
         "ADM-12"
       ],
-      "status": "DISPATCHED",
+      "status": "MERGED",
       "base_sha": null,
       "session_id": "10269760512157044324",
       "session_url": null,
       "pr_url": null,
       "prompt_file": "prompts/W04-45.md",
-      "prompt_sha256": "323633e69359e8c6a57e75874d7019ad064a15d173fc47183ab12bd07ad77e23"
+      "prompt_sha256": "323633e69359e8c6a57e75874d7019ad064a15d173fc47183ab12bd07ad77e23",
+      "review_notes": "Merged in commit 6b90e41 from feat/w04-45-e2e-security"
     },
     {
       "id": "W04-46",
@@ -1641,13 +1646,14 @@
         "BAK-04",
         "MIG-09"
       ],
-      "status": "DISPATCHED",
+      "status": "MERGED",
       "base_sha": null,
       "session_id": "13340191956082579082",
       "session_url": null,
       "pr_url": null,
       "prompt_file": "prompts/W04-47.md",
-      "prompt_sha256": "f2abbe5d64d442e86c1a925078c46b232edab033d313acbb48ef82f6a9ce41b8"
+      "prompt_sha256": "f2abbe5d64d442e86c1a925078c46b232edab033d313acbb48ef82f6a9ce41b8",
+      "review_notes": "Merged in commit d213914 from feat/w04-47-browser-variants"
     },
     {
       "id": "W04-48",
@@ -1717,13 +1723,14 @@
         "OBS-01",
         "DEP-04"
       ],
-      "status": "DISPATCHED",
+      "status": "MERGED",
       "base_sha": null,
       "session_id": "2726729400535846353",
       "session_url": null,
       "pr_url": null,
       "prompt_file": "prompts/W04-49.md",
-      "prompt_sha256": "08faef5ac1f07f93f59df39d8e3ae10c5c81782334932b6774de8ed28cb8c380"
+      "prompt_sha256": "08faef5ac1f07f93f59df39d8e3ae10c5c81782334932b6774de8ed28cb8c380",
+      "review_notes": "Merged in commit 9c4f3b8 from feat/w04-49-perf-slo"
     },
     {
       "id": "W04-50",
@@ -1763,13 +1770,14 @@
         "BAK-11",
         "MIG-10"
       ],
-      "status": "DISPATCHED",
+      "status": "MERGED",
       "base_sha": null,
       "session_id": "16998956303599520233",
       "session_url": null,
       "pr_url": null,
       "prompt_file": "prompts/W04-50.md",
-      "prompt_sha256": "1ff083fcd7f4687fd158db7046998dd25c419d3c3610aab5a21ad90e5af8dabc"
+      "prompt_sha256": "1ff083fcd7f4687fd158db7046998dd25c419d3c3610aab5a21ad90e5af8dabc",
+      "review_notes": "Merged in commit c9d50fc from feat/w04-50-release-pkg"
     }
   ],
   "serialized_path_collisions": [
