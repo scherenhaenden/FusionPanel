@@ -208,11 +208,11 @@
         "ADM-09",
         "NODE-11"
       ],
-      "status": "DISPATCHED",
+      "status": "MERGED",
       "base_sha": "5f78a323903b5adb893edd6c0a7643c8165be710",
       "session_id": "1501694325006079677",
       "session_url": "https://jules.google.com/session/1501694325006079677",
-      "pr_url": null,
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/248",
       "prompt_file": "prompts/W04-06.md",
       "prompt_sha256": "0e02db59a1910d39105aeaad6b72f22cb57c88ac427ce261059b47c081235464"
     },
@@ -674,7 +674,7 @@
       "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
       "session_id": "645019230840343306",
       "session_url": "https://jules.google.com/session/645019230840343306",
-      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/242",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/249",
       "prompt_file": "prompts/W04-20.md",
       "prompt_sha256": "1ae086b83db0f9964f886d53b090f2b2c40ed38a6bc5899f7fbb0eb4de1d370d",
       "review_notes": "Dispatched in Jules session 645019230840343306 against master cbc1c2a"
@@ -702,7 +702,7 @@
       "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
       "session_id": "12903357500547035184",
       "session_url": "https://jules.google.com/session/12903357500547035184",
-      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/227",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/251",
       "prompt_file": "prompts/W04-21.md",
       "prompt_sha256": "f13beea2820ec9ed4b0c16b362fb40a1e32ff831687afeb0d9eb4752209049ec",
       "review_notes": "Audited, corrected, verified and merged into master (PR #227)",
@@ -764,11 +764,11 @@
         "SEC-09",
         "SEC-16"
       ],
-      "status": "DISPATCHED",
+      "status": "MERGED",
       "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
       "session_id": "598262670609115142",
       "session_url": "https://jules.google.com/session/598262670609115142",
-      "pr_url": null,
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/252",
       "prompt_file": "prompts/W04-23.md",
       "prompt_sha256": "7d2b83e329dac7efb941d382eac24d2005ad3bff25d41b2a57f8225169921910",
       "review_notes": "Dispatched in Jules session 598262670609115142 against master cbc1c2a"
