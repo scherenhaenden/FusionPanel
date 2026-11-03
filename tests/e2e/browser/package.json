@@ -1,0 +1,16 @@
+{
+  "name": "variants-browser-e2e",
+  "version": "1.0.0",
+  "description": "Browser E2E tests for FusionPanel variants",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.40.0"
+  },
+  "fusionpanel": {
+    "policy": "compile-only"
+  }
+}
