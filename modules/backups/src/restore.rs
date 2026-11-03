@@ -11,6 +11,15 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 static TEMP_DIR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Default)]
+struct RestoreJournal {
+    committed: bool,
+    rollbacks: Vec<(PathBuf, PathBuf)>, // (rollback_path, target_path)
+    new_files: Vec<PathBuf>,
+}
+
 struct RestoreTransaction {
     base_dir: PathBuf,
     extracted_dir: PathBuf,
@@ -41,40 +50,144 @@ impl RestoreTransaction {
         fs::create_dir_all(&extracted_dir)?;
         fs::create_dir_all(&rollback_dir)?;
 
-        Ok(Self {
+        let tx = Self {
             base_dir,
             extracted_dir,
             rollback_dir,
             committed: false,
             rollbacks: Vec::new(),
             new_files: Vec::new(),
-        })
+        };
+        tx.flush_journal()?;
+        Ok(tx)
     }
 
-    fn commit(&mut self) {
+    fn journal_path(&self) -> PathBuf {
+        self.base_dir.join("journal.json")
+    }
+
+    fn flush_journal(&self) -> Result<(), BackupError> {
+        let journal = RestoreJournal {
+            committed: self.committed,
+            rollbacks: self.rollbacks.clone(),
+            new_files: self.new_files.clone(),
+        };
+        let tmp_path = self.base_dir.join("journal.json.tmp");
+        let mut file = File::create(&tmp_path)?;
+        let content = serde_json::to_vec(&journal)?;
+        file.write_all(&content)?;
+        file.flush()?;
+        file.sync_all()?;
+        fs::rename(tmp_path, self.journal_path())?;
+        Ok(())
+    }
+
+    fn record_rollback(&mut self, rollback_path: PathBuf, target_path: PathBuf) -> Result<(), BackupError> {
+        self.rollbacks.push((rollback_path, target_path));
+        self.flush_journal()
+    }
+
+    fn record_new_file(&mut self, new_file: PathBuf) -> Result<(), BackupError> {
+        self.new_files.push(new_file);
+        self.flush_journal()
+    }
+
+    fn commit(&mut self) -> Result<(), BackupError> {
         self.committed = true;
+        self.flush_journal()?;
+        if self.base_dir.exists() {
+            let _ = fs::remove_dir_all(&self.base_dir);
+        }
+        Ok(())
+    }
+
+    fn rollback(&mut self) -> Result<(), BackupError> {
+        if self.committed {
+            return Ok(());
+        }
+
+        // 1. Remove new files
+        let mut first_err: Option<std::io::Error> = None;
+        for new_file in self.new_files.iter().rev() {
+            if new_file.exists() {
+                if let Err(e) = fs::remove_file(new_file) {
+                    if first_err.is_none() {
+                        first_err = Some(e);
+                    }
+                }
+            }
+        }
+
+        // 2. Restore rollbacks
+        for (rollback_path, target_path) in self.rollbacks.iter().rev() {
+            if rollback_path.exists() {
+                if let Err(e) = fs::rename(rollback_path, target_path) {
+                    if first_err.is_none() {
+                        first_err = Some(e);
+                    }
+                }
+            }
+        }
+
+        // If any rollback failed, preserve base_dir and return error!
+        if let Some(err) = first_err {
+            return Err(BackupError::Io(err));
+        }
+
+        // Cleanup only if rollback succeeded fully
+        if self.base_dir.exists() {
+            let _ = fs::remove_dir_all(&self.base_dir);
+        }
+        Ok(())
     }
 }
 
 impl Drop for RestoreTransaction {
     fn drop(&mut self) {
         if !self.committed {
-            // Rollback
-            for new_file in self.new_files.iter().rev() {
-                if new_file.exists() {
-                    let _ = fs::remove_file(new_file);
-                }
-            }
-            for (rollback_path, target_path) in self.rollbacks.iter().rev() {
-                if rollback_path.exists() {
-                    let _ = fs::rename(rollback_path, target_path);
-                }
-            }
-        }
-        if self.base_dir.exists() {
-            let _ = fs::remove_dir_all(&self.base_dir);
+            let _ = self.rollback();
         }
     }
+}
+
+pub fn recover_pending_restore(target_dir: &Path) -> Result<usize, BackupError> {
+    let mut recovered = 0;
+    if !target_dir.exists() {
+        return Ok(0);
+    }
+    for entry in fs::read_dir(target_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.starts_with(".restore_temp_") {
+                    let journal_file = path.join("journal.json");
+                    if journal_file.exists() {
+                        if let Ok(content) = fs::read(&journal_file) {
+                            if let Ok(journal) = serde_json::from_slice::<RestoreJournal>(&content) {
+                                if !journal.committed {
+                                    // Replay rollbacks
+                                    for new_file in journal.new_files.iter().rev() {
+                                        if new_file.exists() {
+                                            let _ = fs::remove_file(new_file);
+                                        }
+                                    }
+                                    for (rollback_path, target_path) in journal.rollbacks.iter().rev() {
+                                        if rollback_path.exists() {
+                                            fs::rename(rollback_path, target_path)?;
+                                        }
+                                    }
+                                    recovered += 1;
+                                }
+                            }
+                        }
+                    }
+                    let _ = fs::remove_dir_all(&path);
+                }
+            }
+        }
+    }
+    Ok(recovered)
 }
 
 pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
@@ -279,15 +392,15 @@ pub fn restore_archive_with_options<P1: AsRef<Path>, P2: AsRef<Path>>(
                 fs::create_dir_all(parent)?;
             }
             fs::rename(&final_file_path, &rollback_file_path)?;
-            tx.rollbacks.push((rollback_file_path, final_file_path.clone()));
+            tx.record_rollback(rollback_file_path, final_file_path.clone())?;
         }
 
         fs::rename(&temp_file_path, &final_file_path)?;
         if !tx.rollbacks.iter().any(|(_, t)| t == &final_file_path) {
-            tx.new_files.push(final_file_path);
+            tx.record_new_file(final_file_path)?;
         }
     }
 
-    tx.commit();
+    tx.commit()?;
     Ok(manifest)
 }

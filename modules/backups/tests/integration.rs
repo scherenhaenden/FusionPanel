@@ -540,3 +540,40 @@ fn test_retention_identifies_true_backups_without_extensions() {
     assert!(!valid_backup_path.exists());
     assert!(fake_backup_path.exists());
 }
+
+#[test]
+fn test_recover_pending_restore_after_crash() {
+    use backups::restore::recover_pending_restore;
+
+    let restore_dir = TempDir::new().unwrap();
+    let target_file = restore_dir.path().join("file.txt");
+    fs::write(&target_file, b"Overwritten content").unwrap();
+
+    // Create simulated in-flight uncommitted transaction directory
+    let temp_tx_dir = restore_dir.path().join(".restore_temp_99999_1");
+    let rollback_dir = temp_tx_dir.join("rollback");
+    fs::create_dir_all(&rollback_dir).unwrap();
+
+    let rollback_file = rollback_dir.join("file.txt");
+    fs::write(&rollback_file, b"Original preserved content").unwrap();
+
+    let journal_json = serde_json::json!({
+        "committed": false,
+        "rollbacks": [
+            [rollback_file.to_string_lossy(), target_file.to_string_lossy()]
+        ],
+        "new_files": []
+    });
+    fs::write(temp_tx_dir.join("journal.json"), journal_json.to_string()).unwrap();
+
+    // Run recovery
+    let recovered_count = recover_pending_restore(restore_dir.path()).unwrap();
+    assert_eq!(recovered_count, 1);
+
+    // Verify original content was safely recovered from rollback
+    let content = fs::read_to_string(&target_file).unwrap();
+    assert_eq!(content, "Original preserved content");
+
+    // Temp directory was cleaned up after full recovery
+    assert!(!temp_tx_dir.exists());
+}
