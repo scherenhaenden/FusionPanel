@@ -12,11 +12,6 @@ if ! command -v systemd-analyze &> /dev/null; then
     exit 0
 fi
 
-# We have to ignore "is not executable" errors since the files aren't actually installed on the test runner.
-# systemd-analyze verify checks for missing executables and fails if they aren't there.
-# To bypass, we can touch fake files or just grep the output.
-# A better approach is to mock the binaries or filter the specific expected error.
-
 mkdir -p /tmp/fusionpanel-test-bin
 touch /tmp/fusionpanel-test-bin/fusionpanel-api
 touch /tmp/fusionpanel-test-bin/fusionpanel-agent
@@ -27,8 +22,21 @@ chmod +x /tmp/fusionpanel-test-bin/fusionpanel-agent
 TMP_UNIT_DIR=$(mktemp -d)
 trap 'rm -rf "${TMP_UNIT_DIR}"' EXIT
 
-sed 's|/usr/bin/fusionpanel-api|/tmp/fusionpanel-test-bin/fusionpanel-api|g' "${SYSTEMD_DIR}/fusionpanel.service" > "${TMP_UNIT_DIR}/fusionpanel.service"
-sed 's|/usr/bin/fusionpanel-agent|/tmp/fusionpanel-test-bin/fusionpanel-agent|g' "${SYSTEMD_DIR}/fusionpanel-agent.service" > "${TMP_UNIT_DIR}/fusionpanel-agent.service"
+sed 's|/opt/fusionpanel/bin/fusionpanel-api|/tmp/fusionpanel-test-bin/fusionpanel-api|g' "${SYSTEMD_DIR}/fusionpanel.service" > "${TMP_UNIT_DIR}/fusionpanel.service"
+sed 's|/opt/fusionpanel/bin/fusionpanel-agent|/tmp/fusionpanel-test-bin/fusionpanel-agent|g' "${SYSTEMD_DIR}/fusionpanel-agent.service" > "${TMP_UNIT_DIR}/fusionpanel-agent.service"
+
+# Update env file paths
+sed -i 's|/etc/fusionpanel/fusionpanel.env|/tmp/fusionpanel.env|g' "${TMP_UNIT_DIR}/fusionpanel.service"
+sed -i 's|/etc/fusionpanel/fusionpanel-agent.env|/tmp/fusionpanel-agent.env|g' "${TMP_UNIT_DIR}/fusionpanel-agent.service"
+touch /tmp/fusionpanel.env
+touch /tmp/fusionpanel-agent.env
+
+# Note: systemd-analyze will complain about missing users if fusionpanel user doesn't exist on the host
+# We will temporarily mock the user line for the analyzer if it doesn't exist
+if ! id fusionpanel &>/dev/null; then
+    sed -i 's/User=fusionpanel/User=root/' "${TMP_UNIT_DIR}/fusionpanel.service" "${TMP_UNIT_DIR}/fusionpanel-agent.service"
+    sed -i 's/Group=fusionpanel/Group=root/' "${TMP_UNIT_DIR}/fusionpanel.service" "${TMP_UNIT_DIR}/fusionpanel-agent.service"
+fi
 
 echo "Verifying fusionpanel.service..."
 systemd-analyze verify "${TMP_UNIT_DIR}/fusionpanel.service"
