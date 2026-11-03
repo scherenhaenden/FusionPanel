@@ -11,6 +11,10 @@ pub struct AppTemplate {
     pub version: String,
     pub category: String,
     #[serde(default)]
+    pub install_modes: Vec<String>,
+    #[serde(default)]
+    pub unsupported_hardware: Vec<String>,
+    #[serde(default)]
     pub variables: HashMap<String, Variable>,
     #[serde(default)]
     pub volumes: Vec<Volume>,
@@ -142,6 +146,8 @@ compose_template: |
             name: "Test".to_string(),
             version: "1.0".to_string(),
             category: "Test".to_string(),
+            install_modes: vec![],
+            unsupported_hardware: vec![],
             variables: {
                 let mut m = HashMap::new();
                 m.insert(
@@ -185,6 +191,8 @@ compose_template: |
             name: "Test".to_string(),
             version: "1.0".to_string(),
             category: "Test".to_string(),
+            install_modes: vec![],
+            unsupported_hardware: vec![],
             variables: {
                 let mut m = HashMap::new();
                 m.insert(
@@ -213,6 +221,8 @@ compose_template: |
             name: "Test".to_string(),
             version: "1.0".to_string(),
             category: "Test".to_string(),
+            install_modes: vec![],
+            unsupported_hardware: vec![],
             variables: {
                 let mut m = HashMap::new();
                 m.insert(
@@ -247,6 +257,8 @@ compose_template: |
             name: "Test".to_string(),
             version: "1.0".to_string(),
             category: "Test".to_string(),
+            install_modes: vec![],
+            unsupported_hardware: vec![],
             variables: {
                 let mut m = HashMap::new();
                 m.insert(
