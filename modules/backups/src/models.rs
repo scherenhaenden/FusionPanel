@@ -78,3 +78,9 @@ pub struct RetentionPolicy {
     pub max_backups: Option<usize>,
     pub max_days: Option<u32>,
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct RestoreOptions {
+    pub selected_files: Option<Vec<String>>,
+    pub fault_inject_error_after: Option<usize>,
+}
