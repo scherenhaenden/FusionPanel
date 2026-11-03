@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -182,7 +184,11 @@ impl FirewallPolicy {
                 && ssh_allowed.is_none() {
                     match rule.action {
                         Action::Allow => ssh_allowed = Some(true),
-                        Action::Deny => ssh_allowed = Some(false),
+                        Action::Deny => {
+                            if rule.source_ip.is_none() {
+                                ssh_allowed = Some(false);
+                            }
+                        }
                     }
                 }
         }
