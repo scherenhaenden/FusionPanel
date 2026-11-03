@@ -134,8 +134,12 @@ install() {
 
     rm -f "$TMP_DIR/fusionpanel.tar.gz"
 
-    chmod +x "$TMP_DIR/bin/fusionpanel-api" || true
-    chmod +x "$TMP_DIR/bin/fusionpanel-agent" || true
+    if [ ! -f "$TMP_DIR/bin/fusionpanel-api" ] || [ ! -f "$TMP_DIR/bin/fusionpanel-agent" ]; then
+        echo "Error: Required binaries (fusionpanel-api, fusionpanel-agent) not found in archive" >&2
+        exit 1
+    fi
+
+    chmod 755 "$TMP_DIR/bin/fusionpanel-api" "$TMP_DIR/bin/fusionpanel-agent"
     echo "$VERSION" > "$TMP_DIR/.version"
 
     # Create configuration environment file with securely generated admin token if not exists

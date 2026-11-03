@@ -233,6 +233,40 @@ test_partial_install_recovery() {
     echo "PASS: Partial Install Recovery"
 }
 
+test_missing_binaries_fail_closed() {
+    echo "--- Test: Missing Binaries Fail-Closed ---"
+    local test_prefix="$TEST_DIR/opt/fusionpanel_missing"
+
+    # Create mock tar that does NOT extract binaries
+    local old_path="$PATH"
+    local bad_bin_dir="$TEST_DIR/bad_bin"
+    mkdir -p "$bad_bin_dir"
+    cat << 'EOF' > "$bad_bin_dir/tar"
+#!/bin/sh
+mkdir -p "$4"
+# do not extract fusionpanel-api
+touch "$4/some_other_file"
+EOF
+    chmod +x "$bad_bin_dir/tar"
+
+    set +e
+    PATH="$bad_bin_dir:$PATH" "$INSTALL_SCRIPT" --prefix "$test_prefix" > /dev/null 2>&1
+    local exit_code=$?
+    set -e
+
+    if [ "$exit_code" -eq 0 ]; then
+        echo "FAIL: Expected installer to fail when binaries are missing from archive"
+        exit 1
+    fi
+
+    if [ -d "$test_prefix/bin" ]; then
+        echo "FAIL: Missing binaries should not produce installed bin dir"
+        exit 1
+    fi
+
+    echo "PASS: Missing Binaries Fail-Closed"
+}
+
 # Run tests
 test_clean_install
 test_idempotency_and_reinstall
@@ -240,5 +274,6 @@ test_flags
 test_start_restart_mock
 test_valid_auth
 test_partial_install_recovery
+test_missing_binaries_fail_closed
 
 echo "All tests passed successfully."
