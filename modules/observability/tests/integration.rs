@@ -1,8 +1,8 @@
 use observability::{alerts::*, incidents::*, metrics::*, probes::*};
+use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
 use std::time::Duration;
-use std::io::{Read, Write};
 
 #[test]
 fn test_metrics_registry() {
@@ -21,7 +21,7 @@ fn test_metrics_registry() {
 
 #[test]
 fn test_incident_states() {
-    let mut incident = Incident::new("inc-1".into(), "Test".into(), 100);
+    let mut incident = Incident::new("inc-1".into(), "Test".into(), 100, None);
     assert_eq!(incident.state, IncidentState::Triggered);
 
     assert!(incident.acknowledge(101).is_ok());
@@ -162,7 +162,9 @@ fn test_webhook_delivery_success() {
     assert!(received_request.starts_with("POST /alert HTTP/1.1\r\n"));
 
     // Assert Headers
-    assert!(received_request.to_lowercase().contains("content-type: application/json"));
+    assert!(received_request
+        .to_lowercase()
+        .contains("content-type: application/json"));
 
     // Assert JSON payload structure
     let body_start = received_request.find("\r\n\r\n").unwrap() + 4;

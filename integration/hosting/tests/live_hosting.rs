@@ -17,17 +17,21 @@ async fn test_live_hosting_e2e() {
         .output();
 
     if docker_check.is_err() || !docker_check.unwrap().status.success() {
-        println!("BLOCKED: Docker is not available or cannot run basic containers.");
-        assert!(true); // We just pass if docker isn't available
-        return;
+        panic!("BLOCKED: Docker is not available or cannot run basic containers.");
     }
+
+    let port = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    };
 
     let site_id = SiteId(Uuid::new_v4());
     let tenant_id = TenantId(Uuid::new_v4());
     let domain = DomainName::new("example.com").unwrap();
+    let run_as_user: hosting::domain::OsUsername = "testuser".to_string().try_into().unwrap();
     let site = SiteConfig::new(
         site_id,
-        tenant_id,
+        tenant_id.clone(),
         domain.clone(),
         format!("/srv/fusionpanel/sites/{}", domain.as_str()),
         HostingSpec::Php(PhpConfig {
@@ -35,6 +39,10 @@ async fn test_live_hosting_e2e() {
             pool_name: "example_pool".to_string().try_into().unwrap(),
             memory_limit: "256M".to_string().try_into().unwrap(),
         }),
+        port,
+        hosting::domain::ResourceOwner::PanelOwned { tenant_id: tenant_id.clone() },
+        run_as_user.clone(),
+        vec![],
     )
     .unwrap();
 
@@ -85,7 +93,8 @@ async fn test_live_hosting_e2e() {
         .success());
 
     // PHP container script
-    let user_name = format!("tenant_{}", tenant_id.0);
+    let run_as_user: hosting::domain::OsUsername = "testuser".to_string().try_into().unwrap();
+    let user_name = run_as_user.as_str().to_string();
     let php_entrypoint = temp_path.join("php_entrypoint.sh");
     fs::write(
         &php_entrypoint,
@@ -168,7 +177,7 @@ async fn test_live_hosting_e2e() {
         "--network",
         &network_name,
         "-p",
-        "8080:80",
+        &format!("{}:{}", port, port),
         "-v",
         &format!(
             "{}:/etc/nginx/conf.d/default.conf:ro",
@@ -200,7 +209,7 @@ async fn test_live_hosting_e2e() {
     // 2. Test End-to-End Request
     let client = reqwest::Client::new();
     let res = client
-        .get("http://localhost:8080/")
+        .get(&format!("http://localhost:{}/", port))
         .header("Host", "example.com")
         .send()
         .await
@@ -226,7 +235,7 @@ async fn test_live_hosting_e2e() {
     sleep(Duration::from_secs(2)).await;
 
     let res2 = client
-        .get("http://localhost:8080/")
+        .get(&format!("http://localhost:{}/", port))
         .header("Host", "example.com")
         .send()
         .await
@@ -269,7 +278,10 @@ async fn test_live_hosting_e2e() {
     );
 
     // Simulate SSL certificate binding
-    let ssl_nginx_config = nginx_config.replace("listen 80;", "listen 80;\n    listen 443 ssl;\n    ssl_certificate /etc/nginx/cert.pem;\n    ssl_certificate_key /etc/nginx/key.pem;");
+    let ssl_nginx_config = nginx_config.replace(
+        &format!("listen {};", port),
+        &format!("listen {};\n    listen 443 ssl;\n    ssl_certificate /etc/nginx/cert.pem;\n    ssl_certificate_key /etc/nginx/key.pem;", port),
+    );
     let ssl_conf_path = temp_path.join("ssl.conf");
     fs::write(&ssl_conf_path, ssl_nginx_config).unwrap();
 

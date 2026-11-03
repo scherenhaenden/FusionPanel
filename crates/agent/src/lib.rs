@@ -5,3 +5,4 @@ pub mod executor;
 pub mod files;
 pub mod heartbeat;
 pub mod metrics;
+pub mod protocol;
