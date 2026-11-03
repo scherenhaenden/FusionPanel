@@ -1,7 +1,4 @@
-#[path = "../src/installer/mod.rs"]
-mod installer;
-
-use installer::CatalogInstaller;
+use app_catalog::installer::CatalogInstaller;
 use std::collections::HashMap;
 
 #[test]

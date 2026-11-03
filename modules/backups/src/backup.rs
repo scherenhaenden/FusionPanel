@@ -47,6 +47,16 @@ impl BackupJob {
     }
 
     pub fn execute<P: AsRef<Path>>(&self, dest_file: P) -> Result<Manifest, BackupError> {
+        let dest_path = dest_file.as_ref();
+
+        if !self.source_dir.exists() {
+            return Err(BackupError::SourceNotFound(self.source_dir.to_string_lossy().into_owned()));
+        }
+
+        if dest_path.starts_with(&self.source_dir) {
+            return Err(BackupError::DestinationInsideSource);
+        }
+
         // First pass: collect files, sizes, and calculate checksums without creating archive
         let mut files_info = Vec::new();
         self.calculate_checksums(&self.source_dir, &self.source_dir, &mut files_info)?;

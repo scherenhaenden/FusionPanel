@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use uuid::Uuid;
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, Write, Error as IoError};
+use std::path::PathBuf;
+use std::os::unix::fs::OpenOptionsExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AuditEvent {
@@ -29,10 +33,15 @@ pub enum AuditError {
     TamperDetected(Uuid),
     #[error("tamper detected: previous hash mismatch at event {0}")]
     ChainBroken(Uuid),
+    #[error("IO error: {0}")]
+    Io(#[from] IoError),
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
 }
 
 pub struct AuditLog {
     records: Vec<AuditRecord>,
+    path: Option<PathBuf>,
 }
 
 impl Default for AuditLog {
@@ -45,10 +54,35 @@ impl AuditLog {
     pub fn new() -> Self {
         Self {
             records: Vec::new(),
+            path: None,
         }
     }
 
-    pub fn append(&mut self, event: AuditEvent) -> AuditRecord {
+    pub fn with_path(path: impl Into<PathBuf>) -> Result<Self, AuditError> {
+        let path = path.into();
+        let mut records = Vec::new();
+
+        if path.exists() {
+            let file = File::open(&path)?;
+            let reader = BufReader::new(file);
+
+            for line in reader.lines() {
+                let line = line?;
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let record: AuditRecord = serde_json::from_str(&line)?;
+                records.push(record);
+            }
+        }
+
+        Ok(Self {
+            records,
+            path: Some(path),
+        })
+    }
+
+    pub fn append(&mut self, event: AuditEvent) -> Result<AuditRecord, AuditError> {
         let previous_hash = self
             .records
             .last()
@@ -62,7 +96,7 @@ impl AuditLog {
         let mut hasher = Sha256::new();
         hasher.update(&previous_hash);
 
-        let event_json = serde_json::to_string(&event).unwrap_or_default();
+        let event_json = serde_json::to_string(&event)?;
         hasher.update(&event_json);
 
         let hash = hex::encode(hasher.finalize());
@@ -73,8 +107,20 @@ impl AuditLog {
             hash,
         };
 
+        if let Some(path) = &self.path {
+            let mut file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .mode(0o600)
+                .open(path)?;
+            let json_line = serde_json::to_string(&record)?;
+            writeln!(file, "{}", json_line)?;
+            file.flush()?;
+            file.sync_all()?;
+        }
+
         self.records.push(record.clone());
-        record
+        Ok(record)
     }
 
     pub fn verify(&self) -> Result<(), AuditError> {
@@ -124,6 +170,7 @@ mod tests {
     use super::*;
     use chrono::Utc;
     use uuid::Uuid;
+    use tempfile::NamedTempFile;
 
     fn create_test_event(action: &str) -> AuditEvent {
         AuditEvent {
@@ -146,9 +193,9 @@ mod tests {
         let event2 = create_test_event("UPDATE");
         let event3 = create_test_event("DELETE");
 
-        log.append(event1.clone());
-        log.append(event2.clone());
-        log.append(event3.clone());
+        log.append(event1.clone()).unwrap();
+        log.append(event2.clone()).unwrap();
+        log.append(event3.clone()).unwrap();
 
         assert_eq!(log.records().len(), 3);
         assert!(log.verify().is_ok());
@@ -161,8 +208,8 @@ mod tests {
         let event1 = create_test_event("CREATE");
         let event2 = create_test_event("UPDATE");
 
-        log.append(event1);
-        log.append(event2.clone());
+        log.append(event1).unwrap();
+        log.append(event2.clone()).unwrap();
 
         // Tamper with the first event
         let mut tampered_event = log.records()[0].event.clone();
@@ -191,9 +238,9 @@ mod tests {
         let event2 = create_test_event("UPDATE");
         let event3 = create_test_event("DELETE");
 
-        log.append(event1);
-        log.append(event2);
-        log.append(event3);
+        log.append(event1).unwrap();
+        log.append(event2).unwrap();
+        log.append(event3).unwrap();
 
         // Tamper with the second event to break the chain for the third event
         let mut tampered_event = log.records()[1].event.clone();
@@ -214,5 +261,22 @@ mod tests {
                 verification_result
             );
         }
+    }
+
+    #[test]
+    fn test_durable_append_and_load() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let path = temp_file.path().to_path_buf();
+
+        {
+            let mut log = AuditLog::with_path(&path).unwrap();
+            log.append(create_test_event("CREATE")).unwrap();
+            log.append(create_test_event("UPDATE")).unwrap();
+        }
+
+        // Re-load
+        let log = AuditLog::with_path(&path).unwrap();
+        assert_eq!(log.records().len(), 2);
+        assert!(log.verify().is_ok());
     }
 }

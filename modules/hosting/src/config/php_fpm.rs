@@ -15,7 +15,7 @@ pub fn generate_php_fpm_config(site: &SiteConfig) -> Result<String> {
     let memory_limit = php_spec.memory_limit.as_str();
     let root = site.document_root.as_str();
 
-    let user = format!("tenant_{}", site.tenant_id.0);
+    let user = site.run_as_user.as_str();
 
     let config = format!(
         "[{}]\n\

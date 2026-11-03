@@ -77,6 +77,8 @@ impl DatabaseAdapter for MariaDbAdapter {
     }
 
     async fn apply_create_database(&self, plan: &CreateDbPlan) -> Result<()> {
+        validate_identifier(&plan.db_name.0)?;
+        validate_identifier(&plan.owner.0)?;
         let sql = format!(
             "CREATE DATABASE IF NOT EXISTS `{}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;",
             plan.db_name.0
@@ -110,6 +112,7 @@ impl DatabaseAdapter for MariaDbAdapter {
     }
 
     async fn apply_create_user(&self, plan: &CreateUserPlan) -> Result<()> {
+        validate_identifier(&plan.username.0)?;
         let escaped_pwd = plan.password_ref.0.replace("\\", "\\\\").replace("'", "''");
         let sql = format!(
             "CREATE USER IF NOT EXISTS '{}'@'%' IDENTIFIED BY '{}';",
@@ -137,9 +140,9 @@ impl DatabaseAdapter for MariaDbAdapter {
         })?;
 
         if !output.status.success() {
-            return Err(DatabaseError::OperationFailed(
-                String::from_utf8_lossy(&output.stderr).to_string(),
-            ));
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            let safe_err = stderr.replace(&plan.password_ref.0, "[REDACTED]").replace(&escaped_pwd, "[REDACTED]");
+            return Err(DatabaseError::OperationFailed(safe_err));
         }
         Ok(())
     }
@@ -163,6 +166,11 @@ impl DatabaseAdapter for MariaDbAdapter {
     }
 
     async fn apply_grant(&self, plan: &GrantPlan) -> Result<()> {
+        validate_identifier(&plan.db_name.0)?;
+        validate_identifier(&plan.username.0)?;
+        for priv_str in &plan.privileges {
+            validate_privilege(priv_str)?;
+        }
         let privs = if plan.privileges.is_empty() {
             "ALL PRIVILEGES".to_string()
         } else {
@@ -197,10 +205,20 @@ impl DatabaseAdapter for MariaDbAdapter {
     }
 
     async fn apply_dump(&self, plan: &DumpPlan) -> Result<()> {
+        validate_identifier(&plan.db_name.0)?;
         let mut cmd = self.build_cmd("mysqldump");
         cmd.arg(&plan.db_name.0);
 
-        let file = std::fs::File::create(&plan.output_path).map_err(|e| {
+        let mut file_options = std::fs::OpenOptions::new();
+        file_options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            file_options.mode(0o600); // Only owner can read/write
+        }
+
+        let file = file_options.open(&plan.output_path).map_err(|e| {
             DatabaseError::OperationFailed(format!("Failed to create dump file: {}", e))
         })?;
 
@@ -227,6 +245,7 @@ impl DatabaseAdapter for MariaDbAdapter {
     }
 
     async fn apply_restore(&self, plan: &RestorePlan) -> Result<()> {
+        validate_identifier(&plan.db_name.0)?;
         let mut cmd = self.build_cmd("mysql");
         cmd.arg(&plan.db_name.0);
 

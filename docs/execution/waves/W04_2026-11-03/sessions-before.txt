@@ -1,0 +1,52 @@
+           ID                                    Description                                    Repo                Last active                Status         
+ 17937079581487678056    Implement https://github.com/scherenhaenden/FusionPanel/iss…  scherenhaenden/Fusion…  13h56m59s ago           Completed      
+ 11993838793472947743    Implement https://github.com/scherenhaenden/FusionPanel/iss…  scherenhaenden/Fusion…  12h59m24s ago           Awaiting Plan A
+ 17870708631564350179    Implement https://github.com/scherenhaenden/FusionPanel/iss…  scherenhaenden/Fusion…  14h18m26s ago           Awaiting User F
+ 234909097995010988      Implement https://github.com/scherenhaenden/FusionPanel/iss…  scherenhaenden/Fusion…  14h19m58s ago           Awaiting User F
+ 15834990470205652182    Implement https://github.com/scherenhaenden/FusionPanel/iss…  scherenhaenden/Fusion…  16h27m10s ago           Awaiting User F
+ 7385074516211862461     Implement https://github.com/scherenhaenden/FusionPanel/iss…  scherenhaenden/Fusion…  16h51m1s ago            Failed         
+ 521914698062635906      Implement https://github.com/scherenhaenden/FusionPanel/iss…  scherenhaenden/Fusion…  17h10m31s ago           Awaiting User F
+ 4740648715193034086     Implement Dashboard overview page and system health widgets…  scherenhaenden/Fusion…  17h42m51s ago           Failed         
+ 1885562045966245180     W02-03 FusionPanel Repair database apply boundaries and res…  scherenhaenden/Fusion…  2 days ago              Awaiting User F
+ 7302772204230979493     W02-01 FusionPanel Integrate foundation contracts and repro…  scherenhaenden/Fusion…  2 days ago              Awaiting User F
+ 8596482107365986135     Implement https://github.com/scherenhaenden/FusionPanel/iss…  scherenhaenden/Fusion…  2 days ago              Failed         
+ 3198712460135711531     Implement https://github.com/scherenhaenden/FusionPanel/iss…  scherenhaenden/Fusion…  12h24m4s ago                           
+ 15533225560008445472    Implement https://github.com/scherenhaenden/FusionPanel/iss…  scherenhaenden/Fusion…  2 days ago              Failed         
+ 15105318456453535020    Implement https://github.com/scherenhaenden/FusionPanel/iss…  scherenhaenden/Fusion…  2 days ago              Failed         
+ 16362903684652334898    ROUND2 pipewire. Start from remote branch integration/runti…  scherenhaenden/Blazar…  17 days ago             Completed      
+ 839225217572380605      ROUND2 audio. Start from remote branch integration/runtime …  scherenhaenden/Blazar…  17 days ago             Completed      
+ 3560185039890562126     ROUND2 tuner. Start from remote branch integration/runtime …  scherenhaenden/Blazar…  17 days ago             Completed      
+ 5532960291411298498     ROUND2 routing. Start from remote branch integration/runtim…  scherenhaenden/Blazar…  17 days ago             Completed      
+ 2046824431457758393     ROUND2 diagnostics. Start from remote branch integration/ru…  scherenhaenden/Blazar…  17 days ago             Completed      
+ 16042002084640951165    Implement delivery 02 only. Base branch master at exact com…  scherenhaenden/Blazar…  17 days ago             Completed      
+ 10701395717381646250    Implement delivery 03 only. Base branch master at exact com…  scherenhaenden/Blazar…  17 days ago             Completed      
+ 8015611400856351101     Implement delivery 01 only. Base branch master at exact com…  scherenhaenden/Blazar…  17 days ago             Completed      
+ 13445523470199357587    hay una carpeta llamada design... COPIAS ESE DISENHO y lo h…  scherenhaenden/Email-…  28 days ago             Completed      
+ 1778542865285693729     Build a polished Inbox view from the supplied “Local Intell…  scherenhaenden/Email-…  28 days ago             Awaiting User F
+ 12676840469620128138    Could you focus just on making the Inbox account-to-folder …  scherenhaenden/Email-…  28 days ago             Completed      
+ 18112167541008351325    Repository: scherenhaenden/Email-ms. Start from exact curre…  scherenhaenden/Email-…  28 days ago             Awaiting User F
+ 14404413682272044726    Repository: scherenhaenden/Email-ms. Current master is 90d6…  scherenhaenden/Email-…  28 days ago             Awaiting User F
+ 3567252846334273124     Correct the completed source-ID patch from session 11351153…  scherenhaenden/Email-…  28 days ago                            
+ 4258420533850907506     Priority 1 account-isolation completion for remaining per-m…  scherenhaenden/Email-…  28 days ago             Completed      
+ 17070919652953127031    Correct the unmerged Inbox account-selector/resizer slice; …  scherenhaenden/Email-…  28 days ago             Completed      
+ 1690077990446459119     M09-D — Refresh stale status paragraphs in the remaining ar…  scherenhaenden/miniml…  28 days ago             Completed      
+ 137700204874046609      Priority 1 account-isolation hotfix for AI metadata. Start …  scherenhaenden/Email-…  28 days ago             Awaiting User F
+ 11351153140282001670    Priority 1 security hotfix: Thunderbird source IDs must nev…  scherenhaenden/Email-…  28 days ago             Completed      
+ 6366826313956509079     Fix draft attachments through send as one vertical slice. S…  scherenhaenden/Email-…  28 days ago             Completed      
+ 8329064087547061600     Mailbox UX slice. Start from exact master commit 393ffcf000…  scherenhaenden/Email-…  28 days ago                            
+ 10977276690780618163    Documentation update only. Base commit: 393ffcf000b3f9f6587…  scherenhaenden/Email-…  28 days ago             Completed      
+ 513019483045454900      M09-B — Clarify the status of the 1.0 acceptance checklist …  scherenhaenden/miniml…  28 days ago             Completed      
+ 11032068863378026006    Repository: scherenhaenden/miniml-xml-rs.Task M09-A: prepar…  scherenhaenden/miniml…  28 days ago             Completed      
+ 4078684291427294237     M07-B — finish the first typed consumer slice.Please start …  scherenhaenden/miniml…  28 days ago             Completed      
+ 1203790517305183261     M08-B — add a deterministic bounded parser smoke corpus.Ple…  scherenhaenden/miniml…  28 days ago             Completed      
+ 1752884590832168457     M08-A — close the concrete mutation-evidence and status-doc…  scherenhaenden/miniml…  29 days ago             Completed      
+ 7783618785134669031     M06-B — implement the validating parser for miniml-xml-rs. …  scherenhaenden/miniml…  29 days ago             Failed         
+ 17172800555643325890    M07-A — add XML fixtures only for the 0.1.0 typed consumer …  scherenhaenden/miniml…  29 days ago             Completed      
+ 6709002947009389318     M06-A: build the bounded structural element stack for minim…  scherenhaenden/miniml…  29 days ago             Completed      
+ 7772024909784814271     Please inspect commit 54444c0 on branch feature/milestone-0…  scherenhaenden/miniml…  29 days ago             Awaiting User F
+ 14897720166256751629    On current master at a3b52eddac5ce35b48b1dd263df98911490225…  scherenhaenden/miniml…  29 days ago                            
+ 13446562686455561403    M05 tokenizer for miniml-xml-rs. Work from the merged maste…  scherenhaenden/miniml…  29 days ago             Awaiting User F
+ 8372780934571335340     Repository scherenhaenden/miniml-xml-rs. Unique task M08 of…  scherenhaenden/miniml…  29 days ago                            
+ 9272682563869501346     Repository scherenhaenden/miniml-xml-rs. Unique task M04 of…  scherenhaenden/miniml…  29 days ago                            
+ 14253481875008285439    Repository scherenhaenden/miniml-xml-rs. Unique task M03 of…  scherenhaenden/miniml…  29 days ago                            
+                                                                                                                                                      

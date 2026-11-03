@@ -56,6 +56,14 @@ impl IdentityStore for MockStore {
         }
         Ok(())
     }
+
+    async fn get_user_role_bindings(&self, _user_id: UserId) -> Result<Vec<identity::rbac::RoleBinding>, IdentityError> {
+        Ok(vec![])
+    }
+
+    async fn is_revoked(&self, session: &Session) -> Result<bool, IdentityError> {
+        Ok(session.is_revoked())
+    }
 }
 
 async fn protected_handler() -> impl IntoResponse {

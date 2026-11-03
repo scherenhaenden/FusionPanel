@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
-    fs,
+    fs::{self, OpenOptions},
+    os::unix::fs::OpenOptionsExt,
     path::{Path, PathBuf},
 };
 
@@ -44,9 +45,46 @@ mod hex {
 pub struct SecretStore {
     storage_dir: PathBuf,
     engine: CryptoEngine,
+    current_key_version: u32,
 }
 
 impl SecretStore {
+    fn read_active_version(storage_dir: &Path) -> u32 {
+        let path = storage_dir.join("active_version");
+        if let Ok(data) = fs::read_to_string(&path) {
+            if let Ok(version) = data.trim().parse::<u32>() {
+                return version;
+            }
+        }
+        1
+    }
+
+    fn write_active_version(storage_dir: &Path, version: u32) -> Result<(), SecretError> {
+        let path = storage_dir.join("active_version");
+        let tmp_path = storage_dir.join("active_version.tmp");
+
+        Self::write_with_permissions(&tmp_path, version.to_string().as_bytes())?;
+
+        fs::rename(&tmp_path, &path)
+            .map_err(|e| SecretError::OperationFailed(format!("Failed to commit active_version: {}", e)))?;
+        Ok(())
+    }
+
+    fn write_with_permissions(path: &Path, data: &[u8]) -> Result<(), SecretError> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)
+            .map_err(|e| SecretError::OperationFailed(format!("Failed to open file: {}", e)))?;
+
+        use std::io::Write;
+        file.write_all(data)
+            .map_err(|e| SecretError::OperationFailed(format!("Failed to write data: {}", e)))?;
+        Ok(())
+    }
+
     pub fn new<P: AsRef<Path>>(
         storage_dir: P,
         master_key: &[u8],
@@ -59,22 +97,57 @@ impl SecretStore {
         }
 
         let engine = CryptoEngine::new(master_key)?;
+        let current_key_version = Self::read_active_version(&storage_dir);
 
-        Ok(Self { storage_dir, engine })
+        let store = Self { storage_dir, engine, current_key_version };
+
+        // Cleanup stale files during startup (recovery phase)
+        store.cleanup_stale_files()?;
+
+        Ok(store)
     }
 
-    pub fn rotate_master_key(&mut self, new_master_key: &[u8]) -> Result<(), SecretError> {
-        let new_engine = CryptoEngine::new(new_master_key)?;
-
-        let mut new_records = HashMap::new();
-
-        // Re-encrypt all records
+    fn cleanup_stale_files(&self) -> Result<(), SecretError> {
+        let suffix = format!(".v{}", self.current_key_version);
         for entry in fs::read_dir(&self.storage_dir)
             .map_err(|e| SecretError::DependencyUnavailable(e.to_string()))?
         {
             let entry = entry.map_err(|e| SecretError::DependencyUnavailable(e.to_string()))?;
             let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            let file_name = path.file_name().unwrap_or_default().to_string_lossy();
+
+            // Files might be `<id>.json` (legacy), `<id>.json.v<X>`, active_version
+            if file_name.starts_with("active_version") {
+                continue;
+            }
+
+            if file_name.ends_with(".json") {
+                // Legacy file, migrate to current version
+                let new_path = PathBuf::from(format!("{}.v{}", path.to_string_lossy(), self.current_key_version));
+                let _ = fs::rename(&path, &new_path);
+            } else if file_name.contains(".json.v") && !file_name.ends_with(&suffix) {
+                // Stale file from interrupted rotation, or old version file after successful rotation
+                let _ = fs::remove_file(&path);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn rotate_master_key(&mut self, new_master_key: &[u8]) -> Result<(), SecretError> {
+        let new_engine = CryptoEngine::new(new_master_key)?;
+        let new_version = self.current_key_version + 1;
+        let mut new_records = HashMap::new();
+
+        // Phase 1: Staged Generation (Re-encrypt all records to new version files)
+        let suffix = format!(".json.v{}", self.current_key_version);
+        for entry in fs::read_dir(&self.storage_dir)
+            .map_err(|e| SecretError::DependencyUnavailable(e.to_string()))?
+        {
+            let entry = entry.map_err(|e| SecretError::DependencyUnavailable(e.to_string()))?;
+            let path = entry.path();
+            let file_name = path.file_name().unwrap_or_default().to_string_lossy();
+
+            if !file_name.ends_with(&suffix) {
                 continue;
             }
 
@@ -83,23 +156,39 @@ impl SecretStore {
             let mut record: SecretRecord = serde_json::from_str(&data)
                 .map_err(|e| SecretError::DependencyUnavailable(e.to_string()))?;
 
-            let plaintext = self.engine.decrypt(&record.ciphertext)?;
-            let new_ciphertext = new_engine.encrypt(&plaintext)?;
+            let aad = Self::construct_aad(&record.id, &record.scopes);
+            let plaintext = self.engine.decrypt(&record.ciphertext, &aad)?;
+            let new_ciphertext = new_engine.encrypt(&plaintext, &aad)?;
 
             record.ciphertext = new_ciphertext;
-            new_records.insert(path, record);
+
+            // Store target path for new version
+            let new_file_name = file_name.replace(&suffix, &format!(".json.v{}", new_version));
+            let new_path = self.storage_dir.join(new_file_name);
+            new_records.insert(new_path, record);
         }
 
-        // Write all new records
+        // Write all new records (staged generation)
         for (path, record) in new_records {
             let data = serde_json::to_string_pretty(&record)
                 .map_err(|e| SecretError::OperationFailed(e.to_string()))?;
-            fs::write(path, data)
-                .map_err(|e| SecretError::OperationFailed(e.to_string()))?;
+            Self::write_with_permissions(&path, data.as_bytes())?;
         }
 
+        // Phase 2: Commit (Update active_version atomically)
+        Self::write_active_version(&self.storage_dir, new_version)?;
+
+        // Phase 3: Recovery (Update in-memory state and clean up old versions)
         self.engine = new_engine;
+        self.current_key_version = new_version;
+        self.cleanup_stale_files()?;
+
         Ok(())
+    }
+
+    fn construct_aad(id: &str, scopes: &[String]) -> Vec<u8> {
+        let scopes_str = scopes.join(",");
+        format!("{}:{}", id, scopes_str).into_bytes()
     }
 
     pub fn create_secret(
@@ -109,12 +198,15 @@ impl SecretStore {
         material: &SecretMaterial,
     ) -> Result<SecretRef, SecretError> {
         let id = Uuid::new_v4().to_string();
-        let ciphertext = self.engine.encrypt(material)?;
+        let scopes = vec![format!("{}:{}", tenant_id, scope)];
+
+        let aad = Self::construct_aad(&id, &scopes);
+        let ciphertext = self.engine.encrypt(material, &aad)?;
 
         let record = SecretRecord {
             id: id.clone(),
             version: 1,
-            scopes: vec![format!("{}:{}", tenant_id, scope)],
+            scopes,
             ciphertext,
         };
 
@@ -139,7 +231,8 @@ impl SecretStore {
             )));
         }
 
-        self.engine.decrypt(&record.ciphertext)
+        let aad = Self::construct_aad(&record.id, &record.scopes);
+        self.engine.decrypt(&record.ciphertext, &aad)
     }
 
     pub fn get_state(&self, id: &str) -> Result<ObservedState, SecretError> {
@@ -152,14 +245,14 @@ impl SecretStore {
     }
 
     fn file_path(&self, id: &str) -> PathBuf {
-        self.storage_dir.join(format!("{}.json", id))
+        self.storage_dir.join(format!("{}.json.v{}", id, self.current_key_version))
     }
 
     fn save_record(&self, record: &SecretRecord) -> Result<(), SecretError> {
         let path = self.file_path(&record.id);
         let data = serde_json::to_string_pretty(record)
             .map_err(|e| SecretError::OperationFailed(e.to_string()))?;
-        fs::write(path, data).map_err(|e| SecretError::OperationFailed(e.to_string()))?;
+        Self::write_with_permissions(&path, data.as_bytes())?;
         Ok(())
     }
 
@@ -217,5 +310,27 @@ mod tests {
         // Wrong scope
         let result = store.read_secret(&secret_ref.id, "tenant1", "api_key");
         assert!(matches!(result.unwrap_err(), SecretError::Unauthorized(_)));
+    }
+
+    #[test]
+    fn test_metadata_integrity_tampering() {
+        let dir = tempdir().unwrap();
+        let master_key = CryptoEngine::generate_key();
+        let store = SecretStore::new(dir.path(), &master_key).unwrap();
+
+        let material = SecretMaterial::new(b"secret".to_vec());
+        let secret_ref = store.create_secret("tenant1", "scope1", &material).unwrap();
+
+        // Read file and tamper with scopes
+        let file_path = store.file_path(&secret_ref.id);
+        let data = fs::read_to_string(&file_path).unwrap();
+        let mut record: SecretRecord = serde_json::from_str(&data).unwrap();
+        record.scopes = vec!["tenant2:scope1".to_string()];
+        let tampered_data = serde_json::to_string_pretty(&record).unwrap();
+        fs::write(&file_path, tampered_data).unwrap();
+
+        // Attempt to read with tampered scope should fail due to AAD mismatch
+        let result = store.read_secret(&secret_ref.id, "tenant2", "scope1");
+        assert!(matches!(result.unwrap_err(), SecretError::CryptoError(_)));
     }
 }

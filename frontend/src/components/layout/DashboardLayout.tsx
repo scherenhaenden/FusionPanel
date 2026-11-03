@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, Sun, Moon, LayoutDashboard, Settings, Users } from 'lucide-react';
+import { NavLink, Link } from 'react-router-dom';
+import { Menu, Sun, Moon, LayoutDashboard, Globe, Database, Archive, Shield } from 'lucide-react';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -31,11 +32,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <span className="sr-only">Open sidebar</span>
                 <Menu className="w-6 h-6" />
               </button>
-              <a href="#" className="flex ms-2 md:me-24">
+              <Link to="/" className="flex ms-2 md:me-24">
                 <span className="self-center text-xl font-semibold sm:text-2xl whitespace-nowrap dark:text-white">
                   Admin Panel
                 </span>
-              </a>
+              </Link>
             </div>
             <div className="flex items-center">
               <button
@@ -59,22 +60,34 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="h-full px-3 pb-4 overflow-y-auto bg-white dark:bg-gray-800">
           <ul className="space-y-2 font-medium">
             <li>
-              <a href="#" className="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+              <NavLink to="/" className={({ isActive }) => `flex items-center p-2 rounded-lg group ${isActive ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white' : 'text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
                 <LayoutDashboard className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" />
                 <span className="ms-3">Dashboard</span>
-              </a>
+              </NavLink>
             </li>
             <li>
-              <a href="#" className="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-                <Users className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" />
-                <span className="flex-1 ms-3 whitespace-nowrap">Users</span>
-              </a>
+              <NavLink to="/websites" className={({ isActive }) => `flex items-center p-2 rounded-lg group ${isActive ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white' : 'text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                <Globe className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" />
+                <span className="flex-1 ms-3 whitespace-nowrap">Websites</span>
+              </NavLink>
             </li>
             <li>
-              <a href="#" className="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
-                <Settings className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" />
-                <span className="flex-1 ms-3 whitespace-nowrap">Settings</span>
-              </a>
+              <NavLink to="/databases" className={({ isActive }) => `flex items-center p-2 rounded-lg group ${isActive ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white' : 'text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                <Database className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" />
+                <span className="flex-1 ms-3 whitespace-nowrap">Databases</span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/backups" className={({ isActive }) => `flex items-center p-2 rounded-lg group ${isActive ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white' : 'text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                <Archive className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" />
+                <span className="flex-1 ms-3 whitespace-nowrap">Backups</span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/security" className={({ isActive }) => `flex items-center p-2 rounded-lg group ${isActive ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white' : 'text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                <Shield className="w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" />
+                <span className="flex-1 ms-3 whitespace-nowrap">Security</span>
+              </NavLink>
             </li>
           </ul>
         </div>
