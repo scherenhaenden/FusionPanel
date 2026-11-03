@@ -71,9 +71,6 @@ impl CommandExecutor {
             }
             Ok(Err(e)) => return Err(e),
             Err(_) => {
-                // Timeout occurred. The kill_on_drop behavior ensures that when we drop child (as this function exits or we map result),
-                // the child process is killed. But wait, `child` is moved into `wait_future` in some ways, but actually `child.wait()` takes `&mut self`.
-                // Actually `child` is not moved. Let's explicitly kill it.
                 let _ = child.kill().await;
 
                 let stdout_res = stdout_handle.await.unwrap_or_else(|_| Ok(Vec::new()))?;
