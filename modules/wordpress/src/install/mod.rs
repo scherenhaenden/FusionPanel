@@ -125,6 +125,10 @@ impl Orchestrator {
         let mut archive = zip::ZipArchive::new(fs::File::open(tmp_file.path())?)
             .map_err(|e| InstallError::ZipError(e.to_string()))?;
 
+        // Reject ambiguous local/central metadata before extracting or promoting any entry.
+        archive.validate_header_consistency()
+            .map_err(|e| InstallError::ZipError(e.to_string()))?;
+
         for i in 0..archive.len() {
             let mut file = archive.by_index(i).map_err(|e| InstallError::ZipError(e.to_string()))?;
 
@@ -158,7 +162,7 @@ impl Orchestrator {
 
             let outpath = staging.path().join(&rel_path);
 
-            if (*file.name()).ends_with('/') {
+            if file.is_dir() {
                 fs::create_dir_all(&outpath)?;
             } else {
                 if let Some(p) = outpath.parent() {
