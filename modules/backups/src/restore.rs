@@ -1,5 +1,5 @@
 use crate::error::BackupError;
-use crate::models::{FileInfo, Manifest};
+use crate::models::{FileInfo, Manifest, RestoreOptions};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
@@ -11,46 +11,196 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 static TEMP_DIR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-struct TempRestoreDir {
-    path: PathBuf,
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Default)]
+struct RestoreJournal {
+    committed: bool,
+    rollbacks: Vec<(PathBuf, PathBuf)>, // (rollback_path, target_path)
+    new_files: Vec<PathBuf>,
 }
 
-impl TempRestoreDir {
-    fn new(base_dir: &Path) -> Result<Self, BackupError> {
+struct RestoreTransaction {
+    base_dir: PathBuf,
+    extracted_dir: PathBuf,
+    rollback_dir: PathBuf,
+    committed: bool,
+    rollbacks: Vec<(PathBuf, PathBuf)>, // (from_rollback_dir, original_target_path)
+    new_files: Vec<PathBuf>, // newly created files to remove on rollback
+}
+
+impl RestoreTransaction {
+    fn new(target_dir: &Path) -> Result<Self, BackupError> {
         let counter = TEMP_DIR_COUNTER.fetch_add(1, Ordering::SeqCst);
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let path = base_dir.join(format!(".restore_temp_{}_{}", timestamp, counter));
-        fs::create_dir_all(&path)?;
+        let base_dir = target_dir.join(format!(".restore_temp_{}_{}", timestamp, counter));
+        fs::create_dir_all(&base_dir)?;
 
-        // Ensure atomic file creation with specific POSIX permissions to prevent TOCTOU
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&path, fs::Permissions::from_mode(0o700))?;
+            fs::set_permissions(&base_dir, fs::Permissions::from_mode(0o700))?;
         }
 
-        Ok(Self { path })
+        let extracted_dir = base_dir.join("extracted");
+        let rollback_dir = base_dir.join("rollback");
+        fs::create_dir_all(&extracted_dir)?;
+        fs::create_dir_all(&rollback_dir)?;
+
+        let tx = Self {
+            base_dir,
+            extracted_dir,
+            rollback_dir,
+            committed: false,
+            rollbacks: Vec::new(),
+            new_files: Vec::new(),
+        };
+        tx.flush_journal()?;
+        Ok(tx)
     }
 
-    fn path(&self) -> &Path {
-        &self.path
+    fn journal_path(&self) -> PathBuf {
+        self.base_dir.join("journal.json")
+    }
+
+    fn flush_journal(&self) -> Result<(), BackupError> {
+        let journal = RestoreJournal {
+            committed: self.committed,
+            rollbacks: self.rollbacks.clone(),
+            new_files: self.new_files.clone(),
+        };
+        let tmp_path = self.base_dir.join("journal.json.tmp");
+        let mut file = File::create(&tmp_path)?;
+        let content = serde_json::to_vec(&journal)?;
+        file.write_all(&content)?;
+        file.flush()?;
+        file.sync_all()?;
+        fs::rename(tmp_path, self.journal_path())?;
+        Ok(())
+    }
+
+    fn record_rollback(&mut self, rollback_path: PathBuf, target_path: PathBuf) -> Result<(), BackupError> {
+        self.rollbacks.push((rollback_path, target_path));
+        self.flush_journal()
+    }
+
+    fn record_new_file(&mut self, new_file: PathBuf) -> Result<(), BackupError> {
+        self.new_files.push(new_file);
+        self.flush_journal()
+    }
+
+    fn commit(&mut self) -> Result<(), BackupError> {
+        self.committed = true;
+        self.flush_journal()?;
+        if self.base_dir.exists() {
+            let _ = fs::remove_dir_all(&self.base_dir);
+        }
+        Ok(())
+    }
+
+    fn rollback(&mut self) -> Result<(), BackupError> {
+        if self.committed {
+            return Ok(());
+        }
+
+        // 1. Remove new files
+        let mut first_err: Option<std::io::Error> = None;
+        for new_file in self.new_files.iter().rev() {
+            if new_file.exists() {
+                if let Err(e) = fs::remove_file(new_file) {
+                    if first_err.is_none() {
+                        first_err = Some(e);
+                    }
+                }
+            }
+        }
+
+        // 2. Restore rollbacks
+        for (rollback_path, target_path) in self.rollbacks.iter().rev() {
+            if rollback_path.exists() {
+                if let Err(e) = fs::rename(rollback_path, target_path) {
+                    if first_err.is_none() {
+                        first_err = Some(e);
+                    }
+                }
+            }
+        }
+
+        // If any rollback failed, preserve base_dir and return error!
+        if let Some(err) = first_err {
+            return Err(BackupError::Io(err));
+        }
+
+        // Cleanup only if rollback succeeded fully
+        if self.base_dir.exists() {
+            let _ = fs::remove_dir_all(&self.base_dir);
+        }
+        Ok(())
     }
 }
 
-impl Drop for TempRestoreDir {
+impl Drop for RestoreTransaction {
     fn drop(&mut self) {
-        if self.path.exists() {
-            let _ = fs::remove_dir_all(&self.path);
+        if !self.committed {
+            let _ = self.rollback();
         }
     }
+}
+
+pub fn recover_pending_restore(target_dir: &Path) -> Result<usize, BackupError> {
+    let mut recovered = 0;
+    if !target_dir.exists() {
+        return Ok(0);
+    }
+    for entry in fs::read_dir(target_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.starts_with(".restore_temp_") {
+                    let journal_file = path.join("journal.json");
+                    if journal_file.exists() {
+                        if let Ok(content) = fs::read(&journal_file) {
+                            if let Ok(journal) = serde_json::from_slice::<RestoreJournal>(&content) {
+                                if !journal.committed {
+                                    // Replay rollbacks
+                                    for new_file in journal.new_files.iter().rev() {
+                                        if new_file.exists() {
+                                            let _ = fs::remove_file(new_file);
+                                        }
+                                    }
+                                    for (rollback_path, target_path) in journal.rollbacks.iter().rev() {
+                                        if rollback_path.exists() {
+                                            fs::rename(rollback_path, target_path)?;
+                                        }
+                                    }
+                                    recovered += 1;
+                                }
+                            }
+                        }
+                    }
+                    let _ = fs::remove_dir_all(&path);
+                }
+            }
+        }
+    }
+    Ok(recovered)
 }
 
 pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
     archive_path: P1,
     target_dir: P2,
+) -> Result<Manifest, BackupError> {
+    restore_archive_with_options(archive_path, target_dir, &RestoreOptions::default())
+}
+
+pub fn restore_archive_with_options<P1: AsRef<Path>, P2: AsRef<Path>>(
+    archive_path: P1,
+    target_dir: P2,
+    options: &RestoreOptions,
 ) -> Result<Manifest, BackupError> {
     let target_dir = target_dir.as_ref();
     if !target_dir.exists() {
@@ -58,10 +208,9 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
     }
     let canonical_target = fs::canonicalize(target_dir)?;
 
-    // Create a temporary directory in the target dir to avoid cross-device linking issues
-    // and use a secure custom approach to ensure isolated atomic staging.
-    let temp_restore = TempRestoreDir::new(&canonical_target)?;
-    let canonical_temp = fs::canonicalize(temp_restore.path())?;
+    let mut tx = RestoreTransaction::new(&canonical_target)?;
+    let canonical_temp = fs::canonicalize(&tx.extracted_dir)?;
+    let canonical_rollback = fs::canonicalize(&tx.rollback_dir)?;
 
     let file = File::open(archive_path)?;
     let tar = ZstdDecoder::new(file)?;
@@ -76,6 +225,22 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
         let mut entry = entry?;
         let path = entry.path()?.to_path_buf();
         let path_str = path.to_string_lossy().into_owned();
+
+        // Explicitly block any component that attempts path traversal (..)
+        // or absolute path injection (/) before doing *anything* else.
+        for component in path.components() {
+            match component {
+                Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                    return Err(BackupError::UnsafePath(path_str));
+                }
+                _ => {}
+            }
+        }
+
+        let is_selected = match &options.selected_files {
+            Some(selected) => selected.contains(&path_str),
+            None => true,
+        };
 
         if path_str == "manifest.json" {
             if manifest.is_some() {
@@ -95,14 +260,8 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
                 return Err(BackupError::ManifestNotFound);
             }
 
-            // Check for unsafe paths in the components
-            for component in path.components() {
-                match component {
-                    Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
-                        return Err(BackupError::UnsafePath(path_str));
-                    }
-                    _ => {}
-                }
+            if !is_selected {
+                continue;
             }
 
             let expected_info = file_info_map.get(&path_str).ok_or_else(|| {
@@ -113,7 +272,9 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
                 return Err(BackupError::DuplicateFile(path_str.clone()));
             }
 
-            let temp_target_path = canonical_temp.join(&path);
+            // Path containment: strip any leading '/' to prevent absolute path override
+            let rel_path = path.strip_prefix("/").unwrap_or(&path);
+            let temp_target_path = canonical_temp.join(rel_path);
 
             if let Some(parent) = temp_target_path.parent() {
                 fs::create_dir_all(parent)?;
@@ -161,48 +322,85 @@ pub fn restore_archive<P1: AsRef<Path>, P2: AsRef<Path>>(
 
     let manifest = manifest.ok_or(BackupError::ManifestNotFound)?;
 
-    for file_info in &manifest.files {
-        if !extracted_files.contains(&file_info.path) {
-            return Err(BackupError::MissingFiles);
+    if options.selected_files.is_none() {
+        for file_info in &manifest.files {
+            if !extracted_files.contains(&file_info.path) {
+                return Err(BackupError::MissingFiles);
+            }
         }
     }
 
-    // Move files atomically from temp to target
+    // Commit phase
+    let mut file_count = 0;
     for path_str in &extracted_files {
-        let temp_file_path = canonical_temp.join(path_str);
-        let final_file_path = canonical_target.join(path_str);
+        if let Some(fault_after) = options.fault_inject_error_after {
+            if file_count >= fault_after {
+                return Err(BackupError::FaultInjected);
+            }
+        }
+        file_count += 1;
 
-        // Carefully handle pre-existing parent symlinks by ensuring each
-        // component is a real directory, deleting if it's a symlink or file
+        let path = Path::new(path_str);
+        let rel_path = path.strip_prefix("/").unwrap_or(path);
+        let temp_file_path = canonical_temp.join(rel_path);
+        let final_file_path = canonical_target.join(rel_path);
+
+        // Enforce target symlink containment: Ensure all components of the target path
+        // are real directories within the canonical_target base, resolving symlinks
+        // strictly downward. If any symlink points outside the target, it will be
+        // caught by the `starts_with` check.
+        let mut current_canonical = canonical_target.to_path_buf();
         if let Some(parent) = final_file_path.parent() {
-            let mut current = canonical_target.to_path_buf();
             let relative_parent = parent.strip_prefix(&canonical_target).unwrap_or(parent);
             for component in relative_parent.components() {
-                current.push(component);
-                if let Ok(metadata) = current.symlink_metadata() {
-                    if !metadata.is_dir() || metadata.file_type().is_symlink() {
-                        if metadata.is_dir() {
-                            fs::remove_dir_all(&current)?;
+                match component {
+                    Component::Normal(c) => {
+                        let next_path = current_canonical.join(c);
+                        if next_path.symlink_metadata().is_ok() {
+                            let metadata = next_path.symlink_metadata()?;
+                            if metadata.is_symlink() || !metadata.is_dir() {
+                                // If it's a symlink or file, we must remove it to create a real directory
+                                if metadata.is_dir() {
+                                    fs::remove_dir_all(&next_path)?;
+                                } else {
+                                    fs::remove_file(&next_path)?;
+                                }
+                                fs::create_dir(&next_path)?;
+                                current_canonical = next_path;
+                            } else {
+                                // Valid directory, canonicalize to ensure it didn't escape
+                                current_canonical = fs::canonicalize(&next_path)?;
+                            }
                         } else {
-                            fs::remove_file(&current)?;
+                            // Create directory
+                            fs::create_dir(&next_path)?;
+                            current_canonical = next_path;
                         }
                     }
+                    _ => return Err(BackupError::UnsafePath(path_str.clone())),
+                }
+                if !current_canonical.starts_with(&canonical_target) {
+                    return Err(BackupError::UnsafePath(path_str.clone()));
                 }
             }
-            fs::create_dir_all(parent)?;
         }
 
-        // If target file already exists, remove it (could be a symlink or file)
+        // If target file already exists, move it to rollback directory
         if final_file_path.symlink_metadata().is_ok() {
-            if final_file_path.is_dir() {
-                fs::remove_dir_all(&final_file_path)?;
-            } else {
-                fs::remove_file(&final_file_path)?;
+            let rollback_file_path = canonical_rollback.join(rel_path);
+            if let Some(parent) = rollback_file_path.parent() {
+                fs::create_dir_all(parent)?;
             }
+            fs::rename(&final_file_path, &rollback_file_path)?;
+            tx.record_rollback(rollback_file_path, final_file_path.clone())?;
         }
 
         fs::rename(&temp_file_path, &final_file_path)?;
+        if !tx.rollbacks.iter().any(|(_, t)| t == &final_file_path) {
+            tx.record_new_file(final_file_path)?;
+        }
     }
 
+    tx.commit()?;
     Ok(manifest)
 }
