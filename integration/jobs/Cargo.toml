@@ -1,0 +1,31 @@
+[package]
+name = "integration-jobs"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[workspace]
+
+[dependencies]
+fusionpanel-jobs = { path = "../../crates/jobs" }
+fusionpanel-agent-protocol = { path = "../../crates/agent-protocol" }
+
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tokio = { version = "1", features = ["full", "process"] }
+uuid = { version = "1.29.0", features = ["serde", "v4"] }
+thiserror = "2.0.21"
+chrono = { version = "0.4.45", features = ["serde"] }
+async-trait = "0.1.92"
+
+[dev-dependencies]
+tempfile = "3.12"
+futures = "0.3"
+
+[[test]]
+name = "integration_test"
+path = "tests/integration_test.rs"
+
+[[test]]
+name = "real_worker_test"
+path = "tests/real_worker_test.rs"
