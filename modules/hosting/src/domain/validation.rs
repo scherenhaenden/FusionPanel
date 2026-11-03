@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct DomainName(String);
 
 impl DomainName {
@@ -64,6 +65,20 @@ impl DomainName {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl TryFrom<String> for DomainName {
+    type Error = DomainError;
+
+    fn try_from(value: String) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl From<DomainName> for String {
+    fn from(value: DomainName) -> Self {
+        value.0
     }
 }
 

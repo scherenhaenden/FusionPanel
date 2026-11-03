@@ -2,6 +2,16 @@ use crate::adapter::*;
 use async_trait::async_trait;
 use std::process::Stdio;
 use tokio::process::Command;
+use uuid::Uuid;
+
+fn quote_password_literal(password: &str) -> String {
+    loop {
+        let delimiter = format!("$fusionpanel_{}$", Uuid::new_v4().simple());
+        if !password.contains(&delimiter) {
+            return format!("{delimiter}{password}{delimiter}");
+        }
+    }
+}
 
 pub struct PostgresAdapter {
     config: DatabaseConfig,
@@ -110,10 +120,10 @@ impl DatabaseAdapter for PostgresAdapter {
 
     async fn apply_create_user(&self, plan: &CreateUserPlan) -> Result<()> {
         validate_identifier(&plan.username.0)?;
-        let escaped_pwd = plan.password_ref.0.replace("'", "''");
         let sql = format!(
-            "CREATE USER \"{}\" WITH PASSWORD '{}';",
-            plan.username.0, escaped_pwd
+            "CREATE USER \"{}\" WITH PASSWORD {};",
+            plan.username.0,
+            quote_password_literal(&plan.password_ref.0)
         );
 
         let mut cmd = self.build_cmd("psql");
@@ -141,8 +151,9 @@ impl DatabaseAdapter for PostgresAdapter {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             if stderr.contains("already exists") {
                 let alter_sql = format!(
-                    "ALTER USER \"{}\" WITH PASSWORD '{}';",
-                    plan.username.0, escaped_pwd
+                    "ALTER USER \"{}\" WITH PASSWORD {};",
+                    plan.username.0,
+                    quote_password_literal(&plan.password_ref.0)
                 );
                 let mut alter_cmd = self.build_cmd("psql");
                 alter_cmd.args(["-v", "ON_ERROR_STOP=1", "-d", "postgres"]);
@@ -169,12 +180,12 @@ impl DatabaseAdapter for PostgresAdapter {
                 })?;
                 if !alter_output.status.success() {
                     let alter_err = String::from_utf8_lossy(&alter_output.stderr).to_string();
-                    let safe_err = alter_err.replace(&plan.password_ref.0, "[REDACTED]").replace(&escaped_pwd, "[REDACTED]");
+                    let safe_err = alter_err.replace(&plan.password_ref.0, "[REDACTED]");
                     return Err(DatabaseError::OperationFailed(safe_err));
                 }
                 return Ok(());
             }
-            let safe_err = stderr.replace(&plan.password_ref.0, "[REDACTED]").replace(&escaped_pwd, "[REDACTED]");
+            let safe_err = stderr.replace(&plan.password_ref.0, "[REDACTED]");
             return Err(DatabaseError::OperationFailed(safe_err));
         }
         Ok(())
