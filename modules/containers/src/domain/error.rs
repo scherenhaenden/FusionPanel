@@ -17,4 +17,6 @@ pub enum DomainError {
     },
     #[error("Invalid mount point: {0}")]
     InvalidMountPoint(String),
+    #[error("Engine error: {0}")]
+    EngineError(String),
 }

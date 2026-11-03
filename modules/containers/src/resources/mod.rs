@@ -13,7 +13,7 @@ pub enum ResourceError {
     MemoryLimitExceeded(u64),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ResourceLimits {
     pub cpu_millicores: u32,
     pub memory_bytes: u64,
