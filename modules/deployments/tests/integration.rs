@@ -54,7 +54,7 @@ fn test_real_git_build_deploy_and_rollback_cycle() {
     rel_mgr.initialize().unwrap();
 
     // Build and deploy Release 1
-    let rel1_id = ReleaseId(format!("rel-1-{}", &commit1_sha[..7]));
+    let rel1_id = ReleaseId::parse(&format!("rel-1-{}", &commit1_sha[..7])).unwrap();
     let rel1_dir = rel_mgr.prepare_release_dir(&rel1_id).unwrap();
 
     let plan1 = DeploymentPlan {
@@ -101,7 +101,7 @@ fn test_real_git_build_deploy_and_rollback_cycle() {
     let commit2_sha = String::from_utf8_lossy(&out2.stdout).trim().to_string();
 
     // Build and deploy Release 2
-    let rel2_id = ReleaseId(format!("rel-2-{}", &commit2_sha[..7]));
+    let rel2_id = ReleaseId::parse(&format!("rel-2-{}", &commit2_sha[..7])).unwrap();
     let rel2_dir = rel_mgr.prepare_release_dir(&rel2_id).unwrap();
 
     let plan2 = DeploymentPlan {

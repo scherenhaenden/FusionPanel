@@ -52,11 +52,11 @@ impl ReleaseManager {
     /// Prepares an isolated release directory for an upcoming release ID
     pub fn prepare_release_dir(&self, release_id: &ReleaseId) -> Result<PathBuf, DeploymentError> {
         self.initialize()?;
-        let rel_dir = self.releases_dir().join(&release_id.0);
-        if rel_dir.exists() {
+        let rel_dir = self.releases_dir().join(release_id.as_str());
+        if rel_dir.symlink_metadata().is_ok() {
             return Err(DeploymentError::Conflict(format!(
                 "release directory already exists for {}",
-                release_id.0
+                release_id.as_str()
             )));
         }
         fs::create_dir_all(&rel_dir).map_err(|e| {
@@ -71,11 +71,11 @@ impl ReleaseManager {
         deployment_id: &DeploymentId,
         release_id: &ReleaseId,
     ) -> Result<AppliedResult, DeploymentError> {
-        let target_dir = self.releases_dir().join(&release_id.0);
+        let target_dir = self.releases_dir().join(release_id.as_str());
         if !target_dir.exists() {
             return Err(DeploymentError::NotFound(format!(
                 "release {} does not exist in releases directory",
-                release_id.0
+                release_id.as_str()
             )));
         }
 
@@ -154,7 +154,7 @@ impl ReleaseManager {
             DeploymentError::InvalidInput("invalid release path symlink".to_string())
         })?;
 
-        Ok(Some(ReleaseId(rel_name.to_string())))
+        Ok(Some(ReleaseId::parse(rel_name)?))
     }
 
     /// Lists all existing release IDs in chronological/directory order
@@ -175,7 +175,9 @@ impl ReleaseManager {
                     let created = meta
                         .and_then(|m| m.created().or_else(|_| m.modified()).ok())
                         .unwrap_or(std::time::UNIX_EPOCH);
-                    entries.push((created, ReleaseId(name.to_string())));
+                    if let Ok(rel_id) = ReleaseId::parse(name) {
+                        entries.push((created, rel_id));
+                    }
                 }
             }
         }
@@ -198,12 +200,12 @@ impl ReleaseManager {
             if Some(rel) == active.as_ref() {
                 continue; // Invariant: never delete active release
             }
-            let path = self.releases_dir().join(&rel.0);
+            let path = self.releases_dir().join(rel.as_str());
             if path.exists() {
                 fs::remove_dir_all(&path).map_err(|e| {
                     DeploymentError::OperationFailed(format!(
                         "failed to prune release {}: {e}",
-                        rel.0
+                        rel.as_str()
                     ))
                 })?;
                 pruned.push(rel.clone());
@@ -305,8 +307,8 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let mgr = ReleaseManager::new(temp.path());
 
-        let rel1 = ReleaseId("release-1".to_string());
-        let rel2 = ReleaseId("release-2".to_string());
+        let rel1 = ReleaseId::parse("release-1").unwrap();
+        let rel2 = ReleaseId::parse("release-2").unwrap();
 
         let dir1 = mgr.prepare_release_dir(&rel1).unwrap();
         fs::write(dir1.join("app.txt"), b"Version 1.0").unwrap();
@@ -373,9 +375,9 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let mgr = ReleaseManager::new(temp.path());
 
-        let rel1 = ReleaseId("rel-1".to_string());
-        let rel2 = ReleaseId("rel-2".to_string());
-        let rel3 = ReleaseId("rel-3".to_string());
+        let rel1 = ReleaseId::parse("rel-1").unwrap();
+        let rel2 = ReleaseId::parse("rel-2").unwrap();
+        let rel3 = ReleaseId::parse("rel-3").unwrap();
 
         let d1 = mgr.prepare_release_dir(&rel1).unwrap();
         fs::write(d1.join("file"), b"1").unwrap();
