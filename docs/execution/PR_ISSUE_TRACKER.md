@@ -64,3 +64,9 @@ This register lists reviewed package PRs and directly related documentation or c
 Issue [#6](https://github.com/scherenhaenden/FusionPanel/issues/6) owns root workspace integration and CI for the foundation packages. PR #81 is merged documentation-only traceability; the S06 integration/CI implementation PR is still pending. PR #69 remains open; PR #83 and refined DNS PR #85 are merged but have runtime qualification gaps. PR #84 was closed unmerged as superseded. Do not treat dependent runtime packages as complete until their required foundation interfaces and real-process workflows are integrated and verified.
 
 The [source audit](../audits/2026-11-01/SOURCE_AUDIT.md) records release-blocking source findings and actual test evidence. [Wave W02](waves/W02_2026-11-01/README.md) defines ten non-overlapping repair/integration tasks (six dispatched, four queued), including additive work on existing PRs #69, #90 and #98. Failed S17 frontend session 8596482107365986135 remains queued; it is not reported as delivered.
+
+## WordPress ZIP dependency security repair — 3 November 2026
+
+| PR | Package | Primary issue | Change and evidence | Delivery / remaining |
+|---|---|---|---|---|
+| [#254](https://github.com/scherenhaenden/FusionPanel/pull/254) | S22 WordPress management | [#27](https://github.com/scherenhaenden/FusionPanel/issues/27) | zip minimum 9.0.5; whole-archive header consistency before extraction; three crafted-header regressions fail on 0.6.6 and pass after fix; 10 local boundary/installer tests pass on 9.0.5 and 9.3.0; all package test targets compile | Open PR, not merged. Addresses Dependabot alert 15; no product E2E or issue closure claimed |
