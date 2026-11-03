@@ -24,8 +24,8 @@ impl Default for DeploymentId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ReleaseId(pub String);
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReleaseId(String);
 
 impl ReleaseId {
     pub fn new() -> Self {
@@ -33,11 +33,38 @@ impl ReleaseId {
     }
 
     pub fn parse(s: &str) -> Result<Self, crate::error::DeploymentError> {
-        uuid::Uuid::parse_str(s)
-            .map(|u| Self(u.to_string()))
-            .map_err(|e| {
-                crate::error::DeploymentError::InvalidInput(format!("invalid release id: {e}"))
-            })
+        if s.is_empty() {
+            return Err(crate::error::DeploymentError::InvalidInput("invalid release id: empty".to_string()));
+        }
+        for c in s.chars() {
+            if !c.is_ascii_alphanumeric() && c != '-' && c != '_' {
+                return Err(crate::error::DeploymentError::InvalidInput(format!("invalid release id: invalid character '{}'", c)));
+            }
+        }
+        Ok(Self(s.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl serde::Serialize for ReleaseId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ReleaseId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        ReleaseId::parse(&s).map_err(serde::de::Error::custom)
     }
 }
 
