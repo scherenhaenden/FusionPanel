@@ -1,0 +1,17 @@
+[workspace]
+members = ["."]
+
+[package]
+name = "agent_e2e"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
+agent = { path = "../../../crates/agent" }
+
+[lib]
+path = "lib.rs"

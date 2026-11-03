@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct DomainName(String);
 
 impl DomainName {
@@ -64,6 +65,20 @@ impl DomainName {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl TryFrom<String> for DomainName {
+    type Error = DomainError;
+
+    fn try_from(value: String) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl From<DomainName> for String {
+    fn from(value: DomainName) -> Self {
+        value.0
     }
 }
 
@@ -222,6 +237,35 @@ impl MemoryLimit {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "u16", into = "u16")]
+pub struct Port(u16);
+
+impl TryFrom<u16> for Port {
+    type Error = DomainError;
+
+    fn try_from(p: u16) -> Result<Self> {
+        if p < 1024 {
+            return Err(DomainError::InvalidInput(
+                "Port must be >= 1024 to avoid privileged ports".into(),
+            ));
+        }
+        Ok(Self(p))
+    }
+}
+
+impl From<Port> for u16 {
+    fn from(val: Port) -> Self {
+        val.0
+    }
+}
+
+impl Port {
+    pub fn as_u16(&self) -> u16 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct UpstreamUrl(String);
 
@@ -253,4 +297,54 @@ impl UpstreamUrl {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct OsUsername(String);
+
+impl TryFrom<String> for OsUsername {
+    type Error = DomainError;
+
+    fn try_from(s: String) -> Result<Self> {
+        if s.is_empty() {
+            return Err(DomainError::InvalidInput("OS username cannot be empty".into()));
+        }
+        if s.len() > 32 {
+            return Err(DomainError::InvalidInput("OS username too long (max 32 chars)".into()));
+        }
+        if s.starts_with('-') {
+            return Err(DomainError::InvalidInput("OS username cannot start with a hyphen".into()));
+        }
+        if !s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            return Err(DomainError::InvalidInput("OS username contains invalid characters".into()));
+        }
+        let reserved = ["root", "daemon", "bin", "sys", "sync", "games", "man", "lp", "mail", "news", "uucp", "proxy", "www-data", "backup", "list", "irc", "gnats", "nobody", "systemd-network", "systemd-resolve", "systemd-timesync", "messagebus", "sshd"];
+        if reserved.contains(&s.as_str()) {
+            return Err(DomainError::InvalidInput("Protected system account".into()));
+        }
+        Ok(Self(s))
+    }
+}
+
+impl From<OsUsername> for String {
+    fn from(val: OsUsername) -> Self {
+        val.0
+    }
+}
+
+impl OsUsername {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn normalized(&self) -> String {
+        self.0.replace("-", "_")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum BindingReadWritePolicy {
+    ReadOnly,
+    ReadWrite,
 }

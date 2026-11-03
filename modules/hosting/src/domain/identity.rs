@@ -14,6 +14,9 @@ pub struct NodeId(pub Uuid);
 pub struct JobId(pub Uuid);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ResourceOwner {
-    pub tenant_id: TenantId,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ResourceOwner {
+    PanelOwned { tenant_id: TenantId },
+    AdoptedWithBoundary { tenant_id: TenantId },
+    ExternallyManaged,
 }

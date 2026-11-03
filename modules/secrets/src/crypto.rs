@@ -1,5 +1,5 @@
 use chacha20poly1305::{
-    aead::{Aead, KeyInit},
+    aead::{Aead, KeyInit, Payload},
     ChaCha20Poly1305, Key, Nonce,
 };
 use rand::RngCore;
@@ -33,15 +33,20 @@ impl CryptoEngine {
         key
     }
 
-    pub fn encrypt(&self, plaintext: &SecretMaterial) -> Result<Vec<u8>, SecretError> {
+    pub fn encrypt(&self, plaintext: &SecretMaterial, aad: &[u8]) -> Result<Vec<u8>, SecretError> {
         let cipher = ChaCha20Poly1305::new(&self.key);
 
         let mut nonce_bytes = [0u8; NONCE_SIZE];
         rand::thread_rng().fill_bytes(&mut nonce_bytes);
         let nonce = Nonce::from_slice(&nonce_bytes);
 
+        let payload = Payload {
+            msg: plaintext.as_bytes(),
+            aad,
+        };
+
         let ciphertext = cipher
-            .encrypt(nonce, plaintext.as_bytes())
+            .encrypt(nonce, payload)
             .map_err(|e| SecretError::CryptoError(format!("Encryption failed: {:?}", e)))?;
 
         // Format: [nonce][ciphertext]
@@ -52,7 +57,7 @@ impl CryptoEngine {
         Ok(result)
     }
 
-    pub fn decrypt(&self, encrypted_data: &[u8]) -> Result<SecretMaterial, SecretError> {
+    pub fn decrypt(&self, encrypted_data: &[u8], aad: &[u8]) -> Result<SecretMaterial, SecretError> {
         if encrypted_data.len() < NONCE_SIZE {
             return Err(SecretError::CryptoError("Ciphertext too short".into()));
         }
@@ -61,8 +66,13 @@ impl CryptoEngine {
         let nonce = Nonce::from_slice(&encrypted_data[..NONCE_SIZE]);
         let ciphertext = &encrypted_data[NONCE_SIZE..];
 
+        let payload = Payload {
+            msg: ciphertext,
+            aad,
+        };
+
         let plaintext = cipher
-            .decrypt(nonce, ciphertext)
+            .decrypt(nonce, payload)
             .map_err(|_| SecretError::CryptoError("Decryption failed".into()))?;
 
         Ok(SecretMaterial::new(plaintext))
@@ -79,12 +89,12 @@ mod tests {
         let engine = CryptoEngine::new(&key).unwrap();
 
         let secret = SecretMaterial::new(b"super_secret_data".to_vec());
-        let encrypted = engine.encrypt(&secret).unwrap();
+        let encrypted = engine.encrypt(&secret, b"aad").unwrap();
 
         assert_ne!(encrypted, b"super_secret_data");
         assert!(encrypted.len() > b"super_secret_data".len());
 
-        let decrypted = engine.decrypt(&encrypted).unwrap();
+        let decrypted = engine.decrypt(&encrypted, b"aad").unwrap();
         assert_eq!(decrypted.as_bytes(), b"super_secret_data");
     }
 
@@ -97,10 +107,10 @@ mod tests {
         let engine2 = CryptoEngine::new(&key2).unwrap();
 
         let secret = SecretMaterial::new(b"data".to_vec());
-        let encrypted = engine1.encrypt(&secret).unwrap();
+        let encrypted = engine1.encrypt(&secret, b"aad").unwrap();
 
         // Attempt decrypt with different key should fail
-        let result = engine2.decrypt(&encrypted);
+        let result = engine2.decrypt(&encrypted, b"aad");
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), SecretError::CryptoError(_)));
     }
@@ -111,13 +121,25 @@ mod tests {
         let engine = CryptoEngine::new(&key).unwrap();
 
         let secret = SecretMaterial::new(b"data".to_vec());
-        let mut encrypted = engine.encrypt(&secret).unwrap();
+        let mut encrypted = engine.encrypt(&secret, b"aad").unwrap();
 
         // Tamper with the ciphertext
         let len = encrypted.len();
         encrypted[len - 1] ^= 1;
 
-        let result = engine.decrypt(&encrypted);
+        let result = engine.decrypt(&encrypted, b"aad");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_aead_misuse_tampered_aad() {
+        let key = CryptoEngine::generate_key();
+        let engine = CryptoEngine::new(&key).unwrap();
+
+        let secret = SecretMaterial::new(b"data".to_vec());
+        let encrypted = engine.encrypt(&secret, b"original_aad").unwrap();
+
+        let result = engine.decrypt(&encrypted, b"tampered_aad");
         assert!(result.is_err());
     }
 
