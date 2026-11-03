@@ -64,3 +64,9 @@ This register lists reviewed package PRs and directly related documentation or c
 Issue [#6](https://github.com/scherenhaenden/FusionPanel/issues/6) owns root workspace integration and CI for the foundation packages. PR #81 is merged documentation-only traceability; the S06 integration/CI implementation PR is still pending. PR #69 remains open; PR #83 and refined DNS PR #85 are merged but have runtime qualification gaps. PR #84 was closed unmerged as superseded. Do not treat dependent runtime packages as complete until their required foundation interfaces and real-process workflows are integrated and verified.
 
 The [source audit](../audits/2026-11-01/SOURCE_AUDIT.md) records release-blocking source findings and actual test evidence. [Wave W02](waves/W02_2026-11-01/README.md) defines ten non-overlapping repair/integration tasks (six dispatched, four queued), including additive work on existing PRs #69, #90 and #98. Failed S17 frontend session 8596482107365986135 remains queued; it is not reported as delivered.
+
+## Readiness refresh — 3 November 2026
+
+| PR | Scope | Issue | Evidence | Delivery | Remaining |
+|---|---|---|---|---|---|
+| [#250](https://github.com/scherenhaenden/FusionPanel/pull/250) | Complete 162-capability / 63-package snapshot and capability ledger | [#6](https://github.com/scherenhaenden/FusionPanel/issues/6) (coordination) | Pinned master `0fd70197c7dc52cf1f93e0ccf88c91f77cfa4f6b`; 27 new merges; source inspection and catalog arithmetic validation; no fresh product execution | Documentation PR, not merged; capability maturity 7.95%, package maturity 42.54% | Keep #6 open for foundation composition, actual runtime qualification and closure |

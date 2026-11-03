@@ -1,0 +1,12 @@
+
+1 session(s) failed to create:
+Session #1: api error: status 400, content: {
+  "error": {
+    "code": 400,
+    "message": "Request contains an invalid argument.",
+    "status": "INVALID_ARGUMENT"
+  }
+}
+
+
+Error: all sessions failed to create. Please make sure you have finished the setup following https://jules.google/docs
