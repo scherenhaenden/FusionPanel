@@ -99,23 +99,57 @@ async fn test_mariadb_and_postgres_dumps() {
         .expect("Failed to create table in postgres");
     assert!(create_pg.status.success(), "Postgres table creation failed: {:?}", String::from_utf8_lossy(&create_pg.stderr));
 
-    // MariaDB: Dump
-    let dump_mariadb = Command::new("docker")
-        .args(["compose", "-f", &compose_file, "exec", "-T", "mariadb", "mysqldump", "-utestuser", "-ptestpassword", "testdb"])
-        .output()
-        .expect("Failed to dump mariadb");
-    assert!(dump_mariadb.status.success(), "MariaDB dump failed: {:?}", String::from_utf8_lossy(&dump_mariadb.stderr));
-    let mariadb_dump_str = String::from_utf8_lossy(&dump_mariadb.stdout);
-    assert!(mariadb_dump_str.contains("mariadb_test_data"), "MariaDB dump missing expected data");
+    use integration_data::backup_scheduler::{DumpScheduler, Compression};
+    use databases::adapter::{DatabaseConfig, DatabaseEngine, ConnectionStrategy, SecretString};
+    use databases::mariadb::MariaDbAdapter;
+    use databases::postgresql::PostgresAdapter;
+    use std::sync::Arc;
 
-    // Postgres: Dump
-    let dump_pg = Command::new("docker")
-        .args(["compose", "-f", &compose_file, "exec", "-T", "postgres", "pg_dump", "-U", "testuser", "testdb"])
-        .output()
-        .expect("Failed to dump postgres");
-    assert!(dump_pg.status.success(), "Postgres dump failed: {:?}", String::from_utf8_lossy(&dump_pg.stderr));
-    let pg_dump_str = String::from_utf8_lossy(&dump_pg.stdout);
-    assert!(pg_dump_str.contains("postgres_test_data"), "Postgres dump missing expected data");
+    let mariadb_config = DatabaseConfig {
+        engine: DatabaseEngine::MariaDB,
+        strategy: ConnectionStrategy::Container { container_name: "mariadb".to_string(), network: None },
+        host: "127.0.0.1".into(),
+        port: 3306,
+        admin_user: "testuser".into(),
+        admin_password_ref: SecretString("testpassword".into()),
+    };
+    let mariadb_adapter = Arc::new(MariaDbAdapter::new(mariadb_config));
+    
+    let pg_config = DatabaseConfig {
+        engine: DatabaseEngine::PostgreSQL,
+        strategy: ConnectionStrategy::Container { container_name: "postgres".to_string(), network: None },
+        host: "127.0.0.1".into(),
+        port: 5432,
+        admin_user: "testuser".into(),
+        admin_password_ref: SecretString("rootpassword".into()), // Wait, compose says POSTGRES_PASSWORD: rootpassword
+    };
+    let pg_adapter = Arc::new(PostgresAdapter::new(pg_config));
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let mariadb_scheduler = DumpScheduler::new("0 0 0 * * * *", mariadb_adapter.clone(), temp_dir.path().to_path_buf(), Compression::Zstd).unwrap();
+    let pg_scheduler = DumpScheduler::new("0 0 0 * * * *", pg_adapter.clone(), temp_dir.path().to_path_buf(), Compression::Zstd).unwrap();
+
+    // MariaDB: Dump using scheduler
+    let (mariadb_dump_path, mariadb_hash) = mariadb_scheduler.execute_dump("testdb", "mariadb_dump.zst").await.unwrap();
+    assert!(mariadb_dump_path.exists());
+    assert!(!mariadb_hash.is_empty());
+    
+    // Decompress to verify content
+    let mut mariadb_decompressed = String::new();
+    let mut mariadb_decoder = zstd::stream::Decoder::new(std::fs::File::open(&mariadb_dump_path).unwrap()).unwrap();
+    use std::io::Read;
+    mariadb_decoder.read_to_string(&mut mariadb_decompressed).unwrap();
+    assert!(mariadb_decompressed.contains("mariadb_test_data"), "MariaDB dump missing expected data");
+
+    // Postgres: Dump using scheduler
+    let (pg_dump_path, pg_hash) = pg_scheduler.execute_dump("testdb", "postgres_dump.zst").await.unwrap();
+    assert!(pg_dump_path.exists());
+    assert!(!pg_hash.is_empty());
+
+    let mut pg_decompressed = String::new();
+    let mut pg_decoder = zstd::stream::Decoder::new(std::fs::File::open(&pg_dump_path).unwrap()).unwrap();
+    pg_decoder.read_to_string(&mut pg_decompressed).unwrap();
+    assert!(pg_decompressed.contains("postgres_test_data"), "Postgres dump missing expected data");
 
     // MariaDB: Drop table and restore
     let drop_mariadb = Command::new("docker")
@@ -124,16 +158,15 @@ async fn test_mariadb_and_postgres_dumps() {
         .expect("Failed to drop mariadb table");
     assert!(drop_mariadb.status.success());
 
-    let mut restore_mariadb_cmd = Command::new("docker");
-    restore_mariadb_cmd.args(["compose", "-f", &compose_file, "exec", "-i", "mariadb", "mysql", "-utestuser", "-ptestpassword", "testdb"]);
-
-    use std::io::Write;
-    let mut child = restore_mariadb_cmd.stdin(std::process::Stdio::piped()).spawn().expect("Failed to spawn mariadb restore");
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(&dump_mariadb.stdout).expect("Failed to write to mariadb restore stdin");
-    }
-    let restore_mariadb_status = child.wait().expect("Failed to wait for mariadb restore");
-    assert!(restore_mariadb_status.success(), "MariaDB restore failed");
+    let uncompressed_mariadb_dump = temp_dir.path().join("mariadb_dump.sql");
+    std::fs::write(&uncompressed_mariadb_dump, mariadb_decompressed).unwrap();
+    
+    use databases::adapter::{DatabaseAdapter, RestorePlan, DbName};
+    let mariadb_restore_plan = RestorePlan {
+        db_name: DbName("testdb".to_string()),
+        input_path: uncompressed_mariadb_dump.to_string_lossy().to_string(),
+    };
+    mariadb_adapter.apply_restore(&mariadb_restore_plan).await.unwrap();
 
     let verify_mariadb = Command::new("docker")
         .args(["compose", "-f", &compose_file, "exec", "-T", "mariadb", "mysql", "-utestuser", "-ptestpassword", "testdb", "-e", "SELECT data FROM my_table WHERE id=1;"])
@@ -148,15 +181,14 @@ async fn test_mariadb_and_postgres_dumps() {
         .expect("Failed to drop postgres table");
     assert!(drop_pg.status.success());
 
-    let mut restore_pg_cmd = Command::new("docker");
-    restore_pg_cmd.args(["compose", "-f", &compose_file, "exec", "-i", "postgres", "psql", "-U", "testuser", "-d", "testdb"]);
-
-    let mut child_pg = restore_pg_cmd.stdin(std::process::Stdio::piped()).spawn().expect("Failed to spawn postgres restore");
-    if let Some(mut stdin) = child_pg.stdin.take() {
-        stdin.write_all(&dump_pg.stdout).expect("Failed to write to postgres restore stdin");
-    }
-    let restore_pg_status = child_pg.wait().expect("Failed to wait for postgres restore");
-    assert!(restore_pg_status.success(), "Postgres restore failed");
+    let uncompressed_pg_dump = temp_dir.path().join("postgres_dump.sql");
+    std::fs::write(&uncompressed_pg_dump, pg_decompressed).unwrap();
+    
+    let pg_restore_plan = RestorePlan {
+        db_name: DbName("testdb".to_string()),
+        input_path: uncompressed_pg_dump.to_string_lossy().to_string(),
+    };
+    pg_adapter.apply_restore(&pg_restore_plan).await.unwrap();
 
     let verify_pg = Command::new("docker")
         .args(["compose", "-f", &compose_file, "exec", "-T", "postgres", "psql", "-U", "testuser", "-d", "testdb", "-t", "-c", "SELECT data FROM my_table WHERE id=1;"])
