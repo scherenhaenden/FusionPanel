@@ -40,4 +40,8 @@ pub enum BackupError {
     DuplicateFile(String),
     #[error("Invalid compression level: {0}. Must be between 1 and 21.")]
     InvalidCompressionLevel(i32),
+    #[error("Fault injected midway through restore")]
+    FaultInjected,
+    #[error("Missing expected backup format magic bytes")]
+    InvalidBackupFormat,
 }

@@ -422,3 +422,121 @@ fn test_malicious_symlinks() {
     let content = fs::read_to_string(&outside_file_path).unwrap();
     assert_eq!(content, "SECRET");
 }
+
+#[test]
+fn test_restore_transactional_rollback() {
+    let source_dir = TempDir::new().unwrap();
+    let dest_dir = TempDir::new().unwrap();
+    let restore_dir = TempDir::new().unwrap();
+
+    let file1_path = source_dir.path().join("file1.txt");
+    let mut file1 = File::create(&file1_path).unwrap();
+    file1.write_all(b"Valid content 1").unwrap();
+
+    let file2_path = source_dir.path().join("file2.txt");
+    let mut file2 = File::create(&file2_path).unwrap();
+    file2.write_all(b"Valid content 2").unwrap();
+
+    let archive_path = dest_dir.path().join("backup.tar.zst");
+    let job = BackupJob::new(source_dir.path());
+    job.execute(&archive_path).expect("Backup failed");
+
+    // Put existing files in the restore dir to verify they are not corrupted if restore fails
+    let existing1_path = restore_dir.path().join("file1.txt");
+    let mut existing1 = File::create(&existing1_path).unwrap();
+    existing1.write_all(b"Old content 1").unwrap();
+
+    let existing2_path = restore_dir.path().join("file2.txt");
+    let mut existing2 = File::create(&existing2_path).unwrap();
+    existing2.write_all(b"Old content 2").unwrap();
+
+    let options = backups::models::RestoreOptions {
+        selected_files: None,
+        fault_inject_error_after: Some(1), // Fail after restoring 1 file
+    };
+
+    let result = backups::restore::restore_archive_with_options(&archive_path, restore_dir.path(), &options);
+
+    assert!(matches!(result, Err(BackupError::FaultInjected)));
+
+    // Verify rollback: original files should be intact
+    let content1 = fs::read_to_string(&existing1_path).unwrap();
+    assert_eq!(content1, "Old content 1");
+
+    let content2 = fs::read_to_string(&existing2_path).unwrap();
+    assert_eq!(content2, "Old content 2");
+}
+
+#[test]
+fn test_selective_restore() {
+    let source_dir = TempDir::new().unwrap();
+    let dest_dir = TempDir::new().unwrap();
+    let restore_dir = TempDir::new().unwrap();
+
+    let file1_path = source_dir.path().join("file1.txt");
+    let mut file1 = File::create(&file1_path).unwrap();
+    file1.write_all(b"Valid content 1").unwrap();
+
+    let file2_path = source_dir.path().join("file2.txt");
+    let mut file2 = File::create(&file2_path).unwrap();
+    file2.write_all(b"Valid content 2").unwrap();
+
+    let archive_path = dest_dir.path().join("backup.tar.zst");
+    let job = BackupJob::new(source_dir.path());
+    job.execute(&archive_path).expect("Backup failed");
+
+    let options = backups::models::RestoreOptions {
+        selected_files: Some(vec!["file2.txt".to_string()]),
+        fault_inject_error_after: None,
+    };
+
+    let result = backups::restore::restore_archive_with_options(&archive_path, restore_dir.path(), &options);
+    assert!(result.is_ok());
+
+    assert!(!restore_dir.path().join("file1.txt").exists());
+    let content2 = fs::read_to_string(restore_dir.path().join("file2.txt")).unwrap();
+    assert_eq!(content2, "Valid content 2");
+}
+
+#[test]
+fn test_retention_identifies_true_backups_without_extensions() {
+    use std::time::{Duration, SystemTime};
+    use backups::retention::apply_retention_policy;
+    use backups::models::RetentionPolicy;
+
+    let source_dir = TempDir::new().unwrap();
+    let backup_dir = TempDir::new().unwrap();
+
+    let file1_path = source_dir.path().join("file1.txt");
+    let mut file1 = File::create(&file1_path).unwrap();
+    file1.write_all(b"Valid content").unwrap();
+
+    // Create a valid backup
+    let valid_backup_path = backup_dir.path().join("backup_without_extension");
+    let job = BackupJob::new(source_dir.path());
+    job.execute(&valid_backup_path).expect("Backup failed");
+
+    // Modify time to be old
+    let old_time = filetime::FileTime::from_system_time(SystemTime::now() - Duration::from_secs(86400 * 10));
+    filetime::set_file_times(&valid_backup_path, old_time, old_time).unwrap();
+
+    // Create a fake backup with a .zst extension that is actually empty
+    let fake_backup_path = backup_dir.path().join("fake.zst");
+    File::create(&fake_backup_path).unwrap();
+    filetime::set_file_times(&fake_backup_path, old_time, old_time).unwrap();
+
+    let policy = RetentionPolicy {
+        max_backups: None,
+        max_days: Some(5),
+    };
+
+    let deleted = apply_retention_policy(backup_dir.path(), &policy).unwrap();
+
+    // It should have deleted the valid backup (it identified it as a backup despite the extension)
+    // It should NOT have deleted the fake backup (it identified it wasn't a valid backup)
+    assert!(deleted.contains(&valid_backup_path));
+    assert!(!deleted.contains(&fake_backup_path));
+
+    assert!(!valid_backup_path.exists());
+    assert!(fake_backup_path.exists());
+}
