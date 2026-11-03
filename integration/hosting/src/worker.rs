@@ -88,45 +88,81 @@ impl HostingWorker {
         }
 
         // Test configuration
-        let output = Command::new(&self.nginx_bin)
+        let test_output = Command::new(&self.nginx_bin)
             .arg("-t")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .output()
-            .map_err(|e| format!("Failed to run nginx -t: {}", e))?;
+            .output();
 
-        if !output.status.success() {
+        let test_success = test_output
+            .as_ref()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        if !test_success {
             // Rollback
-            if has_existing {
-                let _ = fs::rename(&backup_file, &target_file);
+            let rollback_failed = if has_existing {
+                fs::rename(&backup_file, &target_file).is_err()
             } else {
-                let _ = fs::remove_file(&target_file);
+                fs::remove_file(&target_file).is_err()
+            };
+
+            if rollback_failed {
+                let _ = fs::write(
+                    self.sites_available_dir.join(".restart-marker"),
+                    "Rollback failed after config test error",
+                );
             }
-            return Err(format!(
-                "Nginx config test failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ));
+
+            return match test_output {
+                Ok(output) => Err(format!(
+                    "Nginx config test failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                )),
+                Err(e) => Err(format!("Failed to run nginx -t: {}", e)),
+            };
+        }
+
+        // Reload nginx daemon
+        let reload_output = Command::new(&self.nginx_bin)
+            .arg("-s")
+            .arg("reload")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output();
+
+        let reload_success = reload_output
+            .as_ref()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        if !reload_success {
+            // Rollback
+            let rollback_failed = if has_existing {
+                fs::rename(&backup_file, &target_file).is_err()
+            } else {
+                fs::remove_file(&target_file).is_err()
+            };
+
+            if rollback_failed {
+                let _ = fs::write(
+                    self.sites_available_dir.join(".restart-marker"),
+                    "Rollback failed after reload error",
+                );
+            }
+
+            return match reload_output {
+                Ok(output) => Err(format!(
+                    "Nginx reload failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                )),
+                Err(e) => Err(format!("Failed to run nginx -s reload: {}", e)),
+            };
         }
 
         // Remove backup on success
         if has_existing {
             let _ = fs::remove_file(&backup_file);
-        }
-
-        // Reload nginx daemon
-        let output = Command::new(&self.nginx_bin)
-            .arg("-s")
-            .arg("reload")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .map_err(|e| format!("Failed to run nginx -s reload: {}", e))?;
-
-        if !output.status.success() {
-            return Err(format!(
-                "Nginx reload failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ));
         }
 
         Ok(())

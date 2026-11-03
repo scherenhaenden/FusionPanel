@@ -17,9 +17,7 @@ async fn test_live_hosting_e2e() {
         .output();
 
     if docker_check.is_err() || !docker_check.unwrap().status.success() {
-        println!("BLOCKED: Docker is not available or cannot run basic containers.");
-        assert!(true); // We just pass if docker isn't available
-        return;
+        panic!("BLOCKED: Docker is not available or cannot run basic containers.");
     }
 
     let site_id = SiteId(Uuid::new_v4());
@@ -27,7 +25,7 @@ async fn test_live_hosting_e2e() {
     let domain = DomainName::new("example.com").unwrap();
     let site = SiteConfig::new(
         site_id,
-        tenant_id,
+        tenant_id.clone(),
         domain.clone(),
         format!("/srv/fusionpanel/sites/{}", domain.as_str()),
         HostingSpec::Php(PhpConfig {
@@ -35,6 +33,10 @@ async fn test_live_hosting_e2e() {
             pool_name: "example_pool".to_string().try_into().unwrap(),
             memory_limit: "256M".to_string().try_into().unwrap(),
         }),
+        8080,
+        hosting::domain::ResourceOwner::PanelOwned { tenant_id: tenant_id.clone() },
+        "test-user".to_string().try_into().unwrap(),
+        vec![],
     )
     .unwrap();
 
