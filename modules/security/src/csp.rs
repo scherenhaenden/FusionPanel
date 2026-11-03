@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -52,27 +54,26 @@ impl CspPolicy {
                 for token in value.split_whitespace() {
                     if token == "'unsafe-inline'" {
                         has_unsafe_inline = true;
-                    }
-
-                    if token.starts_with("'nonce-") {
-                        if !token.ends_with('\'') || token.len() <= 8 {
-                            return Err(CspError::InvalidCharacters(
-                                value.clone(),
-                                directive.name.clone(),
-                            ));
+                    } else if let Some(rest) = token.strip_prefix("'nonce-") {
+                        if let Some(b64) = rest.strip_suffix('\'') {
+                            let is_valid_base64 = !b64.is_empty() && b64.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '-' || c == '_' || c == '=');
+                            if !is_valid_base64 {
+                                return Err(CspError::InvalidCharacters(value.clone(), directive.name.clone()));
+                            }
+                            has_nonce_or_hash = true;
+                        } else {
+                            return Err(CspError::InvalidCharacters(value.clone(), directive.name.clone()));
                         }
-                        has_nonce_or_hash = true;
-                    } else if token.starts_with("'sha256-")
-                        || token.starts_with("'sha384-")
-                        || token.starts_with("'sha512-")
-                    {
-                        if !token.ends_with('\'') || token.len() <= 10 {
-                            return Err(CspError::InvalidCharacters(
-                                value.clone(),
-                                directive.name.clone(),
-                            ));
+                    } else if let Some(rest) = token.strip_prefix("'sha256-").or_else(|| token.strip_prefix("'sha384-")).or_else(|| token.strip_prefix("'sha512-")) {
+                        if let Some(b64) = rest.strip_suffix('\'') {
+                            let is_valid_base64 = !b64.is_empty() && b64.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '-' || c == '_' || c == '=');
+                            if !is_valid_base64 {
+                                return Err(CspError::InvalidCharacters(value.clone(), directive.name.clone()));
+                            }
+                            has_nonce_or_hash = true;
+                        } else {
+                            return Err(CspError::InvalidCharacters(value.clone(), directive.name.clone()));
                         }
-                        has_nonce_or_hash = true;
                     }
                 }
             }
