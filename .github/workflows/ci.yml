@@ -98,7 +98,13 @@ jobs:
 
       - name: Enforce Zero-Test Success
         run: |
-          if grep -q "0 passed; 0 failed" test.log; then
+          PASSED_COUNT=$(grep -o -E '[0-9]+ passed' test.log | awk '{sum += $1} END {print sum+0}')
+          FAILED_COUNT=$(grep -o -E '[0-9]+ failed' test.log | awk '{sum += $1} END {print sum+0}')
+          if [ "$FAILED_COUNT" -gt 0 ]; then
+            echo "::error::Tests failed in ${{ matrix.manifest }} ($FAILED_COUNT failures)."
+            exit 1
+          fi
+          if [ "$PASSED_COUNT" -eq 0 ]; then
             echo "::error::Zero-test success detected in ${{ matrix.manifest }}. Tests are mandatory."
             exit 1
           fi

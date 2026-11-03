@@ -4,45 +4,58 @@ import json
 import sys
 import subprocess
 
+EXCLUDE_DIRS = {".git", "target", "node_modules", "dist", "build", "docs", "__pycache__"}
+
 def main():
     cargo_manifests = []
     package_jsons = []
-    manifest_dirs = []
+    manifest_dirs = set()
 
-    # Discover all manifests
+    repo_root = os.path.abspath(".")
+
+    # Discover all manifests excluding ignored directories
     for root, dirs, files in os.walk("."):
-        # Exclude directories
-        dirs[:] = [d for d in dirs if d not in [".git", "target", "node_modules", "dist", "build"]]
+        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
 
-        is_manifest_dir = False
+        rel_root = os.path.relpath(root, ".")
+        abs_root = os.path.abspath(root)
+
         if "Cargo.toml" in files:
-            path = os.path.join(root, "Cargo.toml").removeprefix("./")
+            path = os.path.join(rel_root, "Cargo.toml").removeprefix("./")
+            # Don't add root workspace to individual package matrix if subcrates exist
             cargo_manifests.append(path)
-            is_manifest_dir = True
+            if abs_root != repo_root:
+                manifest_dirs.add(abs_root)
 
         if "package.json" in files:
-            path = os.path.join(root, "package.json").removeprefix("./")
+            path = os.path.join(rel_root, "package.json").removeprefix("./")
             package_jsons.append(path)
-            is_manifest_dir = True
-
-        if is_manifest_dir:
-            # store the absolute or normalized directory path
-            manifest_dirs.append(os.path.abspath(root))
+            manifest_dirs.add(abs_root)
 
     cargo_manifests.sort()
     package_jsons.sort()
 
-    # Detect Orphan Tests
+    # Detect Orphan Tests:
+    # A test file is orphaned if it does not reside under any concrete package directory,
+    # or if its only enclosing manifest is the root repository directory outside ./tests or ./src.
     orphan_tests = []
     for root, dirs, files in os.walk("."):
-        dirs[:] = [d for d in dirs if d not in [".git", "target", "node_modules", "dist", "build"]]
+        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
         for f in files:
-            if f.endswith("_test.rs") or f.startswith("test_") or f.endswith(".test.ts") or f.endswith(".spec.ts"):
+            is_cargo_test = f.endswith(".rs") and (f.startswith("test_") or f.endswith("_test.rs"))
+            is_npm_test = (f.endswith(".test.ts") or f.endswith(".spec.ts") or f.endswith(".test.js") or f.endswith(".spec.js"))
+            if is_cargo_test or is_npm_test:
                 full_path = os.path.abspath(os.path.join(root, f))
-                # Check if it belongs to any manifest dir
-                is_covered = any(full_path.startswith(md) for md in manifest_dirs)
-                if not is_covered:
-                    orphan_tests.append(os.path.join(root, f).removeprefix("./"))
+                rel_path = os.path.relpath(full_path, repo_root)
+
+                # Check if it is inside one of the concrete package directories
+                is_in_package = any(full_path.startswith(md + os.sep) for md in manifest_dirs)
+
+                # Or inside root ./tests or ./src
+                is_in_root_tests = rel_path.startswith("tests" + os.sep) or rel_path.startswith("src" + os.sep)
+
+                if not is_in_package and not is_in_root_tests:
+                    orphan_tests.append(rel_path)
 
     if orphan_tests:
         print(f"::error::Orphan tests detected: {', '.join(orphan_tests)}")
