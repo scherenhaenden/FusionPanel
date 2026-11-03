@@ -219,8 +219,15 @@ install() {
             "$source_dir/systemd/fusionpanel-agent.service" > "$systemd_dir/fusionpanel-agent.service"
 
         if [ -z "$FUSIONPANEL_INSTALLER_NO_SYSTEMD_RELOAD" ]; then
-            systemctl daemon-reload || true
-            systemctl enable fusionpanel.service fusionpanel-agent.service || true
+            if ! systemctl daemon-reload; then
+                echo "Error: systemd daemon-reload failed; service enablement was not attempted. Staged files and existing unit state were not rolled back." >&2
+                exit 1
+            fi
+
+            if ! systemctl enable fusionpanel.service fusionpanel-agent.service; then
+                echo "Error: systemd could not enable both FusionPanel services; either service may now be enabled. Staged files and existing unit state were not rolled back." >&2
+                exit 1
+            fi
         fi
     fi
 
