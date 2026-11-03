@@ -1,7 +1,12 @@
 #![forbid(unsafe_code)]
 
-use reqwest::Client;
+pub mod sigv4;
+
 use std::fmt;
+use std::collections::BTreeMap;
+use chrono::Utc;
+use crate::s3::sigv4::{SigV4Request, sign};
+use std::time::Duration;
 
 /// Credentials for S3 storage
 #[derive(Clone)]
@@ -30,6 +35,8 @@ pub struct S3StorageBackend {
     pub endpoint: String,
     pub bucket: String,
     pub credentials: S3Credentials,
+    pub region: String,
+    pub client: reqwest::Client,
 }
 
 #[derive(Debug)]
@@ -75,10 +82,45 @@ impl S3StorageBackend {
             return Err(S3Error::InvalidBucket);
         }
 
+        let endpoint = endpoint.trim_end_matches('/');
+
+        // Very basic region extraction
+        let region = if endpoint.contains("amazonaws.com") {
+            if let Some(r) = endpoint.strip_prefix("https://s3.") {
+                if let Some(idx) = r.find(".amazonaws.com") {
+                    let extracted = &r[..idx];
+                    if !extracted.is_empty() {
+                        extracted.to_string()
+                    } else {
+                        "us-east-1".to_string()
+                    }
+                } else {
+                    "us-east-1".to_string()
+                }
+            } else if let Some(r) = endpoint.strip_prefix("https://s3-") {
+                if let Some(idx) = r.find(".amazonaws.com") {
+                    r[..idx].to_string()
+                } else {
+                    "us-east-1".to_string()
+                }
+            } else {
+                "us-east-1".to_string()
+            }
+        } else {
+            "us-east-1".to_string()
+        };
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|e| S3Error::NetworkError(e.to_string()))?;
+
         Ok(Self {
-            endpoint: endpoint.trim_end_matches('/').to_string(),
+            endpoint: endpoint.to_string(),
             bucket: bucket.to_string(),
             credentials,
+            region,
+            client,
         })
     }
 
@@ -106,34 +148,104 @@ impl S3StorageBackend {
         chunks
     }
 
-    /// Multipart upload using chunking and retry for transient network errors.
+    async fn request(
+        &self,
+        method: &str,
+        key: &str,
+        query: &str,
+        body: &[u8],
+    ) -> Result<reqwest::Response, S3Error> {
+        let encoded_key = key.split('/').map(|s| urlencoding::encode(s).into_owned()).collect::<Vec<String>>().join("/");
+
+        let url = if query.is_empty() {
+            format!("{}/{}/{}", self.endpoint, self.bucket, encoded_key)
+        } else {
+            format!("{}/{}/{}?{}", self.endpoint, self.bucket, encoded_key, query)
+        };
+
+        let mut sig_req = SigV4Request {
+            method,
+            endpoint: &url,
+            headers: BTreeMap::new(),
+            body,
+            region: &self.region,
+            access_key: &self.credentials.access_key,
+            secret_key: &self.credentials.secret_key,
+            datetime: Utc::now(),
+        };
+
+        let headers = sign(&mut sig_req);
+
+        let req_method = match method {
+            "GET" => reqwest::Method::GET,
+            "PUT" => reqwest::Method::PUT,
+            "POST" => reqwest::Method::POST,
+            "DELETE" => reqwest::Method::DELETE,
+            "HEAD" => reqwest::Method::HEAD,
+            _ => reqwest::Method::GET,
+        };
+
+        let res = self.client
+            .request(req_method, &url)
+            .headers(headers)
+            .body(body.to_vec())
+            .send()
+            .await;
+
+        match res {
+            Ok(response) => Ok(response),
+            Err(e) => Err(S3Error::NetworkError(e.to_string())),
+        }
+    }
+
+    /// Abort multipart upload
+    async fn abort_multipart(&self, key: &str, upload_id: &str) -> Result<(), S3Error> {
+        let query = format!("uploadId={}", upload_id);
+        let res = self.request("DELETE", key, &query, b"").await?;
+
+        if res.status().is_success() {
+            Ok(())
+        } else {
+            let status = res.status();
+            let text = res.text().await.unwrap_or_default();
+            Err(S3Error::NetworkError(format!("Abort failed: {} - {}", status, text)))
+        }
+    }
+
     pub async fn upload_multipart(&self, key: &str, data: &[u8]) -> Result<(), S3Error> {
-        let client = Client::new();
-        let url = format!("{}/{}/{}?uploads", self.endpoint, self.bucket, key);
-
-        // Note: For a complete solution, AWS SigV4 signing must be applied to all requests.
-        // For the purpose of this adaptation, we execute the retry loop over HTTP calls.
-
         // 1. Initiate Multipart Upload
         let mut retries = 0;
         let max_retries = 3;
 
         let upload_id = loop {
-            let res = client.post(&url).send().await;
-
-            match res {
-                Ok(response) if response.status().is_success() => {
-                    // MOCK parsing the XML response to get UploadId
-                    break "mock-upload-id".to_string();
+            match self.request("POST", key, "uploads", b"").await {
+                Ok(res) if res.status().is_success() => {
+                    let text = res.text().await.unwrap_or_default();
+                    // Very simple XML parse for UploadId
+                    if let Some(start) = text.find("<UploadId>") {
+                        let text_after = &text[start + 10..];
+                        if let Some(end) = text_after.find("</UploadId>") {
+                            break text_after[..end].to_string();
+                        }
+                    }
+                    return Err(S3Error::NetworkError("Failed to parse UploadId".into()));
                 }
-                _ => {
+                Ok(res) => {
                     retries += 1;
                     if retries >= max_retries {
-                        return Err(S3Error::NetworkError("Failed to initiate upload".into()));
+                        let status = res.status();
+                        let text = res.text().await.unwrap_or_default();
+                        return Err(S3Error::NetworkError(format!("Failed to initiate upload: {} - {}", status, text)));
                     }
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                }
+                Err(e) => {
+                    retries += 1;
+                    if retries >= max_retries {
+                        return Err(e);
+                    }
                 }
             }
+            tokio::time::sleep(Duration::from_millis(500)).await;
         };
 
         // 2. Upload Parts
@@ -145,44 +257,35 @@ impl S3StorageBackend {
         for (part_number, (offset, length)) in chunks.into_iter().enumerate() {
             let part_number = part_number + 1;
             let chunk_data = &data[offset as usize..(offset + length) as usize];
-            let part_url = format!(
-                "{}/{}/{}?partNumber={}&uploadId={}",
-                self.endpoint, self.bucket, key, part_number, upload_id
-            );
+            let query = format!("partNumber={}&uploadId={}", part_number, upload_id);
 
             let mut part_retries = 0;
             let etag = loop {
-                let res = client.put(&part_url).body(chunk_data.to_vec()).send().await;
-
-                match res {
-                    Ok(response) if response.status().is_success() => {
-                        let etag = response
-                            .headers()
-                            .get("ETag")
-                            .and_then(|h| h.to_str().ok())
-                            .unwrap_or("\"mock-etag\"")
-                            .to_string();
-                        break etag;
+                match self.request("PUT", key, &query, chunk_data).await {
+                    Ok(res) if res.status().is_success() => {
+                        if let Some(etag) = res.headers().get("ETag") {
+                            break etag.to_str().unwrap_or("").to_string();
+                        }
+                        // ETag missing
+                        break "\"\"".to_string();
                     }
-                    _ => {
+                    Ok(_) | Err(_) => {
                         part_retries += 1;
                         if part_retries >= max_retries {
+                            // Abort and fail
+                            let _ = self.abort_multipart(key, &upload_id).await;
                             return Err(S3Error::UploadFailed);
                         }
-                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
                 }
+                tokio::time::sleep(Duration::from_millis(500)).await;
             };
 
             completed_parts.push((part_number, etag));
         }
 
         // 3. Complete Multipart Upload
-        let complete_url = format!(
-            "{}/{}/{}?uploadId={}",
-            self.endpoint, self.bucket, key, upload_id
-        );
-        // Build XML body
+        let complete_query = format!("uploadId={}", upload_id);
         let mut xml_body = String::from("<CompleteMultipartUpload>");
         for (part, etag) in completed_parts {
             xml_body.push_str(&format!(
@@ -194,26 +297,145 @@ impl S3StorageBackend {
 
         let mut complete_retries = 0;
         loop {
-            let res = client
-                .post(&complete_url)
-                .body(xml_body.clone())
-                .send()
-                .await;
-
-            match res {
-                Ok(response) if response.status().is_success() => {
-                    break;
+            match self.request("POST", key, &complete_query, xml_body.as_bytes()).await {
+                Ok(res) if res.status().is_success() => {
+                    // Ensure the server identifier XML is valid, indicating success.
+                    let text = res.text().await.unwrap_or_default();
+                    if text.contains("<CompleteMultipartUploadResult") || text.contains("<Error>") == false {
+                         break;
+                    }
+                    // if it contains error, we retry.
                 }
-                _ => {
+                Ok(res) => {
                     complete_retries += 1;
                     if complete_retries >= max_retries {
-                        return Err(S3Error::NetworkError("Failed to complete upload".into()));
+                        let status = res.status();
+                        let text = res.text().await.unwrap_or_default();
+                        let _ = self.abort_multipart(key, &upload_id).await;
+                        return Err(S3Error::NetworkError(format!("Failed to complete upload: {} - {}", status, text)));
                     }
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                }
+                Err(e) => {
+                    complete_retries += 1;
+                    if complete_retries >= max_retries {
+                        let _ = self.abort_multipart(key, &upload_id).await;
+                        return Err(e);
+                    }
                 }
             }
+            tokio::time::sleep(Duration::from_millis(500)).await;
         }
 
         Ok(())
+    }
+}
+
+use async_trait::async_trait;
+use crate::traits::{StorageBackend, StorageError, FileStat};
+
+#[async_trait]
+impl StorageBackend for S3StorageBackend {
+    async fn upload(&self, path: &str, data: Vec<u8>) -> Result<(), StorageError> {
+        let chunk_size = 5 * 1024 * 1024;
+        if data.len() < chunk_size {
+            let mut retries = 0;
+            loop {
+                match self.request("PUT", path, "", &data).await {
+                    Ok(res) if res.status().is_success() => return Ok(()),
+                    Ok(res) => {
+                        retries += 1;
+                        if retries >= 3 {
+                            let text = res.text().await.unwrap_or_default();
+                            return Err(StorageError::Other(format!("Upload failed: {}", text)));
+                        }
+                    }
+                    Err(_e) => {
+                        retries += 1;
+                        if retries >= 3 {
+                            return Err(StorageError::NetworkTimeout);
+                        }
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        } else {
+            self.upload_multipart(path, &data).await.map_err(|e| match e {
+                S3Error::NetworkError(_) => StorageError::NetworkTimeout,
+                S3Error::UploadFailed => StorageError::Other("Upload Failed".into()),
+                _ => StorageError::Other(e.to_string()),
+            })
+        }
+    }
+
+    async fn download(&self, path: &str) -> Result<Vec<u8>, StorageError> {
+        match self.request("GET", path, "", b"").await {
+            Ok(res) if res.status().is_success() => {
+                let bytes = res.bytes().await.map_err(|e| StorageError::Other(e.to_string()))?;
+                Ok(bytes.to_vec())
+            }
+            Ok(res) if res.status() == reqwest::StatusCode::NOT_FOUND => Err(StorageError::NotFound),
+            Ok(res) if res.status() == reqwest::StatusCode::FORBIDDEN => Err(StorageError::PermissionDenied),
+            Ok(res) => Err(StorageError::Other(format!("Download failed: {}", res.status()))),
+            Err(_) => Err(StorageError::NetworkTimeout),
+        }
+    }
+
+    async fn delete(&self, path: &str) -> Result<(), StorageError> {
+        match self.request("DELETE", path, "", b"").await {
+            Ok(res) if res.status().is_success() || res.status() == reqwest::StatusCode::NO_CONTENT => Ok(()),
+            Ok(res) if res.status() == reqwest::StatusCode::NOT_FOUND => Err(StorageError::NotFound),
+            Ok(res) if res.status() == reqwest::StatusCode::FORBIDDEN => Err(StorageError::PermissionDenied),
+            Ok(res) => Err(StorageError::Other(format!("Delete failed: {}", res.status()))),
+            Err(_) => Err(StorageError::NetworkTimeout),
+        }
+    }
+
+    async fn list(&self, prefix: &str) -> Result<Vec<String>, StorageError> {
+        let query = if prefix.is_empty() {
+            "list-type=2".to_string()
+        } else {
+            format!("list-type=2&prefix={}", urlencoding::encode(prefix))
+        };
+
+        match self.request("GET", "", &query, b"").await {
+            Ok(res) if res.status().is_success() => {
+                let text = res.text().await.map_err(|e| StorageError::Other(e.to_string()))?;
+                let mut results = Vec::new();
+
+                // Very simple XML parse for Keys
+                let mut current_idx = 0;
+                while let Some(start) = text[current_idx..].find("<Key>") {
+                    let key_start = current_idx + start + 5;
+                    if let Some(end) = text[key_start..].find("</Key>") {
+                        let key_end = key_start + end;
+                        results.push(text[key_start..key_end].to_string());
+                        current_idx = key_end + 6;
+                    } else {
+                        break;
+                    }
+                }
+                Ok(results)
+            }
+            Ok(res) if res.status() == reqwest::StatusCode::FORBIDDEN => Err(StorageError::PermissionDenied),
+            Ok(res) => Err(StorageError::Other(format!("List failed: {}", res.status()))),
+            Err(_) => Err(StorageError::NetworkTimeout),
+        }
+    }
+
+    async fn stat(&self, path: &str) -> Result<FileStat, StorageError> {
+        match self.request("HEAD", path, "", b"").await {
+            Ok(res) if res.status().is_success() => {
+                let size = res.headers()
+                    .get(reqwest::header::CONTENT_LENGTH)
+                    .and_then(|val| val.to_str().ok())
+                    .and_then(|val| val.parse::<u64>().ok())
+                    .unwrap_or(0);
+                Ok(FileStat { size })
+            }
+            Ok(res) if res.status() == reqwest::StatusCode::NOT_FOUND => Err(StorageError::NotFound),
+            Ok(res) if res.status() == reqwest::StatusCode::FORBIDDEN => Err(StorageError::PermissionDenied),
+            Ok(res) => Err(StorageError::Other(format!("Stat failed: {}", res.status()))),
+            Err(_) => Err(StorageError::NetworkTimeout),
+        }
     }
 }

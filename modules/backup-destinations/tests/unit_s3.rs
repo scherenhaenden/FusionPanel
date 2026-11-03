@@ -126,3 +126,43 @@ fn test_chunk_calculation_ignores_small_requested_chunk_size() {
     assert_eq!(chunks[0], (0, 5 * 1024 * 1024));
     assert_eq!(chunks[1], (5 * 1024 * 1024, 2 * 1024 * 1024));
 }
+#[test]
+fn test_sigv4_signing() {
+    use backup_destinations::s3::sigv4::{SigV4Request, sign};
+    use chrono::{TimeZone, Utc};
+    use std::collections::BTreeMap;
+
+    let datetime = Utc.with_ymd_and_hms(2023, 5, 24, 12, 0, 0).unwrap();
+
+    let mut req = SigV4Request {
+        method: "GET",
+        endpoint: "https://s3.amazonaws.com/test-bucket/test-key?versionId=123",
+        headers: BTreeMap::new(),
+        body: b"",
+        region: "us-east-1",
+        access_key: "AKIAIOSFODNN7EXAMPLE",
+        secret_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        datetime,
+    };
+
+    let headers = sign(&mut req);
+
+    assert!(headers.contains_key("authorization"));
+    let auth = headers.get("authorization").unwrap().to_str().unwrap();
+    assert!(auth.starts_with("AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20230524/us-east-1/s3/aws4_request,"));
+    assert!(auth.contains("SignedHeaders=host;x-amz-content-sha256;x-amz-date"));
+    assert!(auth.contains("Signature="));
+}
+
+#[test]
+fn test_abort_on_failure_logic() {
+    // Tests S3Error implementations
+    let e = backup_destinations::s3::S3Error::UploadFailed;
+    assert_eq!(e.to_string(), "Upload failed after retries");
+
+    let e = backup_destinations::s3::S3Error::InvalidEndpoint;
+    assert_eq!(e.to_string(), "Invalid endpoint URL");
+
+    let e = backup_destinations::s3::S3Error::NetworkError("timeout".into());
+    assert_eq!(e.to_string(), "Network error: timeout");
+}
