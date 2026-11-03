@@ -9,7 +9,10 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use worker::{Event, HostingWorker};
 
+static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 struct TestEnv {
+    _guard: std::sync::MutexGuard<'static, ()>,
     temp_dir: PathBuf,
     pub staging_dir: PathBuf,
     pub sites_available_dir: PathBuf,
@@ -23,6 +26,7 @@ impl Drop for TestEnv {
 }
 
 fn setup_test_env(nginx_script: &str) -> TestEnv {
+    let _guard = TEST_LOCK.lock().unwrap();
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -49,6 +53,7 @@ fn setup_test_env(nginx_script: &str) -> TestEnv {
     fs::set_permissions(&nginx_bin, perms).unwrap();
 
     TestEnv {
+        _guard,
         temp_dir,
         staging_dir,
         sites_available_dir,
@@ -240,6 +245,7 @@ fn test_missing_nginx_binary() {
     fs::create_dir_all(&sites_available_dir).unwrap();
 
     let env = TestEnv {
+        _guard: TEST_LOCK.lock().unwrap(),
         temp_dir: temp_dir.clone(),
         staging_dir: staging_dir.clone(),
         sites_available_dir: sites_available_dir.clone(),
@@ -305,7 +311,7 @@ exit 0
 fn test_rollback_on_reload_launch_failure() {
     let script = r#"#!/bin/sh
 if [ "$1" = "-t" ]; then
-    rm "$0"
+    chmod 000 "$0"
     exit 0
 fi
 exit 1
