@@ -1,10 +1,10 @@
 # Current readiness milestone
 
-Latest: [2 November, revision 3](READINESS_SNAPSHOT_2026-11-02_R3.md), baseline `32de924fc5376afb5aa06e30817aba22f09b49ef`.
+Latest: [3 November 2026](READINESS_SNAPSHOT_2026-11-03.md), baseline `0fd70197c7dc52cf1f93e0ccf88c91f77cfa4f6b`.
 
 | Scope | Maturity | Remaining evidence gates | Fully accepted |
-|---|---:|---:|---:|
-| 162 features | 7.72% | 92.28% | 0/162 |
-| 63 packages | 41.43% | 58.57% | 3/63 |
+|---|---|---|---|
+| 162 features | 7.95% | 92.05% | 0/162 |
+| 63 packages | 42.54% | 57.46% | 3/63 |
 
-These measure evidence gates, not code completion or engineering time. Source-only refresh through merged PR #212; no new product tests executed. Each row lists remaining work. [JSON](READINESS_SNAPSHOT_2026-11-02_R3.json); [previous revision](READINESS_SNAPSHOT_2026-11-02_R2.md).
+These measure evidence gates, not code completion or engineering time. All rows refreshed against live master; 27 additional merges inspected. New source artifacts receive bounded partial credit; no fresh product tests were run. BLOCKED applies to missing qualification prerequisites, not discarded work. [JSON](READINESS_SNAPSHOT_2026-11-03.json); [previous revision](READINESS_SNAPSHOT_2026-11-02_R3.md).

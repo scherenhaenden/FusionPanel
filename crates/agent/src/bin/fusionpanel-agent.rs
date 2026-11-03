@@ -11,6 +11,7 @@ use sha2::Sha256;
 use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
+use tokio::signal;
 use tokio::time::sleep;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -23,8 +24,6 @@ async fn main() {
     let secret =
         env::var("FUSIONPANEL_AGENT_SECRET").unwrap_or_else(|_| "default-secret".to_string());
 
-    // Start heartbeat loop (daemon) on the same URL for now, or assume it's separated by logical endpoints
-    // For this requirement we just need the agent process to use both transport features.
     let h_url = env::var("FUSIONPANEL_AGENT_HEARTBEAT_URL")
         .unwrap_or_else(|_| "ws://127.0.0.1:8080/heartbeat".to_string());
     let transport = HmacWsTransport::new(h_url, secret.as_bytes().to_vec());
@@ -34,12 +33,31 @@ async fn main() {
         daemon.run().await;
     });
 
-    loop {
-        if let Err(e) = run_protocol_loop(&url, secret.as_bytes()).await {
-            eprintln!("Protocol loop error: {:?}. Reconnecting...", e);
-            sleep(Duration::from_secs(5)).await;
+    let shutdown_signal = async {
+        let _ = signal::ctrl_c().await;
+    };
+
+    let main_loop = async {
+        loop {
+            if let Err(e) = run_protocol_loop(&url, secret.as_bytes()).await {
+                eprintln!("Protocol loop error: {:?}. Reconnecting...", e);
+                sleep(Duration::from_secs(5)).await;
+            }
         }
+    };
+
+    tokio::select! {
+        _ = main_loop => {},
+        _ = shutdown_signal => {
+            println!("Shutting down gracefully...");
+        },
     }
+}
+
+// Bounded operation allowlist
+fn is_allowed_command(cmd: &str) -> bool {
+    let allowed = ["echo", "uptime", "free", "df"];
+    allowed.contains(&cmd)
 }
 
 async fn run_protocol_loop(
@@ -162,43 +180,50 @@ async fn run_protocol_loop(
                     }
                     "executor.run" => {
                         if let Some(cmd) = req.payload.get("cmd").and_then(|v| v.as_str()) {
-                            let args = req
-                                .payload
-                                .get("args")
-                                .and_then(|v| v.as_array())
-                                .map(|arr| {
-                                    arr.iter()
-                                        .filter_map(|x| x.as_str().map(|s| s.to_string()))
-                                        .collect()
-                                })
-                                .unwrap_or_default();
-                            let timeout_secs = req
-                                .payload
-                                .get("timeout_secs")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(30);
+                            if !is_allowed_command(cmd) {
+                                response.error = Some(AgentError {
+                                    code: "operation_blocked".to_string(),
+                                    message: "Command not in allowed list".to_string(),
+                                });
+                            } else {
+                                let args = req
+                                    .payload
+                                    .get("args")
+                                    .and_then(|v| v.as_array())
+                                    .map(|arr| {
+                                        arr.iter()
+                                            .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                                            .collect()
+                                    })
+                                    .unwrap_or_default();
+                                let timeout_secs = req
+                                    .payload
+                                    .get("timeout_secs")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(30);
 
-                            let cmd_req = CommandRequest {
-                                cmd: cmd.to_string(),
-                                args,
-                                envs: HashMap::new(),
-                                timeout: Duration::from_secs(timeout_secs),
-                            };
+                                let cmd_req = CommandRequest {
+                                    cmd: cmd.to_string(),
+                                    args,
+                                    envs: HashMap::new(),
+                                    timeout: Duration::from_secs(timeout_secs),
+                                };
 
-                            match CommandExecutor::execute(&cmd_req).await {
-                                Ok(res) => {
-                                    response.result = Some(json!({
-                                        "exit_code": res.exit_code,
-                                        "stdout": String::from_utf8_lossy(&res.stdout).to_string(),
-                                        "stderr": String::from_utf8_lossy(&res.stderr).to_string(),
-                                        "timeout": res.timeout
-                                    }));
-                                }
-                                Err(e) => {
-                                    response.error = Some(AgentError {
-                                        code: "execution_failed".to_string(),
-                                        message: e.to_string(),
-                                    });
+                                match CommandExecutor::execute(&cmd_req).await {
+                                    Ok(res) => {
+                                        response.result = Some(json!({
+                                            "exit_code": res.exit_code,
+                                            "stdout": String::from_utf8_lossy(&res.stdout).to_string(),
+                                            "stderr": String::from_utf8_lossy(&res.stderr).to_string(),
+                                            "timeout": res.timeout
+                                        }));
+                                    }
+                                    Err(e) => {
+                                        response.error = Some(AgentError {
+                                            code: "execution_failed".to_string(),
+                                            message: e.to_string(),
+                                        });
+                                    }
                                 }
                             }
                         } else {

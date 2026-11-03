@@ -134,7 +134,7 @@ async fn test_agent_child_process_handshake() {
 
     let mut ws = accept_hdr_async(stream, callback).await.unwrap();
 
-    // We send an executor request
+    // We send an executor request that is ALLOWED
     let req = AgentRequest {
         version: 1,
         request_id: "test-req".to_string(),
@@ -157,6 +157,28 @@ async fn test_agent_child_process_handshake() {
         let res_json = resp.result.unwrap();
         let out = res_json.get("stdout").unwrap().as_str().unwrap();
         assert!(out.contains("hello-executor"));
+    }
+
+    // We send an executor request that is BLOCKED
+    let req_blocked = AgentRequest {
+        version: 1,
+        request_id: "test-req-blocked".to_string(),
+        operation: "executor.run".to_string(),
+        payload: json!({"cmd": "cat", "args": ["/etc/shadow"]}),
+    };
+
+    ws.send(tokio_tungstenite::tungstenite::Message::Text(
+        serde_json::to_string(&req_blocked).unwrap(),
+    ))
+    .await
+    .unwrap();
+
+    let resp = ws.next().await.unwrap().unwrap();
+    if let tokio_tungstenite::tungstenite::Message::Text(t) = resp {
+        let resp: AgentResponse = serde_json::from_str(&t).unwrap();
+        assert!(resp.error.is_some());
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, "operation_blocked");
     }
 
     child.kill().await.unwrap();

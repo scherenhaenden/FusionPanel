@@ -70,3 +70,9 @@ The [source audit](../audits/2026-11-01/SOURCE_AUDIT.md) records release-blockin
 | PR | Package | Primary issue | Change and evidence | Delivery / remaining |
 |---|---|---|---|---|
 | [#254](https://github.com/scherenhaenden/FusionPanel/pull/254) | S22 WordPress management | [#27](https://github.com/scherenhaenden/FusionPanel/issues/27) | zip minimum 9.0.5; whole-archive header consistency before extraction; three crafted-header regressions fail on 0.6.6 and pass after fix; 10 local boundary/installer tests pass on 9.0.5 and 9.3.0; all package test targets compile | Open PR, not merged. Addresses Dependabot alert 15; no product E2E or issue closure claimed |
+
+## Readiness refresh — 3 November 2026
+
+| PR | Scope | Issue | Evidence | Delivery | Remaining |
+|---|---|---|---|---|---|
+| [#250](https://github.com/scherenhaenden/FusionPanel/pull/250) | Complete 162-capability / 63-package snapshot and capability ledger | [#6](https://github.com/scherenhaenden/FusionPanel/issues/6) (coordination) | Pinned master `0fd70197c7dc52cf1f93e0ccf88c91f77cfa4f6b`; 27 new merges; source inspection and catalog arithmetic validation; no fresh product execution | Documentation PR, not merged; capability maturity 7.95%, package maturity 42.54% | Keep #6 open for foundation composition, actual runtime qualification and closure |
