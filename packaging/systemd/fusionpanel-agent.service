@@ -7,7 +7,7 @@ Documentation=https://github.com/scherenhaenden/FusionPanel
 Type=simple
 User=fusionpanel
 Group=fusionpanel
-ExecStart=/usr/bin/fusionpanel-agent
+ExecStart=/opt/fusionpanel/bin/fusionpanel-agent
 EnvironmentFile=-/etc/fusionpanel/fusionpanel-agent.env
 
 # Restart backoff configuration

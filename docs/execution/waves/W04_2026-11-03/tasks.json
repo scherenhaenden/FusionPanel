@@ -1,0 +1,1907 @@
+{
+  "wave": "W04",
+  "date": "2026-11-03",
+  "timezone": "Europe/Berlin",
+  "repository": "scherenhaenden/FusionPanel",
+  "baseline": "5f78a323903b5adb893edd6c0a7643c8165be710",
+  "requested_total": 50,
+  "authorized_initial_dispatch": 6,
+  "remaining_queued": 44,
+  "capacity_source": "Owner states six currently free slots; CLI status is not an authoritative account quota counter.",
+  "external_handoffs": {
+    "X_RECONCILIATION": {
+      "description": "Owner/agy reviews and integrates candidate 32c69cf (or a reviewed equivalent) restoring domain/observability/security and missing integration manifests. Not merged at capture; W04 does not merge it.",
+      "scope": "restored foundation/module exports and integration manifests"
+    },
+    "X_FOUNDATION": {
+      "description": "Recover/review existing session 7302772204230979493; explicit handoff and exact published foundation base. Do not start duplicate foundation implementation while it owns paths.",
+      "session_id": "7302772204230979493"
+    },
+    "X_LOGIN": {
+      "description": "Recover/review existing login/session routes session 521914698062635906 and publish accepted routes before handing integration/identity to W04-13.",
+      "session_id": "521914698062635906"
+    },
+    "X_DNS": {
+      "description": "Recover/review pending DNS repair 234909097995010988 then hand off modules/dns.",
+      "session_id": "234909097995010988"
+    },
+    "X_SECURITY": {
+      "description": "Recover/review pending firewall/CSP repair 17870708631564350179 then hand off modules/security.",
+      "session_id": "17870708631564350179"
+    },
+    "X_OBSERVABILITY": {
+      "description": "Recover/review pending probe/webhook repair 11993838793472947743; its returned patch contains broad stale-base files. Apply only reviewed owned deltas, never its whole stale snapshot. Then hand off modules/observability.",
+      "session_id": "11993838793472947743"
+    }
+  },
+  "tasks": [
+    {
+      "id": "W04-01",
+      "order": 1,
+      "title": "Fail-closed migration and source-retirement decisions",
+      "issue": 19,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/migration/"
+      ],
+      "dependencies": [],
+      "objective": "Fix create_review_plan: it currently allows source decommission for dry-run inventory containing a conflicting root user because all_items_reviewed is all(|_| true). Model explicit reviewed migration/restore/handoff evidence. Default to refusing decommission while execution/verification is absent; never use nonempty inventory as proof. Preserve discovery/planner API behavior and explicit unsupported source versions.",
+      "acceptance": "Direct negative tests for dry-run, Conflict, Unsupported, Unknown, empty inventory, missing target/restore/handoff evidence and forged deserialization; every case refuses retirement. Any positive decision must require validated current attestations, not caller booleans. No destructive source operation.",
+      "capabilities": [
+        "MIG-08",
+        "MIG-10",
+        "MIG-11",
+        "MIG-12"
+      ],
+      "status": "MERGED",
+      "base_sha": "5f78a323903b5adb893edd6c0a7643c8165be710",
+      "session_id": "12940082909438083420",
+      "session_url": "https://jules.google.com/session/12940082909438083420",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/216",
+      "prompt_file": "prompts/W04-01.md",
+      "prompt_sha256": "70235da4fde300ea33c5d9b99ffdb095ca2c3064f5c5bab8c7181f0cefbf7b12",
+      "dispatch_started_at": "2026-11-03T08:01:41.118361+00:00",
+      "dispatch_exit_code": 0,
+      "dispatch_attempts": [
+        {
+          "context": "local unpublished branch checkout",
+          "outcome": "HTTP 400 INVALID_ARGUMENT; no session created"
+        },
+        {
+          "context": "non-repository /tmp; explicit remote repository",
+          "exit_code": 0,
+          "output_file": "W04-01-dispatch-from-tmp.txt"
+        }
+      ],
+      "review_notes": "Merged in e9405a0"
+    },
+    {
+      "id": "W04-02",
+      "order": 2,
+      "title": "Executable, restart-aware and recoverable signed updater",
+      "issue": 42,
+      "priority": "P1",
+      "exclusive_paths": [
+        "packaging/updater/",
+        "packaging/tests/unit_updater.rs"
+      ],
+      "dependencies": [],
+      "objective": "run_update writes a temp file and renames it over a 0755 binary without preserving executable permissions; any healthy URL can accept an update even if the old process still runs. Preserve verification and establish a bounded injected process/service lifecycle contract with version/identity-specific health. Use a durable recovery marker and retain the old artifact until the candidate actually starts. Preserve currently registered [[test]] unit_updater: first inspect metadata; do not duplicate it or rely on the older audit orphan claim.",
+      "acceptance": "Signed local HTTP fixture -> execute a real disposable replacement fixture binary and assert executable bits, observed new version, failed-start rollback, signature rejection before mutation, network timeout bounds, repeated/interrupted update recovery and permissions. Service-control tests must use owned child processes, never workstation systemctl.",
+      "capabilities": [
+        "ADM-04",
+        "SEC-17",
+        "DEP-07"
+      ],
+      "status": "MERGED",
+      "base_sha": "5f78a323903b5adb893edd6c0a7643c8165be710",
+      "session_id": "3524266206398097751",
+      "session_url": "https://jules.google.com/session/3524266206398097751",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/217",
+      "prompt_file": "prompts/W04-02.md",
+      "prompt_sha256": "86cae027ece00923efdb8eb46d653dceb8d34afeb8537602f6e18df6e0f47d33",
+      "review_notes": "Merged in 0fdd2c4"
+    },
+    {
+      "id": "W04-03",
+      "order": 3,
+      "title": "Crash-recoverable secret-key rotation and scoped storage",
+      "issue": 25,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/secrets/"
+      ],
+      "dependencies": [],
+      "objective": "rotate_master_key writes reencrypted JSON files one by one and changes the engine only at the end, so interruption leaves mixed keys. Implement staged generation/commit/recovery with explicit key-version references and a documented ownership protocol. Never persist plaintext keys/material. Make storage permissions and metadata integrity appropriate for scoped credentials, preserving the existing access API where practical.",
+      "acceptance": "Actual temp-filesystem reopen tests with deterministic fault injection before/during/after commit, invalid key, mixed/corrupt generation, failed writes and retry; secrets remain recoverable under the documented key handoff. Assert cross-tenant denial, redaction and restrictive permissions. No fake service injection acceptance.",
+      "capabilities": [
+        "ADM-12",
+        "SEC-12",
+        "BAK-07"
+      ],
+      "status": "MERGED",
+      "base_sha": "5f78a323903b5adb893edd6c0a7643c8165be710",
+      "session_id": "9133192636994590980",
+      "session_url": "https://jules.google.com/session/9133192636994590980",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/218",
+      "prompt_file": "prompts/W04-03.md",
+      "prompt_sha256": "f3461faed41cc79564fa73ae897871cab8e273323be8d7363cbc615cb97df120",
+      "review_notes": "Merged in bbc1dc4"
+    },
+    {
+      "id": "W04-04",
+      "order": 4,
+      "title": "Reproducible React frontend build and reachable resource views",
+      "issue": 18,
+      "priority": "P1",
+      "exclusive_paths": [
+        "frontend/"
+      ],
+      "dependencies": [],
+      "objective": "Reconcile package.json/package-lock.json so clean npm ci works. Fix CommonJS Jest configuration under type:module and TypeScript build problems. Convert the orphan Vue database view to React without losing its controls, and connect Websites/Databases/Backups/Security views into accessible navigation. Preserve supported controls; unimplemented server endpoints must display accurate unavailable/error states. Do not invent API successes or a production mock backend.",
+      "acceptance": "Clean npm ci, npm run build, actual Jest component/client tests, reachable route/navigation smoke tests and keyboard/error/loading/401 states. Test doubles only qualify client behavior. Document exact backend paths still unavailable; real browser/server workflows belong to W04-35/47.",
+      "capabilities": [
+        "ADM-02",
+        "ADM-03",
+        "ADM-08",
+        "HOST-01",
+        "DB-01",
+        "BAK-15"
+      ],
+      "status": "MERGED",
+      "base_sha": "5f78a323903b5adb893edd6c0a7643c8165be710",
+      "session_id": "15842338730015189448",
+      "session_url": "https://jules.google.com/session/15842338730015189448",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/219",
+      "prompt_file": "prompts/W04-04.md",
+      "prompt_sha256": "9c3c3384e89e7923da8c933504f2244c5bab4b0a53320eccb352040f6cc8b0aa",
+      "review_notes": "Merged in 0bdb345"
+    },
+    {
+      "id": "W04-05",
+      "order": 5,
+      "title": "Authenticated real S3 multipart and storage-adapter implementation",
+      "issue": 41,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/backup-destinations/"
+      ],
+      "dependencies": [],
+      "objective": "Replace the hardcoded mock-upload-id/mock-etag and unsigned HTTP multipart requests with real SigV4-compatible request signing, XML/server identifier validation, bounded retries/timeouts and abort-on-failure. Implement the shared StorageBackend contract for the real S3 adapter including independent read/stat/list/delete as needed. Preserve R2/MinIO endpoint modes and redact credentials; do not claim untested native cloud-provider compatibility. Keep the SFTP implementation intact for later W04-30.",
+      "acceptance": "Known signing vectors and malformed-response/error tests plus a real disposable local S3-compatible endpoint exercising multipart upload, independent download/checksum, listing/deletion, auth rejection and aborted uploads. Missing Docker/service means executable BLOCKED, never mock success. No paid/external provider or production credentials.",
+      "capabilities": [
+        "BAK-04",
+        "BAK-10"
+      ],
+      "status": "MERGED",
+      "base_sha": "5f78a323903b5adb893edd6c0a7643c8165be710",
+      "session_id": "11664730654098869586",
+      "session_url": "https://jules.google.com/session/11664730654098869586",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/220",
+      "prompt_file": "prompts/W04-05.md",
+      "prompt_sha256": "9755b0209f1a5234e25fa1149911f075738294c2fdb13f84f9be2ce497776c0c",
+      "review_notes": "Merged in 44ded76"
+    },
+    {
+      "id": "W04-06",
+      "order": 6,
+      "title": "Recover and requalify the deleted real test laboratory",
+      "issue": 10,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/.gitignore",
+        "tests/README.md",
+        "tests/runner.py",
+        "tests/test_e2e.py",
+        "tests/test_integration.py",
+        "tests/test_unit.py",
+        "tests/fixtures/compose.py",
+        "tests/fixtures/docker-compose.yml",
+        "tests/fixtures/nginx/index.html",
+        "tests/lab/"
+      ],
+      "dependencies": [],
+      "objective": "Recover the nine laboratory files deleted in first-parent merge 43acf391 from that commit parent, or the reviewed PR70 tree. Reconcile them with current contracts without restoring old application code or root manifests. Preserve real API/CLI, SQLite and disposable dependency behavior, unique fixture naming and structured PASS/FAIL/BLOCKED/NOT_RUN evidence. Ensure task dispatches cannot delete/rewrite this laboratory again without a regression guard.",
+      "acceptance": "Run meaningful Python unit tests, actual API/CLI child-process journey and real local SQLite/filesystem lanes. Probe missing prerequisites to prove nonzero BLOCKED. Docker lanes must be isolated with deterministic teardown; report their actual prerequisites. Do not label an unavailable service or fabricated response PASS.",
+      "capabilities": [
+        "ADM-08",
+        "ADM-09",
+        "NODE-11"
+      ],
+      "status": "DISPATCHED",
+      "base_sha": "5f78a323903b5adb893edd6c0a7643c8165be710",
+      "session_id": "1501694325006079677",
+      "session_url": "https://jules.google.com/session/1501694325006079677",
+      "pr_url": null,
+      "prompt_file": "prompts/W04-06.md",
+      "prompt_sha256": "0e02db59a1910d39105aeaad6b72f22cb57c88ac427ce261059b47c081235464"
+    },
+    {
+      "id": "W04-07",
+      "order": 7,
+      "title": "Reconcile existing foundation result and freeze core runtime contracts",
+      "issue": 6,
+      "priority": "P1",
+      "exclusive_paths": [
+        "Cargo.toml",
+        "Cargo.lock",
+        ".gitignore",
+        "crates/domain/",
+        "crates/agent-protocol/",
+        "crates/jobs/",
+        "crates/cli/",
+        "docs/foundation-integration/"
+      ],
+      "dependencies": [
+        "X_RECONCILIATION",
+        "X_FOUNDATION",
+        "W04-06"
+      ],
+      "objective": "Consume the reviewed result of existing session 7302772204230979493 after exclusive ownership handoff. Implement only residual foundation integration: UUID/wire adapters, immutable terminal states, durable job claim/reconciliation, version/correlation checks and reproducible root lock. Preserve restored domain validation. Do not restart the old session work from scratch or delete independent packages.",
+      "acceptance": "Locked root build/test, actual API/CLI lab compatibility, SQLite reopen and contested claims, interrupted worker reconciliation without silent automatic replay. Publish exact public interfaces for later workers and stores.",
+      "capabilities": [
+        "NODE-10",
+        "NODE-11",
+        "ADM-09"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-07.md",
+      "prompt_sha256": "7f4d8d724a0a58570b19d90c30b0b7016a822780a0e5d9b90bb6ef4318fadbb5"
+    },
+    {
+      "id": "W04-08",
+      "order": 8,
+      "title": "Hosting provisioning compensation for every failure path",
+      "issue": 28,
+      "priority": "P1",
+      "exclusive_paths": [
+        "integration/hosting/"
+      ],
+      "dependencies": [
+        "X_RECONCILIATION"
+      ],
+      "objective": "Fix worker replacement/validation/reload into a recoverable transaction: launch errors currently leave new config installed, and backup is deleted before reload. Coordinate ownership with the restored manifest. Correct live_hosting test early assert(true)/return when Docker fails. Preserve existing ACME source for subsequent W04-09.",
+      "acceptance": "Real temp filesystem and owned process tests for missing nginx, syntax failure, reload exit/launch failure, create/update rollback, failed compensation and restart markers. Configure an isolated Nginx/PHP fixture when available; otherwise nonzero BLOCKED.",
+      "capabilities": [
+        "HOST-01",
+        "HOST-02",
+        "HOST-04",
+        "HOST-05",
+        "HOST-15"
+      ],
+      "status": "MERGED",
+      "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
+      "session_id": "14652888502581845168",
+      "session_url": "https://jules.google.com/task/14652888502581845168",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/234",
+      "merged_sha": "5071477",
+      "prompt_file": "prompts/W04-08.md",
+      "prompt_sha256": "3235400473540daef5d1f775799373b17da055d3a23e772878d3bd3eb0809804",
+      "review_notes": "Restored integration-hosting manifest, added failure marker (.restart-marker), safe rollback compensation, dynamic port binding, all 15 tests pass"
+    },
+    {
+      "id": "W04-09",
+      "order": 9,
+      "title": "Complete bounded ACME order and certificate lifecycle",
+      "issue": 28,
+      "priority": "P1",
+      "exclusive_paths": [
+        "integration/hosting/src/acme.rs",
+        "integration/hosting/tests/unit_acme.rs",
+        "integration/hosting/tests/acme_lifecycle.rs"
+      ],
+      "dependencies": [
+        "W04-08",
+        "W04-03"
+      ],
+      "objective": "Implement the missing real account/JWS/nonce/order/HTTP-01/challenge/finalize/download lifecycle behind the existing transport contract, certificate/key custody and renewal scheduling handoff. Include alternate domain/certificate modes explicitly; leave unsupported DNS wildcard issuance unavailable rather than faking it.",
+      "acceptance": "Deterministic protocol negatives and a real local ACME test authority or explicitly authorized staging fixture. Verify challenge served content, issued certificate trust/name, expiry/renewal, failed authorization, retries and cleanup; no default public production CA calls.",
+      "capabilities": [
+        "HOST-06",
+        "HOST-07",
+        "HOST-08"
+      ],
+      "status": "DISPATCHED",
+      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
+      "session_id": "2868511753205531299",
+      "session_url": "https://jules.google.com/session/2868511753205531299",
+      "pr_url": null,
+      "prompt_file": "prompts/W04-09.md",
+      "prompt_sha256": "abde1c7e2247fc98258f9769cc388a8fe874c93f562f41011f7a77e7ce43df93",
+      "review_notes": "Dispatched in Jules session 2868511753205531299 against master cbc1c2a"
+    },
+    {
+      "id": "W04-10",
+      "order": 10,
+      "title": "Contain release IDs and make deployment state transitions durable-safe",
+      "issue": 20,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/deployments/"
+      ],
+      "dependencies": [],
+      "objective": "Enforce release path containment at filesystem entry points and checked construction/deserialization. ReleaseId(\"../../escaped\") currently bypasses parse and escapes releases/. Preserve build/webhook/rollback behavior and strengthen approval/history state transitions for later runtime consumption.",
+      "acceptance": "Actual release directory/symlink tests for traversal, absolute IDs, hostile deserialization, preexisting symlinks, rollback/pruning safety and terminal states; real git/static build integration. No live traffic acceptance from a symlink unit test.",
+      "capabilities": [
+        "DEP-03",
+        "DEP-04",
+        "DEP-07",
+        "DEP-09",
+        "DEP-10"
+      ],
+      "status": "MERGED",
+      "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
+      "session_id": "9051421364286810987",
+      "session_url": "https://jules.google.com/session/9051421364286810987",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/223",
+      "prompt_file": "prompts/W04-10.md",
+      "prompt_sha256": "9cdcd6cd58326fb8f7876be555770ca33e5f4de193e4eecec622885a53a39625",
+      "review_notes": "Audited, corrected, verified and merged into master (PR #223)",
+      "merged_pr": 223
+    },
+    {
+      "id": "W04-11",
+      "order": 11,
+      "title": "Transactional backup restore and ownership-aware retention",
+      "issue": 15,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/backups/"
+      ],
+      "dependencies": [],
+      "objective": "Preserve the PR213 manifest/size/checksum repairs, then address interruption during target application and whole-tree/selected restore semantics. Validate before mutation, maintain an explicit recoverable commit/rollback protocol and enforce source/output/target symlink containment. Retention must identify owned valid backups rather than arbitrary filenames.",
+      "acceptance": "Actual filesystem fault injection midway through application, existing-target preservation/reopen, missing/duplicate archive entries, unexpected links, corruption, source aliases and retention ownership. Verify independent restored bytes. State mode/atomicity limits precisely.",
+      "capabilities": [
+        "BAK-02",
+        "BAK-08",
+        "BAK-09",
+        "BAK-10",
+        "BAK-11"
+      ],
+      "status": "MERGED",
+      "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
+      "session_id": "12220664641739891816",
+      "session_url": "https://jules.google.com/session/12220664641739891816",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/222",
+      "prompt_file": "prompts/W04-11.md",
+      "prompt_sha256": "53988cfce1f18f246d88821a320a44857da1a85a860458c183d4f032d8a922bf",
+      "review_notes": "Audited, corrected, verified and merged into master (PR #222)",
+      "merged_pr": 222
+    },
+    {
+      "id": "W04-12",
+      "order": 12,
+      "title": "Replace fabricated database HTTP handlers with real operations",
+      "issue": 29,
+      "priority": "P1",
+      "exclusive_paths": [
+        "integration/data/"
+      ],
+      "dependencies": [
+        "X_RECONCILIATION",
+        "W04-13",
+        "W04-21",
+        "W04-03"
+      ],
+      "objective": "AppState and CRUD handlers currently validate then return synthetic 201/200 without DB effects. Add injected real adapter/job/resource store and authenticated principal scope; connect lifecycle/users/privileges and safe dump scheduling to exact existing database interfaces. Preserve configured host/container management modes.",
+      "acceptance": "Real disposable MariaDB and PostgreSQL instances prove create/query/grants/denials/drop and independent dump/restore. No success before durable job/resource acknowledgement and observed adapter outcome. Negative auth, tenant, subprocess failure and restart cases; clear BLOCKED without fixture.",
+      "capabilities": [
+        "DB-01",
+        "DB-02",
+        "DB-03",
+        "DB-04",
+        "DB-08",
+        "DB-09",
+        "BAK-01",
+        "BAK-03"
+      ],
+      "status": "MERGED",
+      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
+      "session_id": "4954054738400993459",
+      "session_url": "https://jules.google.com/session/4954054738400993459",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/244",
+      "prompt_file": "prompts/W04-12.md",
+      "prompt_sha256": "0b65013d543bf5719d756418cb6f0d02c12bf130b01068fa66502384095df303",
+      "review_notes": "Dispatched in Jules session 4954054738400993459 against master cbc1c2a"
+    },
+    {
+      "id": "W04-13",
+      "order": 13,
+      "title": "Persisted principal/session adapter and authenticated operation boundary",
+      "issue": 31,
+      "priority": "P1",
+      "exclusive_paths": [
+        "integration/identity/"
+      ],
+      "dependencies": [
+        "X_RECONCILIATION",
+        "X_LOGIN",
+        "W04-07"
+      ],
+      "objective": "First consume the reviewed login/refresh/logout work from session 521914698062635906 after handoff; implement only missing SqliteIdentityStore-to-IdentityStore adaptation and current principal/role/revocation enforcement. Establish one published request principal contract for all business routers and explicit session renewal/error semantics.",
+      "acceptance": "Real SQLite-backed API requests prove login/logout/reopen/expiry/revocation/demotion and tenant membership. Forged principal/header and stale privileges are denied. Preserve existing admin-token health/capability contract until consumers are migrated.",
+      "capabilities": [
+        "SEC-04",
+        "SEC-12",
+        "ADM-05"
+      ],
+      "status": "MERGED",
+      "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
+      "session_id": "18017673997336866514",
+      "session_url": "https://jules.google.com/session/18017673997336866514",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/224",
+      "prompt_file": "prompts/W04-13.md",
+      "prompt_sha256": "3827c7bf644ae8fe6ec6bb9cfea4e9b5acedd9914a7da80494062cbfa5c5e9a9",
+      "review_notes": "Audited, corrected, verified and merged into master (PR #224)",
+      "merged_pr": 224
+    },
+    {
+      "id": "W04-14",
+      "order": 14,
+      "title": "Principal-owned container router and durable resource mapping",
+      "issue": 30,
+      "priority": "P1",
+      "exclusive_paths": [
+        "integration/containers/"
+      ],
+      "dependencies": [
+        "X_RECONCILIATION",
+        "W04-13",
+        "W04-21",
+        "W04-15"
+      ],
+      "objective": "Replace trust in x-tenant-id and string container ID prefixes with authenticated principal membership and persisted resource ownership; wire the actual engine and port allocator. Preserve create/start/stop/restart/inspect/delete and resource modes, with actual outcomes and compensation.",
+      "acceptance": "Route tests with SQLite ownership plus real disposable Docker containers prove cross-tenant/header forgery denial, concurrent ports, lifecycle state and failed-engine compensation. Reopen and reconcile resource ownership after restart.",
+      "capabilities": [
+        "CTR-01",
+        "CTR-05",
+        "CTR-06",
+        "CTR-11"
+      ],
+      "status": "DISPATCHED",
+      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
+      "session_id": "16624685868498480158",
+      "session_url": "https://jules.google.com/session/16624685868498480158",
+      "pr_url": null,
+      "prompt_file": "prompts/W04-14.md",
+      "prompt_sha256": "b58b8c7b68612ae155f20be8fbc5ee64aee56ee69210fd0b3b7d1db2c385d936",
+      "review_notes": "Dispatched in Jules session 16624685868498480158 against master cbc1c2a"
+    },
+    {
+      "id": "W04-15",
+      "order": 15,
+      "title": "Concrete Docker engine with volumes, networks and bounded lifecycle",
+      "issue": 14,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/containers/"
+      ],
+      "dependencies": [],
+      "objective": "Implement a real ContainerEngine adapter using typed daemon API or safely invoked Docker CLI; the current package only defines a trait. Preserve Compose validation, managed/adopted ownership, networks/volumes/limits and inspect-derived health/log behavior. Do not execute shell-interpolated commands or claim unsupported GPU hardware.",
+      "acceptance": "Disposable daemon fixture proves actual create/start/stop/remove/inspect, persistence/volume data, network isolation, resource limits, refused host paths and failed daemon calls. GPU/vendor cases remain explicitly blocked unless qualified.",
+      "capabilities": [
+        "CTR-01",
+        "CTR-02",
+        "CTR-04",
+        "CTR-05",
+        "CTR-06",
+        "CTR-07",
+        "CTR-11"
+      ],
+      "status": "MERGED",
+      "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
+      "session_id": "11029762586239046050",
+      "session_url": "https://jules.google.com/session/11029762586239046050",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/226",
+      "prompt_file": "prompts/W04-15.md",
+      "prompt_sha256": "9ac6163d7f9a0eb2da5e3228925fa6f378ce486ba9d27fa3db1053279c8b868f",
+      "review_notes": "Audited, corrected, verified and merged into master (PR #226)",
+      "merged_pr": 226
+    },
+    {
+      "id": "W04-16",
+      "order": 16,
+      "title": "Authoritative DNS backend and complete zone lifecycle",
+      "issue": 16,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/dns/"
+      ],
+      "dependencies": [
+        "X_DNS"
+      ],
+      "objective": "Consume the existing DNS repair handoff, preserve validated record/deserialization/Null MX protections and implement a concrete authoritative backend adapter with serial/conflict checks, import/export and supported DNSSEC boundaries. Zone models alone must not acknowledge applied changes.",
+      "acceptance": "Real disposable authoritative server: update then independent DNS query; negative ownership/TTL/serial cases, export/restore and DNSSEC only where actual signing is configured. Missing backend/fixture is nonzero BLOCKED.",
+      "capabilities": [
+        "NET-01",
+        "NET-02",
+        "NET-03"
+      ],
+      "status": "CHANGES_REQUESTED",
+      "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
+      "session_id": "10193962684488937249",
+      "session_url": "https://jules.google.com/session/10193962684488937249",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/225",
+      "prompt_file": "prompts/W04-16.md",
+      "prompt_sha256": "3c9e5d1745f205165c8bcaeabcefc71ddc4a1cf8c3ef0d010a19d3a7783a6777",
+      "review_notes": "Authoritative backend is in-memory HashMap mock, DNSSEC is boolean flag without cryptographic signatures"
+    },
+    {
+      "id": "W04-17",
+      "order": 17,
+      "title": "Recoverable Postfix/Dovecot account and alias worker",
+      "issue": 32,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/mail/",
+        "integration/network-services/src/mail_worker.rs",
+        "integration/network-services/tests/unit_mail_worker.rs",
+        "integration/network-services/Cargo.toml",
+        "integration/network-services/src/lib.rs"
+      ],
+      "dependencies": [
+        "X_RECONCILIATION",
+        "W04-03"
+      ],
+      "objective": "Preserve both merged mail models after namespace repair. Make mailbox/alias synchronization transactional across SQLite/config/postmap/reload, with coherent failures, quota/credential custody and supported local/relay modes. Never restart workstation daemons.",
+      "acceptance": "Disposable mail stack proves SMTP submission, independent IMAP retrieval, aliases/catch-all, quota denial and failed postmap/reload recovery. Local spool/config-only tests earn partial credit only. No public deliverability claims.",
+      "capabilities": [
+        "NET-04",
+        "NET-06",
+        "NET-07",
+        "NET-08",
+        "NET-09",
+        "NET-10"
+      ],
+      "status": "DISPATCHED",
+      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
+      "session_id": "16185362412843173964",
+      "session_url": "https://jules.google.com/session/16185362412843173964",
+      "pr_url": null,
+      "prompt_file": "prompts/W04-17.md",
+      "prompt_sha256": "1e9b3ec34caf04d422ce02fbfce28a58804e4eb86c6693ae83950a47c156de22",
+      "review_notes": "Dispatched in Jules session 16185362412843173964 against master cbc1c2a"
+    },
+    {
+      "id": "W04-18",
+      "order": 18,
+      "title": "Authenticated DNS and mail resource API",
+      "issue": 32,
+      "priority": "P1",
+      "exclusive_paths": [
+        "integration/network-services/src/dns_routes.rs",
+        "integration/network-services/src/routes.rs",
+        "integration/network-services/tests/unit_dns_routes.rs",
+        "integration/network-services/tests/resource_routes.rs",
+        "integration/network-services/src/lib.rs",
+        "integration/network-services/Cargo.toml"
+      ],
+      "dependencies": [
+        "W04-13",
+        "W04-16",
+        "W04-17",
+        "W04-21"
+      ],
+      "objective": "Turn DNS in-memory helpers into actual authenticated resource routers using the real backend and durable ownership. Expose supported mail worker operations with accurate apply/job/error semantics and cross-tenant denial. Publish router composition for W04-19.",
+      "acceptance": "Requests to the actual router cause observable authoritative DNS/mail fixture changes and persist ownership. Validate request deserialization, conflict/retry, worker failure and forbidden resource access.",
+      "capabilities": [
+        "NET-01",
+        "NET-04",
+        "NET-06",
+        "NET-10"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-18.md",
+      "prompt_sha256": "c77b4b7a3767eb7e6df916b3c92de1756eacd22382f9e5d835e20107c0322265"
+    },
+    {
+      "id": "W04-19",
+      "order": 19,
+      "title": "Compose the running API with real authenticated resource routers",
+      "issue": 6,
+      "priority": "P1",
+      "exclusive_paths": [
+        "crates/api/",
+        "Cargo.toml",
+        "Cargo.lock"
+      ],
+      "dependencies": [
+        "W04-07",
+        "W04-08",
+        "W04-12",
+        "W04-13",
+        "W04-14",
+        "W04-18",
+        "W04-20",
+        "W04-21",
+        "W04-22",
+        "W04-23",
+        "W04-24",
+        "W04-25",
+        "W04-26",
+        "W04-27",
+        "W04-28",
+        "W04-32"
+      ],
+      "objective": "Provide the executable composition root and configuration that mount the reviewed identity/hosting/data/containers/network/operations routers and durable worker/agent/store services. Preserve public health/admin capability compatibility and accurate capability availability. Do not reimplement domain adapters in this session. Coordinate missing router exports before dispatch.",
+      "acceptance": "Build/start the real API; assert authenticated requests reach registered adapters and durable jobs, denied requests have no side effects, restart restores state and unavailable services produce explicit errors. Contract checks enumerate actual mounted routes and capabilities.",
+      "capabilities": [
+        "ADM-08",
+        "ADM-09",
+        "NODE-03",
+        "NODE-10",
+        "NODE-11"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-19.md",
+      "prompt_sha256": "040d9014364f81ec642270447f794d1b1695e95eb8a3e27be5fa3ed3665e43de"
+    },
+    {
+      "id": "W04-20",
+      "order": 20,
+      "title": "Runnable authenticated agent and bounded operation dispatcher",
+      "issue": 26,
+      "priority": "P1",
+      "exclusive_paths": [
+        "crates/agent/"
+      ],
+      "dependencies": [
+        "X_RECONCILIATION",
+        "W04-07"
+      ],
+      "objective": "Deliver a genuine fusionpanel-agent executable using existing heartbeat/executor/file code and typed validated protocol. Authenticate both transport directions, correlate requests, bound execution/output/timeouts and restrict operations/paths/ownership. Do not describe an arbitrary process executor as a sandbox.",
+      "acceptance": "Owned control-plane and agent child processes prove HMAC/auth/replay/version/correlation denial, real safe temp-path operations, bounded timeout/output, reconnect/backoff and shutdown. Host privilege cases require disposable OS fixture.",
+      "capabilities": [
+        "NODE-03",
+        "NODE-04",
+        "NODE-05",
+        "SEC-10",
+        "SEC-11"
+      ],
+      "status": "MERGED",
+      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
+      "session_id": "645019230840343306",
+      "session_url": "https://jules.google.com/session/645019230840343306",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/242",
+      "prompt_file": "prompts/W04-20.md",
+      "prompt_sha256": "1ae086b83db0f9964f886d53b090f2b2c40ed38a6bc5899f7fbb0eb4de1d370d",
+      "review_notes": "Dispatched in Jules session 645019230840343306 against master cbc1c2a"
+    },
+    {
+      "id": "W04-21",
+      "order": 21,
+      "title": "Durable tenant-owned control-resource store",
+      "issue": 24,
+      "priority": "P1",
+      "exclusive_paths": [
+        "crates/control-store/"
+      ],
+      "dependencies": [
+        "W04-07"
+      ],
+      "objective": "Implement a standalone SQLite control store for stable tenant/resource IDs, ownership/management modes, desired/observed state, operation correlation and versioned updates. Use existing published domain IDs and migrations; no broad root-manifest edits.",
+      "acceptance": "Actual SQLite reopen/concurrent transactions, ownership filters, revision conflict, lifecycle preservation and crash-safe migration tests. Publish explicit typed interfaces consumed by routers/workers; avoid parallel JSON/in-memory shadow stores.",
+      "capabilities": [
+        "NODE-10",
+        "ADM-01",
+        "ADM-05"
+      ],
+      "status": "MERGED",
+      "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
+      "session_id": "12903357500547035184",
+      "session_url": "https://jules.google.com/session/12903357500547035184",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/227",
+      "prompt_file": "prompts/W04-21.md",
+      "prompt_sha256": "f13beea2820ec9ed4b0c16b362fb40a1e32ff831687afeb0d9eb4752209049ec",
+      "review_notes": "Audited, corrected, verified and merged into master (PR #227)",
+      "merged_pr": 227
+    },
+    {
+      "id": "W04-22",
+      "order": 22,
+      "title": "Durable operation workers, cancellation and restart reconciliation",
+      "issue": 6,
+      "priority": "P1",
+      "exclusive_paths": [
+        "integration/jobs/"
+      ],
+      "dependencies": [
+        "W04-07",
+        "W04-20",
+        "W04-21"
+      ],
+      "objective": "Compose the existing job store with explicit idempotency and agent operation dispatch. Persist claimed work and external-operation receipts; interrupted unknown effects require reconciliation, never blind automatic replay. Publish one typed operation service for all domain runtimes.",
+      "acceptance": "Actual worker subprocess kill/restart and SQLite receipts prove no duplicate side effects, competing claims, queued/running cancellation, failed agent/timeouts and terminal immutability. No fabricated successful worker effect.",
+      "capabilities": [
+        "NODE-11",
+        "HOST-15",
+        "ADM-08"
+      ],
+      "status": "MERGED",
+      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
+      "session_id": "14126683591992868537",
+      "session_url": "https://jules.google.com/session/14126683591992868537",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/237",
+      "prompt_file": "prompts/W04-22.md",
+      "prompt_sha256": "81985a9f819297db8a0b3c1bbb45f0cda9467e0417fa29f885185da00b06f1f3",
+      "review_notes": "Dispatched in Jules session 14126683591992868537 against master cbc1c2a"
+    },
+    {
+      "id": "W04-23",
+      "order": 23,
+      "title": "Apply and recover host security policy through the agent",
+      "issue": 40,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/security/",
+        "integration/security/"
+      ],
+      "dependencies": [
+        "X_RECONCILIATION",
+        "X_SECURITY",
+        "W04-13",
+        "W04-20"
+      ],
+      "objective": "Consume existing firewall/CSP repair without duplication, then add explicit validated adapters and router exports for firewall/SSH/WAF modes and emergency access. Validate before applying and preserve independently reachable recovery. Never run privileged tests on the workstation.",
+      "acceptance": "Policy/unit negatives plus disposable Debian VM evidence for safe apply, rollback on lockout/parser failure and emergency reachability. Missing VM/connector means nonzero BLOCKED; no expected-panic green acceptance.",
+      "capabilities": [
+        "SEC-05",
+        "SEC-06",
+        "SEC-07",
+        "SEC-08",
+        "SEC-09",
+        "SEC-16"
+      ],
+      "status": "DISPATCHED",
+      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
+      "session_id": "598262670609115142",
+      "session_url": "https://jules.google.com/session/598262670609115142",
+      "pr_url": null,
+      "prompt_file": "prompts/W04-23.md",
+      "prompt_sha256": "7d2b83e329dac7efb941d382eac24d2005ad3bff25d41b2a57f8225169921910",
+      "review_notes": "Dispatched in Jules session 598262670609115142 against master cbc1c2a"
+    },
+    {
+      "id": "W04-24",
+      "order": 24,
+      "title": "Durable administration, teams, quotas and audit API",
+      "issue": 39,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/administration/",
+        "integration/administration/"
+      ],
+      "dependencies": [
+        "W04-13",
+        "W04-21",
+        "W04-22"
+      ],
+      "objective": "Implement authenticated tenant/team/user invitations and quota operations using durable stores, with atomic reservations tied to actual provisioning. Replace in-memory-only audit acceptance with persisted append/verify and explicit anchoring/export limits. Publish router for composition.",
+      "acceptance": "Actual SQLite/API calls prove cross-tenant/invitation/revocation policy, quota races and release-on-failure, persisted audit chain/reopen/tamper detection and redacted export. Do not claim global OS quota enforcement from a reservation model.",
+      "capabilities": [
+        "ADM-01",
+        "ADM-05",
+        "ADM-06",
+        "ADM-07",
+        "ADM-10",
+        "HOST-13",
+        "SEC-13"
+      ],
+      "status": "MERGED",
+      "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
+      "session_id": "13674076978658296012",
+      "session_url": "https://jules.google.com/session/13674076978658296012",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/228",
+      "prompt_file": "prompts/W04-24.md",
+      "prompt_sha256": "b966e5bf24b76e23be1dfc8a7fafc862cb6a341e4eefa921ec7bc50697479e78",
+      "review_notes": "Audited, corrected, verified and merged into master (PR #228)",
+      "merged_pr": 228
+    },
+    {
+      "id": "W04-25",
+      "order": 25,
+      "title": "Real monitoring collectors, durable incidents and alerts API",
+      "issue": 34,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/observability/",
+        "integration/observability/"
+      ],
+      "dependencies": [
+        "X_RECONCILIATION",
+        "X_OBSERVABILITY",
+        "W04-13",
+        "W04-20",
+        "W04-21"
+      ],
+      "objective": "Consume existing probe fallback/webhook-assertion work before handoff. Implement bounded real collectors/probes and persisted metrics/incidents/alert delivery state with authenticated ownership-scoped reads and outage recovery; expose router.",
+      "acceptance": "Owned HTTP/TCP target goes down/up; actual collector/receiver verifies payload, retry/backoff, no duplicate incident and persisted/reopened history. Measure timestamps and boundaries. No invented uptime or synthetic metrics displayed as live.",
+      "capabilities": [
+        "OBS-01",
+        "OBS-02",
+        "OBS-06",
+        "OBS-07",
+        "OBS-09",
+        "OBS-10",
+        "OBS-15"
+      ],
+      "status": "MERGED",
+      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
+      "session_id": "974171387012295205",
+      "session_url": "https://jules.google.com/session/974171387012295205",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/245",
+      "prompt_file": "prompts/W04-25.md",
+      "prompt_sha256": "928724c5509c07f84b086921c74e003b99f7db818e7d73dcde90ecc555f9f08c",
+      "review_notes": "Dispatched in Jules session 974171387012295205 against master cbc1c2a"
+    },
+    {
+      "id": "W04-26",
+      "order": 26,
+      "title": "Persistent multi-node enrollment, placement and reconnection",
+      "issue": 37,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/nodes/",
+        "integration/nodes/"
+      ],
+      "dependencies": [
+        "W04-13",
+        "W04-20",
+        "W04-21",
+        "W04-22"
+      ],
+      "objective": "Compose authenticated agent enrollment/revocation with durable node lifecycle, heartbeat expiry and validated placement/move plans. Preserve managed/adopted ownership and surface unsupported HA/autoscaling explicitly. Publish router/config for W04-19.",
+      "acceptance": "Two owned agent/control subprocess fixtures prove enrollment/key rotation/revocation, heartbeat expiry/reconnect, load-aware placement and explicit reconciliation after loss. Actual full-machine migration requires two disposable VMs; mocks do not close it.",
+      "capabilities": [
+        "NODE-05",
+        "NODE-06",
+        "NODE-07",
+        "NODE-08",
+        "NODE-14",
+        "NODE-15"
+      ],
+      "status": "MERGED",
+      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
+      "session_id": "10620636324558931612",
+      "session_url": "https://jules.google.com/session/10620636324558931612",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/238",
+      "prompt_file": "prompts/W04-26.md",
+      "prompt_sha256": "db7928ebe6048739a8dc7441b7361d9aa2b8e488d4f2fad96a470ec107690795",
+      "review_notes": "Dispatched in Jules session 10620636324558931612 against master cbc1c2a"
+    },
+    {
+      "id": "W04-27",
+      "order": 27,
+      "title": "Durable repository-to-release deployment runtime",
+      "issue": 33,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/deployments/",
+        "integration/deployments/"
+      ],
+      "dependencies": [
+        "W04-10",
+        "W04-13",
+        "W04-15",
+        "W04-21",
+        "W04-22"
+      ],
+      "objective": "Connect signed/replay-protected webhook ingress, real checkout/build, durable approval/schedule/history and atomic release/health/rollback to the common operation service. Implement the supported staging/preview boundary while preserving unimplemented modes as explicit limitations. Expose router.",
+      "acceptance": "Real local git repo and served disposable app: two versions, signed trigger, separate approver, health failure rollback, restart/replay/cancel and observed content continuity. No acceptance from state-machine-only tests.",
+      "capabilities": [
+        "DEP-01",
+        "DEP-02",
+        "DEP-03",
+        "DEP-04",
+        "DEP-05",
+        "DEP-06",
+        "DEP-07",
+        "DEP-08",
+        "DEP-09",
+        "DEP-10",
+        "DEP-11",
+        "DEP-12"
+      ],
+      "status": "MERGED",
+      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
+      "session_id": "4953433900432402414",
+      "session_url": "https://jules.google.com/session/4953433900432402414",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/243",
+      "prompt_file": "prompts/W04-27.md",
+      "prompt_sha256": "55ba7330b93da874e8b9119806c91cc35dde63b8eb099bfdd0c0dbbed0fab8ed",
+      "review_notes": "Dispatched in Jules session 4953433900432402414 against master cbc1c2a"
+    },
+    {
+      "id": "W04-28",
+      "order": 28,
+      "title": "WordPress provisioning and maintenance runtime",
+      "issue": 36,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/wordpress/",
+        "integration/wordpress/"
+      ],
+      "dependencies": [
+        "W04-08",
+        "W04-12",
+        "W04-13",
+        "W04-21",
+        "W04-22"
+      ],
+      "objective": "Wire WP-CLI helpers to real hosting/database/secret services and durable operations for install/plugin/theme/maintenance/hardening and supported clone/migration controls. Preserve managed/external ownership and explicit unsupported modes. Expose router.",
+      "acceptance": "Disposable actual WP/PHP/DB fixture proves served install, authenticated admin operations, plugin/theme changes, cron handoff and failure cleanup; standalone generated config or fake WP executable is not full workflow evidence.",
+      "capabilities": [
+        "WP-01",
+        "WP-02",
+        "WP-03",
+        "WP-04",
+        "WP-05",
+        "WP-06",
+        "WP-07",
+        "WP-08",
+        "WP-09",
+        "WP-10",
+        "WP-11",
+        "WP-12"
+      ],
+      "status": "MERGED",
+      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
+      "session_id": "4589094473249414100",
+      "session_url": "https://jules.google.com/session/4589094473249414100",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/239",
+      "prompt_file": "prompts/W04-28.md",
+      "prompt_sha256": "4df10b59d887aeef5b8f5cc5e45950f72f5c23ed0dd12553c635fb62408bc693",
+      "review_notes": "Dispatched in Jules session 4589094473249414100 against master cbc1c2a"
+    },
+    {
+      "id": "W04-29",
+      "order": 29,
+      "title": "Real migration execution with reversible checkpoints",
+      "issue": 38,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/migration/",
+        "integration/migration/"
+      ],
+      "dependencies": [
+        "W04-01",
+        "W04-03",
+        "W04-08",
+        "W04-11",
+        "W04-12",
+        "W04-21",
+        "W04-22"
+      ],
+      "objective": "Extend read-only discovery/dry-run into checkpointed real migration through the ordinary hosting/database/backup APIs. Require exact source-version adapter support and preserve ownership, aliases, schedules, variants and user mappings. Decommission stays prohibited until separately qualified handoff.",
+      "acceptance": "Representative version-matched sanitized export and real disposable target prove copied served data/DB associations, interrupted apply/restart, conflicts, rollback and post-cutover writes policy. Synthetic SQLite only qualifies discovery parsing.",
+      "capabilities": [
+        "MIG-01",
+        "MIG-02",
+        "MIG-03",
+        "MIG-04",
+        "MIG-05",
+        "MIG-06",
+        "MIG-07",
+        "MIG-08",
+        "MIG-09",
+        "MIG-10",
+        "MIG-11",
+        "MIG-12"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-29.md",
+      "prompt_sha256": "55848974c547d12f258ed26f1b139b693176856724c38859b532b21a80b2138c"
+    },
+    {
+      "id": "W04-30",
+      "order": 30,
+      "title": "Actual SFTP backend with credential redaction and independent restore",
+      "issue": 41,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/backup-destinations/"
+      ],
+      "dependencies": [
+        "W04-05"
+      ],
+      "objective": "After S3 package handoff implement authenticated SFTP upload/download/stat/list/delete using the shared storage contract, constrained paths, host-key verification, quotas/timeouts and credential redaction. Keep FTPS distinct and explicitly unavailable if not implemented; do not rename it SFTP support.",
+      "acceptance": "Real disposable SFTP server proves independently restored bytes, denied credentials, mismatched host key, path escape/symlink policy, interruption and limits. Never default to accepting unknown host keys or logging private credentials.",
+      "capabilities": [
+        "BAK-05",
+        "BAK-10"
+      ],
+      "status": "MERGED",
+      "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
+      "session_id": "13964025231246527373",
+      "session_url": "https://jules.google.com/task/13964025231246527373",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/241",
+      "prompt_file": "prompts/W04-30.md",
+      "prompt_sha256": "c9f897e0b2f8854bf6dd72b61c374343c11edd46091e5b06ece3d98a594bfaa8",
+      "review_notes": "Failed in Jules due to missing user/SSH store dependencies"
+    },
+    {
+      "id": "W04-31",
+      "order": 31,
+      "title": "Real template installation and vulnerability scanner execution",
+      "issue": 43,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/app-catalog/"
+      ],
+      "dependencies": [
+        "W04-13",
+        "W04-15",
+        "W04-21",
+        "W04-22"
+      ],
+      "objective": "Connect templates to actual Docker/Compose engine and ownership/port/secret allocation with compensation. Execute pinned real Trivy/Grype-compatible scanners with freshness/error policy instead of merely parsing reports. Preserve install modes and report unsupported hardware/providers.",
+      "acceptance": "Install/health/delete a disposable template with independent observed resources and retained data; fail installation on genuine pinned vulnerable image findings and scanner errors. Fixture report parsing is unit evidence only. Include SBOM/update hooks only when actually implemented.",
+      "capabilities": [
+        "CTR-03",
+        "CTR-08",
+        "CTR-09",
+        "CTR-10"
+      ],
+      "status": "MERGED",
+      "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
+      "session_id": "11546784311494421002",
+      "session_url": "https://jules.google.com/task/11546784311494421002",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/235",
+      "merged_sha": "8d71cab",
+      "prompt_file": "prompts/W04-31.md",
+      "prompt_sha256": "6a3efdcce110085cea24b54db2daa64bc41d2db4ebfa0090a677c1bfc3cfca72",
+      "review_notes": "Implemented template deploy with hardware validation, port/secret allocation, secure tempdir, clean patch.diff removal, 17/17 tests passing"
+    },
+    {
+      "id": "W04-32",
+      "order": 32,
+      "title": "Encrypted scheduled backup and independent restore runtime",
+      "issue": 29,
+      "priority": "P1",
+      "exclusive_paths": [
+        "integration/backups/",
+        "integration/data/src/backup_scheduler.rs",
+        "integration/data/tests/unit_backup_scheduler.rs"
+      ],
+      "dependencies": [
+        "W04-03",
+        "W04-05",
+        "W04-11",
+        "W04-12",
+        "W04-21",
+        "W04-22"
+      ],
+      "objective": "Unify scheduling, real DB dumps, encrypted backup/key references, owned retention and real remote S3 storage with durable receipts and restore operations. Avoid leaving a dump marked complete after subprocess failure; preserve supported file/DB selection and recovery modes. Expose a router and publish operation config.",
+      "acceptance": "Real fixture data and independent target restore prove consistency, encryption/key recovery, checksum, scheduler restart, dump/upload interruption and retention boundaries. No fake DB SQL text or tar/curl against a mock receiver as backup E2E.",
+      "capabilities": [
+        "BAK-01",
+        "BAK-02",
+        "BAK-03",
+        "BAK-04",
+        "BAK-07",
+        "BAK-08",
+        "BAK-09",
+        "BAK-10",
+        "BAK-11",
+        "BAK-13",
+        "BAK-14"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-32.md",
+      "prompt_sha256": "ab99014c4e8cb784e7c6a4a2e4576df6ade77f71c14bbe54c9db1032f6a10120"
+    },
+    {
+      "id": "W04-33",
+      "order": 33,
+      "title": "Adoption and decommission attestation across real resources",
+      "issue": 56,
+      "priority": "P1",
+      "exclusive_paths": [
+        "modules/adoption/",
+        "tests/qualification/adoption/",
+        "docs/qualification/adoption/"
+      ],
+      "dependencies": [
+        "W04-01",
+        "W04-21",
+        "W04-29",
+        "W04-32"
+      ],
+      "objective": "Replace purely local qualification models with a reusable ownership/attestation guard and tests against actual managed/adopted/external resources. Require independently verified target state, backup/renewal successor owners and reconciliation of post-cutover changes before a decommission decision.",
+      "acceptance": "Owned temporary services/files plus current migration receipts prove external workloads are preserved on suspend/delete, schedules/cert ownership transfer is verified, trust/SNI modes remain explicit and missing/expired evidence denies retirement. Full OS source retirement is BLOCKED without the lab.",
+      "capabilities": [
+        "MIG-09",
+        "MIG-10",
+        "MIG-11",
+        "MIG-12",
+        "ADM-04"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-33.md",
+      "prompt_sha256": "60cdb04edd997740124e51f7fc1618daf13a06a9d25678a3b32983a23cbac6b4"
+    },
+    {
+      "id": "W04-34",
+      "order": 34,
+      "title": "Real release installer and systemd package reconciliation",
+      "issue": 42,
+      "priority": "P1",
+      "exclusive_paths": [
+        "packaging/install.sh",
+        "packaging/systemd/",
+        "packaging/tests/test_installer.sh",
+        "packaging/tests/test_systemd.sh",
+        "packaging/README.md"
+      ],
+      "dependencies": [
+        "W04-02",
+        "W04-07",
+        "W04-19",
+        "W04-20"
+      ],
+      "objective": "Replace touch/chmod placeholder installation with verified versioned artifacts, consistent paths/configuration/users/permissions and actual API/agent entry points. Preserve prefix/port/version flags, idempotency and update/recovery compatibility; refuse incomplete installs.",
+      "acceptance": "Disposable Debian VM or full-OS fixture proves clean install, start, restart, valid auth, reinstallation, failed artifact/signature, partial install recovery and uninstall/ownership policy. Do not run workstation systemctl or call empty file installation success.",
+      "capabilities": [
+        "ADM-04",
+        "NODE-02",
+        "SEC-17"
+      ],
+      "status": "MERGED",
+      "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
+      "session_id": "16428568201938412283",
+      "session_url": "https://jules.google.com/session/16428568201938412283",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/230",
+      "prompt_file": "prompts/W04-34.md",
+      "prompt_sha256": "879a6ccf8d2f58ea81500f62983e4e156fbd4ebfb1b2570fedebac82f2462fa7",
+      "review_notes": "Audited, corrected, verified and merged into master (PR #230)",
+      "merged_pr": 230
+    },
+    {
+      "id": "W04-35",
+      "order": 35,
+      "title": "Live frontend operations against the actual authenticated API",
+      "issue": 35,
+      "priority": "P1",
+      "exclusive_paths": [
+        "frontend/"
+      ],
+      "dependencies": [
+        "W04-04",
+        "W04-19",
+        "W04-24",
+        "W04-25"
+      ],
+      "objective": "After clean-build ownership handoff, connect existing resource screens and login to the actual composed API routes, progress/jobs, capability availability and variant controls. Preserve loading/permission/error/cancel/retry behaviors and all existing screen controls. Do not enable a production mock backend.",
+      "acceptance": "Browser against real local API verifies login, resource create/read/change/delete and actual effects for available slices, 401/revocation/cross-tenant denial, visible job failures and unavailable capabilities. Deterministic client tests may use labeled doubles but not acceptance.",
+      "capabilities": [
+        "ADM-02",
+        "ADM-03",
+        "ADM-08",
+        "BAK-15"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-35.md",
+      "prompt_sha256": "13b6d1bb63715aa9331d638a1d0682b2813fad1ba67fcd718f80a53652f1a002"
+    },
+    {
+      "id": "W04-36",
+      "order": 36,
+      "title": "Actual foundation, login and permission E2E",
+      "issue": 46,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/e2e/foundation/",
+        "tests/e2e/identity/"
+      ],
+      "dependencies": [
+        "W04-06",
+        "W04-13",
+        "W04-19",
+        "W04-21"
+      ],
+      "objective": "Exercise identity/session/user/tenant flows via the actual running HTTP/CLI interfaces rather than calling the identity library next to a health request. Include durable state and actual business operation authorization.",
+      "acceptance": "Owned processes and SQLite fixtures prove boot/config, valid/invalid login, scoped operation, revoked/demoted sessions, expiration, restart and absence of secret leakage. Required missing route/service is BLOCKED and nonzero.",
+      "capabilities": [
+        "SEC-04",
+        "SEC-12",
+        "ADM-05",
+        "ADM-08",
+        "ADM-09"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-36.md",
+      "prompt_sha256": "9f826b3133591196a9eef14e9e63912b994e9434e625e8f64d9b1f883a4a463f"
+    },
+    {
+      "id": "W04-37",
+      "order": 37,
+      "title": "Real hosting, certificate and compensation E2E",
+      "issue": 45,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/e2e/hosting/",
+        "integration/hosting/tests/live_hosting.rs"
+      ],
+      "dependencies": [
+        "W04-06",
+        "W04-08",
+        "W04-09",
+        "W04-19",
+        "W04-23",
+        "W04-36"
+      ],
+      "objective": "Qualify actual Nginx/PHP/static/proxy provisioning through authenticated API/agent and durable jobs, including ownership, certificate modes and failed provisioning/reload compensation. Use disposable fixtures and exact build inputs.",
+      "acceptance": "Independently fetch served content/certificate, verify pools/permissions and rejected unsafe inputs, kill/restart during provisioning and prove restored state. Missing Docker/VM/CA never produces a green skip.",
+      "capabilities": [
+        "HOST-01",
+        "HOST-02",
+        "HOST-04",
+        "HOST-05",
+        "HOST-06",
+        "HOST-08",
+        "HOST-13",
+        "HOST-15"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-37.md",
+      "prompt_sha256": "23a3f03db33a4fd8cb9b7219bd8934cfb854f340f4dfba7b39f7eac2847ecd03"
+    },
+    {
+      "id": "W04-38",
+      "order": 38,
+      "title": "Independent database and encrypted backup recovery E2E",
+      "issue": 47,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/e2e/data/",
+        "tests/e2e/backups/",
+        "integration/data/tests/disposable_db.rs"
+      ],
+      "dependencies": [
+        "W04-03",
+        "W04-06",
+        "W04-11",
+        "W04-12",
+        "W04-19",
+        "W04-32",
+        "W04-36"
+      ],
+      "objective": "Replace mock tar/curl backup acceptance with actual product backup/dump/encrypt/upload/download/restore to independently provisioned DB and file targets; support both database engines and actual grant semantics.",
+      "acceptance": "Insert unique live rows/files, perform authenticated jobs, destroy only source fixtures, restore independently and compare data/checksums/permissions. Exercise failed credentials, corruption, revoked key, interruption and retention; record observed RTO/RPO.",
+      "capabilities": [
+        "DB-01",
+        "DB-02",
+        "DB-08",
+        "BAK-03",
+        "BAK-07",
+        "BAK-10",
+        "BAK-11",
+        "BAK-14"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-38.md",
+      "prompt_sha256": "982df76fbf32826addb30dbbe3060b15385f3aaffc6c99ff86646e7dedab3ad5"
+    },
+    {
+      "id": "W04-39",
+      "order": 39,
+      "title": "Docker and application catalog lifecycle E2E",
+      "issue": 48,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/e2e/containers/"
+      ],
+      "dependencies": [
+        "W04-06",
+        "W04-14",
+        "W04-15",
+        "W04-19",
+        "W04-31",
+        "W04-36"
+      ],
+      "objective": "Implement actual API-to-Docker-to-observed-container user journeys, including app installation, volumes/networks/ports/resources and cross-tenant negatives. Do not duplicate the broad closure matrix or call a mock engine real integration.",
+      "acceptance": "Disposable daemon fixture independently checks running processes, health, persisted volume bytes, collision rejection, failed install compensation, unauthorized access and scanner gates. GPU qualification stays hardware-specific.",
+      "capabilities": [
+        "CTR-01",
+        "CTR-02",
+        "CTR-03",
+        "CTR-05",
+        "CTR-06",
+        "CTR-09",
+        "CTR-11"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-39.md",
+      "prompt_sha256": "f0ecc22578d40cfe66d8d2c7fc5e79b00cc9de1f41f6c551cdb703f5472dac27"
+    },
+    {
+      "id": "W04-40",
+      "order": 40,
+      "title": "Live deployment and rollback continuity E2E",
+      "issue": 49,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/e2e/deployments/"
+      ],
+      "dependencies": [
+        "W04-06",
+        "W04-19",
+        "W04-27",
+        "W04-36"
+      ],
+      "objective": "Qualify signed Git trigger through authenticated durable deployment runtime and real served versions with approvals, progress, rollback and history. Replace unconditional BLOCKED placeholders only where prerequisites are genuinely implemented.",
+      "acceptance": "Continuously query actual served app while moving versions; assert health-failure rollback, no fabricated success, second-person approval, bad/replayed signature denial, worker interruption and stable history after restart.",
+      "capabilities": [
+        "DEP-01",
+        "DEP-02",
+        "DEP-03",
+        "DEP-04",
+        "DEP-07",
+        "DEP-09",
+        "DEP-10",
+        "DEP-11"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-40.md",
+      "prompt_sha256": "7223e4e700293b166f9bd1e1b12c2dda31faf1938a88b939b6fd527f62e593fe"
+    },
+    {
+      "id": "W04-41",
+      "order": 41,
+      "title": "Actual WordPress lifecycle and recovery E2E",
+      "issue": 50,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/e2e/wordpress/"
+      ],
+      "dependencies": [
+        "W04-06",
+        "W04-19",
+        "W04-28",
+        "W04-36"
+      ],
+      "objective": "Qualify WordPress install/admin/maintenance/plugin/theme/cron and backup recovery through the product APIs on a real isolated WP/PHP/DB stack. Preserve supported lifecycle/ownership modes and error paths.",
+      "acceptance": "Independent HTTP/database/WP state checks prove the declared user outcomes, failed install cleanup, external workload preservation, recovery and denied cross-tenant access. Real executable/server absence is nonzero BLOCKED.",
+      "capabilities": [
+        "WP-01",
+        "WP-02",
+        "WP-03",
+        "WP-04",
+        "WP-05",
+        "WP-07",
+        "WP-11"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-41.md",
+      "prompt_sha256": "43a833aba819159d1ef75ccd73e1b9eb29e55d0b86d559ed1c7e46e4c42abc4b"
+    },
+    {
+      "id": "W04-42",
+      "order": 42,
+      "title": "Authoritative DNS and actual mailbox/relay E2E",
+      "issue": 54,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/e2e/network-services/",
+        "tests/e2e/network/"
+      ],
+      "dependencies": [
+        "W04-06",
+        "W04-16",
+        "W04-17",
+        "W04-18",
+        "W04-19",
+        "W04-36"
+      ],
+      "objective": "Recover any useful result of failed session 7385074516211862461 without duplicate session creation for delivery. Qualify real API-driven DNS changes and SMTP/IMAP/alias/relay behavior in isolated service stacks; explicitly separate local delivery and public deliverability.",
+      "acceptance": "Independent DNS queries and mail client roundtrips, DNSSEC where configured, alias/relay denial, worker restart and failed config rollback. Public provider/domain cases remain individually blocked without authorized resources.",
+      "capabilities": [
+        "NET-01",
+        "NET-02",
+        "NET-04",
+        "NET-06",
+        "NET-07",
+        "NET-09",
+        "NET-10"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-42.md",
+      "prompt_sha256": "755daef0fca05dab82c343ebb5d982a73f1c209c2280483cd8d6ce1ac542f986"
+    },
+    {
+      "id": "W04-43",
+      "order": 43,
+      "title": "Administration and observability outage/recovery E2E",
+      "issue": 53,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/e2e/administration/",
+        "tests/e2e/observability/"
+      ],
+      "dependencies": [
+        "W04-06",
+        "W04-19",
+        "W04-24",
+        "W04-25",
+        "W04-36"
+      ],
+      "objective": "Replace unconditional admin/observation blockers with real resource/quota/team/invitation/audit and monitoring receiver workflows. Test actual outage creation/recovery and persisted results through authenticated APIs.",
+      "acceptance": "Quota races prevent actual over-allocation; revoked invitations/users lose access; audit survives restart; real target outage/repair produces checked alert payload/history. Immutable/anchored claims require actual evidence.",
+      "capabilities": [
+        "ADM-05",
+        "ADM-06",
+        "ADM-07",
+        "ADM-10",
+        "OBS-06",
+        "OBS-09",
+        "OBS-10",
+        "OBS-15"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-43.md",
+      "prompt_sha256": "0614df89a86ae6fb0f79fcdef3164ac141d4065342f58e261d69244d7f8bb125"
+    },
+    {
+      "id": "W04-44",
+      "order": 44,
+      "title": "Agent and multi-node fault/reconciliation E2E",
+      "issue": 52,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/e2e/agent/",
+        "tests/e2e/nodes/"
+      ],
+      "dependencies": [
+        "W04-06",
+        "W04-19",
+        "W04-20",
+        "W04-22",
+        "W04-26",
+        "W04-36"
+      ],
+      "objective": "Qualify real agent heartbeat/transport/dispatch plus node partition/loss/reconnect and operation reconciliation. A standalone failing probe or in-memory model is not a real node fault scenario.",
+      "acceptance": "Two disposable agent/node processes or VMs prove key revocation, HMAC/version errors, heartbeat expiry, partition/reconnect, contested placement and no duplicate effects. Actual machine move/HA remains blocked without sufficient state/fixtures.",
+      "capabilities": [
+        "NODE-03",
+        "NODE-05",
+        "NODE-06",
+        "NODE-07",
+        "NODE-08",
+        "NODE-11",
+        "NODE-14"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-44.md",
+      "prompt_sha256": "2714678ef33440612f1ca2cf05ee5f7cf4880831a6cb14b10290941cc9b192db"
+    },
+    {
+      "id": "W04-45",
+      "order": 45,
+      "title": "Real security, secret injection and emergency recovery qualification",
+      "issue": 55,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/e2e/security/",
+        "docs/qualification/security/"
+      ],
+      "dependencies": [
+        "W04-03",
+        "W04-06",
+        "W04-19",
+        "W04-23",
+        "W04-34",
+        "W04-36"
+      ],
+      "objective": "Exercise real authorization/revocation/secret injection/rotation boundaries and emergency firewall/SSH/WAF safety using disposable full-OS fixtures. Preserve meaningful negatives; do not convert BLOCKED panic cases to should_panic acceptance.",
+      "acceptance": "API request denial, old credential revocation and verified new service credential after rotation; independent recovery path survives intended lockout tests; parser+benign/malicious traffic checks use actual configured services. Missing OS/connectors stays BLOCKED.",
+      "capabilities": [
+        "SEC-04",
+        "SEC-05",
+        "SEC-07",
+        "SEC-09",
+        "SEC-10",
+        "SEC-11",
+        "SEC-12",
+        "SEC-13",
+        "ADM-12"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-45.md",
+      "prompt_sha256": "323633e69359e8c6a57e75874d7019ad064a15d173fc47183ab12bd07ad77e23"
+    },
+    {
+      "id": "W04-46",
+      "order": 46,
+      "title": "Discover every package and enforce real CI qualification lanes",
+      "issue": 44,
+      "priority": "P1",
+      "exclusive_paths": [
+        "scripts/ci/",
+        ".github/workflows/",
+        "docs/testing/W04_CI_MATRIX.md"
+      ],
+      "dependencies": [
+        "W04-04",
+        "W04-06",
+        "W04-07",
+        "W04-19"
+      ],
+      "objective": "Create a machine-discovered all-manifest/target compile+unit CI matrix with one authoritative dependency lock strategy and separate dependency/full-OS/provider qualification lanes. Detect dropped files, orphan tests, zero-test success, ignored/expected BLOCKED acceptance and stale base merges. Preserve individual local unit passes without presenting them as whole-product acceptance.",
+      "acceptance": "Run against the integrated base and intentional disposable missing-manifest/test-target fixtures to show failures. CI reports PASS/FAIL/BLOCKED/NOT_RUN per lane and capability, captures sanitized logs and never silently skips a required release lane.",
+      "capabilities": [
+        "ADM-08",
+        "SEC-17"
+      ],
+      "status": "MERGED",
+      "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
+      "session_id": "6581141872018750",
+      "session_url": "https://jules.google.com/session/6581141872018750",
+      "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/229",
+      "prompt_file": "prompts/W04-46.md",
+      "prompt_sha256": "fedae8fe48acac1c0fb350bbae95193a7458c45394cbc983fbbd0a370ec179a1",
+      "review_notes": "Audited, corrected, verified and merged into master (PR #229)",
+      "merged_pr": 229
+    },
+    {
+      "id": "W04-47",
+      "order": 47,
+      "title": "Browser and supported variant compatibility qualification",
+      "issue": 35,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/e2e/variants/",
+        "tests/e2e/browser/",
+        "docs/qualification/variants/"
+      ],
+      "dependencies": [
+        "W04-19",
+        "W04-35",
+        "W04-36",
+        "W04-37",
+        "W04-38",
+        "W04-39",
+        "W04-42",
+        "W04-46"
+      ],
+      "objective": "Replace ignored variant placeholders with actual supported management/storage/deployment/TLS choices driven by the real registry and browser/API. Preserve external/adopted modes and document unsupported variants without deleting catalog entries.",
+      "acceptance": "Actual browser/API fixtures prove allowed transitions, persisted modes, denied incompatible/unsafe choices and observed effects after restart. No intercepted fake resource success in the acceptance suite.",
+      "capabilities": [
+        "ADM-02",
+        "ADM-03",
+        "HOST-01",
+        "CTR-01",
+        "BAK-04",
+        "MIG-09"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-47.md",
+      "prompt_sha256": "f2abbe5d64d442e86c1a925078c46b232edab033d313acbb48ef82f6a9ce41b8"
+    },
+    {
+      "id": "W04-48",
+      "order": 48,
+      "title": "Replace artificial closure greens with capability-linked evidence",
+      "issue": 58,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/closure/",
+        "docs/qualification/containers/",
+        "docs/qualification/data-network/",
+        "docs/qualification/operations/",
+        "docs/qualification/hosting/"
+      ],
+      "dependencies": [
+        "W04-33",
+        "W04-36",
+        "W04-37",
+        "W04-38",
+        "W04-39",
+        "W04-40",
+        "W04-41",
+        "W04-42",
+        "W04-43",
+        "W04-44",
+        "W04-45",
+        "W04-47"
+      ],
+      "objective": "Remove acceptance based on 73 expected BLOCKED panics, three assert(true) cases and detached local constants. Reconcile canonical 162 feature IDs to immutable actual implementation/runtime/E2E evidence from prerequisite sessions; do not reimplement all product features here. A missing case is a named blocker with an owner, not deleted scope or closure credit.",
+      "acceptance": "Each reported closed capability has a genuine executable product assertion and captured successful evidence at the reviewed SHA. Machine validation rejects aliases/duplicates, source-only claims and green blocked tests. Remaining scope is explicit by mode/platform.",
+      "capabilities": [
+        "ALL-162"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-48.md",
+      "prompt_sha256": "554734a6ae2c3148c63da65dfdbe290d0144486450592af4b5916c6f400fa778"
+    },
+    {
+      "id": "W04-49",
+      "order": 49,
+      "title": "Measure real performance and failure/recovery budgets",
+      "issue": 62,
+      "priority": "P1",
+      "exclusive_paths": [
+        "tests/qualification/performance/",
+        "docs/qualification/performance/"
+      ],
+      "dependencies": [
+        "W04-19",
+        "W04-34",
+        "W04-36",
+        "W04-38",
+        "W04-39",
+        "W04-40",
+        "W04-44",
+        "W04-46"
+      ],
+      "objective": "Replace sleep-only load claims with bounded concurrent actual API/jobs/agent/service workloads and controlled disposable failure injection. Measure queue behavior, latency/errors, data integrity, resource use and recovery under declared hardware/modes.",
+      "acceptance": "Capture reproducible fixture versions, workload, p50/p95/p99, error rates and measured RTO/RPO; assert no lost acknowledged writes or duplicate effects. No production load, unapproved cloud spending or unsupported HA claims.",
+      "capabilities": [
+        "NODE-11",
+        "BAK-11",
+        "OBS-01",
+        "DEP-04"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-49.md",
+      "prompt_sha256": "08faef5ac1f07f93f59df39d8e3ae10c5c81782334932b6774de8ed28cb8c380"
+    },
+    {
+      "id": "W04-50",
+      "order": 50,
+      "title": "Integrated release, independent machine recovery and evidence handoff",
+      "issue": 63,
+      "priority": "P1",
+      "exclusive_paths": [
+        "scripts/release/",
+        "docs/releases/",
+        "docs/operations/",
+        "docs/execution/waves/W04_2026-11-03/final/"
+      ],
+      "dependencies": [
+        "W04-33",
+        "W04-34",
+        "W04-36",
+        "W04-37",
+        "W04-38",
+        "W04-39",
+        "W04-40",
+        "W04-41",
+        "W04-42",
+        "W04-43",
+        "W04-44",
+        "W04-45",
+        "W04-46",
+        "W04-47",
+        "W04-48",
+        "W04-49"
+      ],
+      "objective": "Build the reviewed integrated release from exact source/dependencies; verify artifact signatures/content, clean install/update, independent restore and operator handoff. Export all surviving branches/patches/test fixtures before provider cutoff. Keep research-only HA/autoscaling unsupported where evidence is absent; do not invent release approval.",
+      "acceptance": "Actual disposable machine release install, authenticated real journey, failed update recovery and independent data restore with captured commands/checksums/versions/operator observations. Produce an explicit release/no-release decision and blocker list, never blanket 100% from PR count.",
+      "capabilities": [
+        "ADM-04",
+        "SEC-17",
+        "BAK-11",
+        "MIG-10"
+      ],
+      "status": "QUEUED",
+      "base_sha": null,
+      "session_id": null,
+      "session_url": null,
+      "pr_url": null,
+      "prompt_file": "prompts/W04-50.md",
+      "prompt_sha256": "1ff083fcd7f4687fd158db7046998dd25c419d3c3610aab5a21ad90e5af8dabc"
+    }
+  ],
+  "serialized_path_collisions": [
+    {
+      "a": "W04-01",
+      "b": "W04-29",
+      "paths": [
+        [
+          "modules/migration/",
+          "modules/migration/"
+        ]
+      ],
+      "serialization": "dependency handoff required"
+    },
+    {
+      "a": "W04-04",
+      "b": "W04-35",
+      "paths": [
+        [
+          "frontend/",
+          "frontend/"
+        ]
+      ],
+      "serialization": "dependency handoff required"
+    },
+    {
+      "a": "W04-05",
+      "b": "W04-30",
+      "paths": [
+        [
+          "modules/backup-destinations/",
+          "modules/backup-destinations/"
+        ]
+      ],
+      "serialization": "dependency handoff required"
+    },
+    {
+      "a": "W04-07",
+      "b": "W04-19",
+      "paths": [
+        [
+          "Cargo.toml",
+          "Cargo.toml"
+        ],
+        [
+          "Cargo.lock",
+          "Cargo.lock"
+        ]
+      ],
+      "serialization": "dependency handoff required"
+    },
+    {
+      "a": "W04-08",
+      "b": "W04-09",
+      "paths": [
+        [
+          "integration/hosting/",
+          "integration/hosting/src/acme.rs"
+        ],
+        [
+          "integration/hosting/",
+          "integration/hosting/tests/unit_acme.rs"
+        ],
+        [
+          "integration/hosting/",
+          "integration/hosting/tests/acme_lifecycle.rs"
+        ]
+      ],
+      "serialization": "dependency handoff required"
+    },
+    {
+      "a": "W04-08",
+      "b": "W04-37",
+      "paths": [
+        [
+          "integration/hosting/",
+          "integration/hosting/tests/live_hosting.rs"
+        ]
+      ],
+      "serialization": "dependency handoff required"
+    },
+    {
+      "a": "W04-10",
+      "b": "W04-27",
+      "paths": [
+        [
+          "modules/deployments/",
+          "modules/deployments/"
+        ]
+      ],
+      "serialization": "dependency handoff required"
+    },
+    {
+      "a": "W04-12",
+      "b": "W04-32",
+      "paths": [
+        [
+          "integration/data/",
+          "integration/data/src/backup_scheduler.rs"
+        ],
+        [
+          "integration/data/",
+          "integration/data/tests/unit_backup_scheduler.rs"
+        ]
+      ],
+      "serialization": "dependency handoff required"
+    },
+    {
+      "a": "W04-12",
+      "b": "W04-38",
+      "paths": [
+        [
+          "integration/data/",
+          "integration/data/tests/disposable_db.rs"
+        ]
+      ],
+      "serialization": "dependency handoff required"
+    },
+    {
+      "a": "W04-17",
+      "b": "W04-18",
+      "paths": [
+        [
+          "integration/network-services/Cargo.toml",
+          "integration/network-services/Cargo.toml"
+        ],
+        [
+          "integration/network-services/src/lib.rs",
+          "integration/network-services/src/lib.rs"
+        ]
+      ],
+      "serialization": "dependency handoff required"
+    }
+  ]
+}

@@ -20,7 +20,7 @@ export default function SecurityRulesUI() {
 
   const [error, setError] = useState('');
 
-  const validatePort = (portValue) => {
+  const validatePort = (portValue: string) => {
     const portRegex = /^(\d+)(?:-(\d+))?$/;
     const match = portValue.match(portRegex);
 
@@ -35,7 +35,7 @@ export default function SecurityRulesUI() {
     return true;
   };
 
-  const handlePortChange = (e) => {
+  const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setPort(val);
     if (val === '22' || val.startsWith('22-') || val.endsWith('-22') || val.includes('-22-') || val === '22') {
@@ -57,7 +57,7 @@ export default function SecurityRulesUI() {
     }
   };
 
-  const handleAddRule = (e) => {
+  const handleAddRule = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validatePort(port)) {
       setError('Invalid port or port range. Must be 1-65535 or a valid range (e.g., 8000-8080).');

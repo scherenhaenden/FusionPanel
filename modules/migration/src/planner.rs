@@ -20,6 +20,14 @@ pub struct PlanAction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReviewEvidence {
+    pub execution_completed: bool,
+    pub target_verified: bool,
+    pub restore_verified: bool,
+    pub handoff_completed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MigrationPlan {
     pub actions: Vec<PlanAction>,
     pub is_dry_run: bool,
@@ -50,21 +58,34 @@ impl Planner {
         }
     }
 
-    pub fn create_review_plan(inventory: &MigrationInventory, dry_run: bool) -> MigrationPlan {
+    pub fn create_review_plan(
+        inventory: &MigrationInventory,
+        dry_run: bool,
+        evidence: Option<&ReviewEvidence>,
+    ) -> MigrationPlan {
         let mut plan = Self::create_plan(inventory, dry_run);
 
         if inventory.items.is_empty() {
-             plan.decommission_allowed = false;
+            plan.decommission_allowed = false;
+        } else if dry_run {
+            plan.decommission_allowed = false;
         } else {
-             // Decommission is only allowed if there are no Unknown types or Unsupported actions.
-             let has_unsupported = plan.actions.iter().any(|action| action.action == PlanActionType::Unsupported);
-             let has_unknown_items = inventory.items.iter().any(|item| matches!(item.item_type, InventoryItemType::Unknown(_)));
+            let has_unsupported = plan.actions.iter().any(|action| action.action == PlanActionType::Unsupported);
+            let has_conflict = plan.actions.iter().any(|action| action.action == PlanActionType::Conflict);
+            let has_unknown_items = inventory.items.iter().any(|item| matches!(item.item_type, InventoryItemType::Unknown(_)));
 
-             // In a real implementation this would check target and handoff attestations.
-             // For this test we ensure that if items aren't empty and there are no unknown/unsupported items, it might be true.
-             let all_items_reviewed = plan.actions.iter().all(|_| true /* some condition */);
+            let has_valid_evidence = match evidence {
+                Some(ev) => {
+                    ev.execution_completed
+                        && ev.target_verified
+                        && ev.restore_verified
+                        && ev.handoff_completed
+                }
+                None => false,
+            };
 
-             plan.decommission_allowed = !has_unsupported && !has_unknown_items && all_items_reviewed;
+            plan.decommission_allowed =
+                !has_unsupported && !has_conflict && !has_unknown_items && has_valid_evidence;
         }
 
         plan
@@ -104,6 +125,15 @@ impl Planner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn get_full_evidence() -> ReviewEvidence {
+        ReviewEvidence {
+            execution_completed: true,
+            target_verified: true,
+            restore_verified: true,
+            handoff_completed: true,
+        }
+    }
 
     #[test]
     fn test_planner_creates_actions_correctly() {
@@ -150,13 +180,10 @@ mod tests {
         assert_eq!(plan.actions.len(), 4);
 
         assert_eq!(plan.actions[0].action, PlanActionType::Create); // example.com
-
         assert_eq!(plan.actions[1].action, PlanActionType::Unsupported); // old-site.com
         assert_eq!(plan.actions[1].reason, Some("PHP 5.6 is unsupported".to_string()));
-
         assert_eq!(plan.actions[2].action, PlanActionType::Conflict); // missing-php-site.com
         assert_eq!(plan.actions[2].reason, Some("Site is missing PHP version definition".to_string()));
-
         assert_eq!(plan.actions[3].action, PlanActionType::Conflict); // root user
         assert_eq!(plan.actions[3].reason, Some("User root conflicts with system users".to_string()));
     }
@@ -164,7 +191,6 @@ mod tests {
     #[test]
     fn test_planner_dry_run_false_is_blocked() {
         let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-
         inventory.items.push(InventoryItem {
             id: "site_1".to_string(),
             item_type: InventoryItemType::Site,
@@ -177,7 +203,6 @@ mod tests {
         let plan = Planner::create_plan(&inventory, false);
         assert_eq!(plan.is_dry_run, false);
         assert_eq!(plan.actions.len(), 1);
-
         assert_eq!(plan.actions[0].action, PlanActionType::Unsupported);
         assert_eq!(plan.actions[0].reason, Some("Real runtime apply operations are explicitly BLOCKED in this phase. (dry_run=false)".to_string()));
     }
@@ -185,8 +210,22 @@ mod tests {
     #[test]
     fn test_review_plan_empty_inventory_decommission_not_allowed() {
         let inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-        let plan = Planner::create_review_plan(&inventory, true);
+        let plan = Planner::create_review_plan(&inventory, false, Some(&get_full_evidence()));
+        assert_eq!(plan.decommission_allowed, false);
+    }
 
+    #[test]
+    fn test_review_plan_dry_run_decommission_not_allowed() {
+        let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
+        inventory.items.push(InventoryItem {
+            id: "site_1".to_string(),
+            item_type: InventoryItemType::Site,
+            name: "example.com".to_string(),
+            version: Some("8.1".to_string()),
+            metadata: std::collections::HashMap::new(),
+            associations: Vec::new(),
+        });
+        let plan = Planner::create_review_plan(&inventory, true, Some(&get_full_evidence()));
         assert_eq!(plan.decommission_allowed, false);
     }
 
@@ -201,8 +240,22 @@ mod tests {
             metadata: std::collections::HashMap::new(),
             associations: Vec::new(),
         });
+        let plan = Planner::create_review_plan(&inventory, true, Some(&get_full_evidence()));
+        assert_eq!(plan.decommission_allowed, false);
+    }
 
-        let plan = Planner::create_review_plan(&inventory, true);
+    #[test]
+    fn test_review_plan_conflict_item_decommission_not_allowed() {
+        let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
+        inventory.items.push(InventoryItem {
+            id: "user_1".to_string(),
+            item_type: InventoryItemType::User,
+            name: "root".to_string(),
+            version: None,
+            metadata: std::collections::HashMap::new(),
+            associations: Vec::new(),
+        });
+        let plan = Planner::create_review_plan(&inventory, true, Some(&get_full_evidence()));
         assert_eq!(plan.decommission_allowed, false);
     }
 
@@ -217,13 +270,27 @@ mod tests {
             metadata: std::collections::HashMap::new(),
             associations: Vec::new(),
         });
-
-        let plan = Planner::create_review_plan(&inventory, true);
+        let plan = Planner::create_review_plan(&inventory, true, Some(&get_full_evidence()));
         assert_eq!(plan.decommission_allowed, false);
     }
 
     #[test]
-    fn test_review_plan_valid_inventory_decommission_allowed() {
+    fn test_review_plan_missing_evidence_decommission_not_allowed() {
+        let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
+        inventory.items.push(InventoryItem {
+            id: "site_1".to_string(),
+            item_type: InventoryItemType::Site,
+            name: "example.com".to_string(),
+            version: Some("8.1".to_string()),
+            metadata: std::collections::HashMap::new(),
+            associations: Vec::new(),
+        });
+        let plan = Planner::create_review_plan(&inventory, false, None);
+        assert_eq!(plan.decommission_allowed, false);
+    }
+
+    #[test]
+    fn test_review_plan_incomplete_evidence_decommission_not_allowed() {
         let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
         inventory.items.push(InventoryItem {
             id: "site_1".to_string(),
@@ -234,7 +301,33 @@ mod tests {
             associations: Vec::new(),
         });
 
-        let plan = Planner::create_review_plan(&inventory, true);
-        assert_eq!(plan.decommission_allowed, true);
+        let evs = vec![
+            ReviewEvidence { execution_completed: false, target_verified: true, restore_verified: true, handoff_completed: true },
+            ReviewEvidence { execution_completed: true, target_verified: false, restore_verified: true, handoff_completed: true },
+            ReviewEvidence { execution_completed: true, target_verified: true, restore_verified: false, handoff_completed: true },
+            ReviewEvidence { execution_completed: true, target_verified: true, restore_verified: true, handoff_completed: false },
+        ];
+
+        for ev in evs {
+            let plan = Planner::create_review_plan(&inventory, false, Some(&ev));
+            assert_eq!(plan.decommission_allowed, false);
+        }
+    }
+
+    #[test]
+    fn test_review_plan_valid_inventory_dry_run_false_is_blocked() {
+        let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
+        inventory.items.push(InventoryItem {
+            id: "site_1".to_string(),
+            item_type: InventoryItemType::Site,
+            name: "example.com".to_string(),
+            version: Some("8.1".to_string()),
+            metadata: std::collections::HashMap::new(),
+            associations: Vec::new(),
+        });
+
+        // Because evaluate_item hard-blocks dry_run=false operations, they always yield Unsupported actions!
+        let plan = Planner::create_review_plan(&inventory, false, Some(&get_full_evidence()));
+        assert_eq!(plan.decommission_allowed, false);
     }
 }

@@ -7,3 +7,4 @@ pub mod health;
 pub mod logs;
 pub mod resources;
 pub mod storage;
+pub mod docker;
