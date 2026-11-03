@@ -49,12 +49,15 @@ In the event of a catastrophic failure, follow this sequence:
    - Manually verify DNS responses, TLS endpoints, and database connection grants on the restored nodes.
    - Do not redirect production traffic until verification completes.
 
-## Rollback
+## In-Place Updates and Rollbacks
 
-If a migration or update fails:
+If a migration or self-update fails:
 
 1. **Identify the Failure Domain**: Determine if the failure occurred at the node agent level or control plane.
-2. **Revert the Release Directory**:
+2. **Crash Recovery Marker Check**:
+   - The self-updater uses atomic file replacements. Check for `.recovery-marker` alongside the executable.
+   - If present, a mid-update crash occurred. Delete the marker and manually restore the `.backup` executable if needed.
+3. **Revert the Release Directory**:
    - For control plane, stop `fusionpanel-api.service`, switch the active release symlink to the previous build, and restart.
-3. **Job Reconciliation**:
+4. **Job Reconciliation**:
    - Restarted jobs may need manual intervention if stuck in an incomplete state. Check SQLite backend `job_records`.
