@@ -1,8 +1,13 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { DashboardLayout } from './components/layout/DashboardLayout';
+import WebsitesView from './views/Websites';
+import DatabasesView from './views/Databases';
+import BackupsView from './views/Backups';
+import SecurityRulesUI from './views/Security';
 
-function App() {
+function Dashboard() {
   return (
-    <DashboardLayout>
+    <>
       <div className="grid grid-cols-1 gap-4 mb-4">
         <div className="flex items-center justify-center h-24 rounded-sm bg-gray-50 dark:bg-gray-800">
           <p className="text-2xl text-gray-400 dark:text-gray-500">
@@ -22,7 +27,23 @@ function App() {
           </p>
         </div>
       </div>
-    </DashboardLayout>
+    </>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <DashboardLayout>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/websites" element={<WebsitesView />} />
+          <Route path="/databases" element={<DatabasesView />} />
+          <Route path="/backups" element={<BackupsView />} />
+          <Route path="/security" element={<SecurityRulesUI />} />
+        </Routes>
+      </DashboardLayout>
+    </BrowserRouter>
   );
 }
 
