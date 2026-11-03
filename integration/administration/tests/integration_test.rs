@@ -29,6 +29,7 @@ async fn setup_app() -> (axum::Router, Arc<QuotaEngine>) {
         quotas: quotas.clone(),
         audit,
         invitations,
+        admin_token: Arc::new("secret-admin-token".to_string()),
     };
     (router(state), quotas)
 }
@@ -209,14 +210,38 @@ async fn test_cross_tenant_invitation_policy() {
     let id = invitation["id"].as_str().unwrap();
     let token = invitation["token"].as_str().unwrap();
 
-    let current_time = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
+    // Remove unused current_time
     let res = post_json_auth(&app, &format!("/invitations/{}/accept", id), json!({
-        "token": token,
-        "current_time": current_time
+        "token": token
     })).await;
     assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_invitation_revocation_durable_survives_reload() {
+    let inv_file = NamedTempFile::new().unwrap();
+    let path = inv_file.path().to_path_buf();
+    let tenant_id = Uuid::new_v4();
+
+    // 1. Create invitation
+    let inv = administration::teams::invitation::Invitation::new(
+        tenant_id,
+        administration::teams::invitation::Role::Member,
+        3600,
+    );
+    let inv_id = inv.id;
+
+    {
+        let mut store = DurableInvitations::new(path.clone());
+        store.insert(inv_id, inv).unwrap();
+        // Revoke
+        assert!(store.remove(&inv_id).unwrap().is_some());
+    }
+
+    // 2. Re-open store from disk - revoked invitation must NOT resurrect!
+    {
+        let mut reloaded_store = DurableInvitations::new(path);
+        assert!(reloaded_store.get_mut(&inv_id).is_none());
+        assert!(reloaded_store.remove(&inv_id).unwrap().is_none());
+    }
 }

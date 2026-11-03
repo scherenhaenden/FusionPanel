@@ -82,7 +82,7 @@ impl AuditLog {
         })
     }
 
-    pub fn append(&mut self, event: AuditEvent) -> AuditRecord {
+    pub fn append(&mut self, event: AuditEvent) -> Result<AuditRecord, AuditError> {
         let previous_hash = self
             .records
             .last()
@@ -96,7 +96,7 @@ impl AuditLog {
         let mut hasher = Sha256::new();
         hasher.update(&previous_hash);
 
-        let event_json = serde_json::to_string(&event).unwrap_or_default();
+        let event_json = serde_json::to_string(&event)?;
         hasher.update(&event_json);
 
         let hash = hex::encode(hasher.finalize());
@@ -107,23 +107,20 @@ impl AuditLog {
             hash,
         };
 
-        self.records.push(record.clone());
-
         if let Some(path) = &self.path {
-            // Memory rule: explicit restrictive storage permissions
-            if let Ok(mut file) = OpenOptions::new()
+            let mut file = OpenOptions::new()
                 .create(true)
                 .append(true)
                 .mode(0o600)
-                .open(path)
-            {
-                if let Ok(json_line) = serde_json::to_string(&record) {
-                    let _ = writeln!(file, "{}", json_line);
-                }
-            }
+                .open(path)?;
+            let json_line = serde_json::to_string(&record)?;
+            writeln!(file, "{}", json_line)?;
+            file.flush()?;
+            file.sync_all()?;
         }
 
-        record
+        self.records.push(record.clone());
+        Ok(record)
     }
 
     pub fn verify(&self) -> Result<(), AuditError> {
@@ -196,9 +193,9 @@ mod tests {
         let event2 = create_test_event("UPDATE");
         let event3 = create_test_event("DELETE");
 
-        log.append(event1.clone());
-        log.append(event2.clone());
-        log.append(event3.clone());
+        log.append(event1.clone()).unwrap();
+        log.append(event2.clone()).unwrap();
+        log.append(event3.clone()).unwrap();
 
         assert_eq!(log.records().len(), 3);
         assert!(log.verify().is_ok());
@@ -211,8 +208,8 @@ mod tests {
         let event1 = create_test_event("CREATE");
         let event2 = create_test_event("UPDATE");
 
-        log.append(event1);
-        log.append(event2.clone());
+        log.append(event1).unwrap();
+        log.append(event2.clone()).unwrap();
 
         // Tamper with the first event
         let mut tampered_event = log.records()[0].event.clone();
@@ -241,9 +238,9 @@ mod tests {
         let event2 = create_test_event("UPDATE");
         let event3 = create_test_event("DELETE");
 
-        log.append(event1);
-        log.append(event2);
-        log.append(event3);
+        log.append(event1).unwrap();
+        log.append(event2).unwrap();
+        log.append(event3).unwrap();
 
         // Tamper with the second event to break the chain for the third event
         let mut tampered_event = log.records()[1].event.clone();
@@ -273,8 +270,8 @@ mod tests {
 
         {
             let mut log = AuditLog::with_path(&path).unwrap();
-            log.append(create_test_event("CREATE"));
-            log.append(create_test_event("UPDATE"));
+            log.append(create_test_event("CREATE")).unwrap();
+            log.append(create_test_event("UPDATE")).unwrap();
         }
 
         // Re-load
