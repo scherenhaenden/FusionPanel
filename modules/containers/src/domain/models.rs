@@ -36,7 +36,24 @@ impl PortMapping {
     }
 }
 
+#[derive(Deserialize)]
+struct RawMountPoint {
+    source: String,
+    target: String,
+    #[serde(default)]
+    read_only: bool,
+}
+
+impl TryFrom<RawMountPoint> for MountPoint {
+    type Error = DomainError;
+
+    fn try_from(raw: RawMountPoint) -> Result<Self, Self::Error> {
+        MountPoint::new(raw.source, raw.target, raw.read_only)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "RawMountPoint")]
 pub struct MountPoint {
     source: String,
     target: String,
@@ -85,6 +102,9 @@ impl MountPoint {
             "/sys",
             "/dev",
             "/var/lib/docker",
+            "/proc",
+            "/root",
+            "/boot",
         ];
 
         for p in sensitive_paths {
@@ -92,6 +112,39 @@ impl MountPoint {
                 return Err(DomainError::InvalidMountPoint(
                     format!("Mounting sensitive path {} is not allowed", p),
                 ));
+            }
+        }
+
+        // Resolve symlinks to prevent escaping sensitive paths via symlink targets or ancestors
+        let path_obj = Path::new(&source);
+        if path_obj.exists() {
+            if let Ok(canonical) = path_obj.canonicalize() {
+                let canonical_str = canonical.to_string_lossy();
+                for p in sensitive_paths {
+                    if canonical_str == *p || canonical_str.starts_with(&format!("{}/", p)) {
+                        return Err(DomainError::InvalidMountPoint(
+                            format!("Mounting sensitive symlink target {} is not allowed", canonical_str),
+                        ));
+                    }
+                }
+            }
+        } else {
+            let mut curr = path_obj.parent();
+            while let Some(parent) = curr {
+                if parent.exists() {
+                    if let Ok(canonical) = parent.canonicalize() {
+                        let canonical_str = canonical.to_string_lossy();
+                        for p in sensitive_paths {
+                            if p != "/" && (canonical_str == p || canonical_str.starts_with(&format!("{}/", p))) {
+                                return Err(DomainError::InvalidMountPoint(
+                                    format!("Mounting through sensitive symlink ancestor {} is not allowed", canonical_str),
+                                ));
+                            }
+                        }
+                    }
+                    break;
+                }
+                curr = parent.parent();
             }
         }
 
@@ -123,6 +176,8 @@ pub struct ContainerSpec {
     pub mounts: Vec<MountPoint>,
     pub network: Option<String>,
     pub limits: Option<ResourceLimits>,
+    #[serde(default)]
+    pub command: Vec<String>,
 }
 
 impl ContainerSpec {
@@ -139,6 +194,7 @@ impl ContainerSpec {
             mounts,
             network: None,
             limits: None,
+            command: Vec::new(),
         }
     }
 
@@ -149,6 +205,11 @@ impl ContainerSpec {
 
     pub fn with_limits(mut self, limits: ResourceLimits) -> Self {
         self.limits = Some(limits);
+        self
+    }
+
+    pub fn with_command(mut self, command: Vec<String>) -> Self {
+        self.command = command;
         self
     }
 }

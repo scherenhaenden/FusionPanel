@@ -86,7 +86,8 @@ async fn test_docker_volume_persistence() {
         false,
     ).unwrap();
 
-    let spec = ContainerSpec::new(container_id.clone(), image_ref, vec![], vec![mount]);
+    let spec = ContainerSpec::new(container_id.clone(), image_ref, vec![], vec![mount])
+        .with_command(vec!["sleep".to_string(), "10".to_string()]);
 
     engine.create(&spec).await.expect("Failed to create container");
 
@@ -131,14 +132,16 @@ async fn test_docker_network_isolation() {
     let image_ref = ImageRef::new("alpine:latest".to_string()).unwrap();
 
     let spec = ContainerSpec::new(container_id.clone(), image_ref, vec![], vec![])
-        .with_network(network_name.clone());
+        .with_network(network_name.clone())
+        .with_command(vec!["sleep".to_string(), "10".to_string()]);
 
     engine.create(&spec).await.expect("Failed to create container");
+    engine.start(&container_id).await.expect("Failed to start container");
 
-    // Inspect container to check network
+    // Inspect container to check network using index to support hyphens in Go templates
     let output = Command::new("docker")
         .arg("inspect")
-        .arg(format!("--format={{{{.NetworkSettings.Networks.{}.NetworkID}}}}", network_name))
+        .arg(format!("--format={{{{(index .NetworkSettings.Networks \"{}\").NetworkID}}}}", network_name))
         .arg(container_id.as_str())
         .output()
         .unwrap();
@@ -147,6 +150,7 @@ async fn test_docker_network_isolation() {
     let id_str = String::from_utf8_lossy(&output.stdout);
     assert!(!id_str.trim().is_empty());
 
+    engine.stop(&container_id).await.expect("Failed to stop container");
     engine.remove(&container_id).await.expect("Failed to remove container");
 
     // Remove network
@@ -210,4 +214,20 @@ fn test_refused_host_paths() {
 
     // Valid path is accepted
     assert!(MountPoint::new("/var/data".to_string(), "/target".to_string(), false).is_ok());
+
+    // Symlink resolution checks
+    let temp_symlink_dir = std::env::temp_dir().join(format!("symlink-test-{}", Uuid::new_v4()));
+    let _ = std::fs::create_dir_all(&temp_symlink_dir);
+    let symlink_path = temp_symlink_dir.join("evil_etc");
+    #[cfg(unix)]
+    {
+        let _ = std::os::unix::fs::symlink("/etc", &symlink_path);
+        // Mounting symlink pointing to /etc must be refused
+        assert!(MountPoint::new(symlink_path.to_string_lossy().to_string(), "/target".to_string(), false).is_err());
+    }
+    let _ = std::fs::remove_dir_all(&temp_symlink_dir);
+
+    // Deserialization bypass protection: serde_json cannot deserialize sensitive path
+    let json_bypass = r#"{"source": "/etc/shadow", "target": "/data", "read_only": true}"#;
+    assert!(serde_json::from_str::<MountPoint>(json_bypass).is_err());
 }
