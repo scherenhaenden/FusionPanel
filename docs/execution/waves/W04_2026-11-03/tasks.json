@@ -1389,13 +1389,14 @@
         "DEP-10",
         "DEP-11"
       ],
-      "status": "DISPATCHED",
+      "status": "MERGED",
       "base_sha": null,
       "session_id": "14229757872236177400",
       "session_url": null,
       "pr_url": null,
       "prompt_file": "prompts/W04-40.md",
-      "prompt_sha256": "7223e4e700293b166f9bd1e1b12c2dda31faf1938a88b939b6fd527f62e593fe"
+      "prompt_sha256": "7223e4e700293b166f9bd1e1b12c2dda31faf1938a88b939b6fd527f62e593fe",
+      "review_notes": "Merged in commit d0d6b21 from feat/w04-40-e2e-deployments"
     },
     {
       "id": "W04-41",
