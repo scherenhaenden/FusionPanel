@@ -1,15 +1,5 @@
 # Administration E2E Tests
 
-This package provides End-to-End (E2E) verification for the Administration domains (ADM-01 through ADM-15).
+The suite starts the real administration router on loopback with a disposable audit journal and invitation journal. It verifies authenticated audit append and tamper detection after restart, invitation acceptance and revocation across restarts, and concurrent quota reservations through HTTP. Updater checks exercise the production updater against temporary files. No shared service, host firewall, or production credential is used.
 
-## Capabilities tracked
-* **ADM-04: Panel updates and recovery**: Partial. `test_inplace_updater_rollback_guard` is implemented but blocked awaiting disposable test environment.
-* **ADM-05: User and role management**: Partial. `test_team_member_invitation_flow` is implemented but blocked awaiting disposable test environment.
-* **ADM-06: Reseller hierarchy (Tenant Quotas)**: Partial. `test_organization_tenant_quotas` is implemented but blocked awaiting disposable test environment.
-* **Audit Logging**: Partial. `test_audit_logging_immutability` is implemented but blocked awaiting disposable test environment.
-
-All other ADM- capabilities are currently missing and represent follow-on work items.
-
-## Execution
-Run `cargo test --manifest-path tests/e2e/administration/Cargo.toml`.
-If the `FUSIONPANEL_E2E_READY` environment variable is not set or prerequisites are unavailable, tests will explicitly panic with a `BLOCKED` message to prevent silent passes.
+Run with `cargo test --manifest-path tests/e2e/administration/Cargo.toml`.
