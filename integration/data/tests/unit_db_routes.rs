@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use axum::{
-    extract::{Path, State, Extension},
+    extract::{Extension, Path, State},
     response::IntoResponse,
     Json,
 };
@@ -14,11 +14,15 @@ use db_routes::{
     CreateDatabaseUserRequest, Privilege, UpdateUserPrivilegesRequest,
 };
 
-use databases::adapter::{DatabaseAdapter, DatabaseConfig, DatabaseEngine, ConnectionStrategy, SecretString, DbName, DbUser, CreateDbPlan, CreateUserPlan, GrantPlan, DumpPlan, RestorePlan, Result as DbResult};
 use async_trait::async_trait;
-use std::sync::{Arc, Mutex};
-use jobs::JobStore;
+use databases::adapter::{
+    ConnectionStrategy, CreateDbPlan, CreateUserPlan, DatabaseAdapter, DatabaseConfig,
+    DatabaseEngine, DbName, DbUser, DumpPlan, GrantPlan, RestorePlan, Result as DbResult,
+    SecretString,
+};
 use integration_identity::AuthenticatedUser;
+use jobs::JobStore;
+use std::sync::{Arc, Mutex};
 
 struct MockAdapter {
     config: DatabaseConfig,
@@ -26,19 +30,70 @@ struct MockAdapter {
 
 #[async_trait]
 impl DatabaseAdapter for MockAdapter {
-    fn engine(&self) -> DatabaseEngine { self.config.engine.clone() }
-    fn config(&self) -> &DatabaseConfig { &self.config }
-    async fn check_connection(&self) -> DbResult<()> { Ok(()) }
-    async fn plan_create_database(&self, name: DbName, owner: DbUser) -> DbResult<CreateDbPlan> { Ok(CreateDbPlan { db_name: name, owner }) }
-    async fn apply_create_database(&self, _plan: &CreateDbPlan) -> DbResult<()> { Ok(()) }
-    async fn plan_create_user(&self, username: DbUser, password_ref: SecretString) -> DbResult<CreateUserPlan> { Ok(CreateUserPlan { username, password_ref }) }
-    async fn apply_create_user(&self, _plan: &CreateUserPlan) -> DbResult<()> { Ok(()) }
-    async fn plan_grant(&self, db_name: DbName, username: DbUser, privileges: Vec<String>) -> DbResult<GrantPlan> { Ok(GrantPlan { db_name, username, privileges }) }
-    async fn apply_grant(&self, _plan: &GrantPlan) -> DbResult<()> { Ok(()) }
-    async fn plan_dump(&self, db_name: DbName, output_path: String) -> DbResult<DumpPlan> { Ok(DumpPlan { db_name, output_path }) }
-    async fn apply_dump(&self, _plan: &DumpPlan) -> DbResult<()> { Ok(()) }
-    async fn plan_restore(&self, db_name: DbName, input_path: String) -> DbResult<RestorePlan> { Ok(RestorePlan { db_name, input_path }) }
-    async fn apply_restore(&self, _plan: &RestorePlan) -> DbResult<()> { Ok(()) }
+    fn engine(&self) -> DatabaseEngine {
+        self.config.engine.clone()
+    }
+    fn config(&self) -> &DatabaseConfig {
+        &self.config
+    }
+    async fn check_connection(&self) -> DbResult<()> {
+        Ok(())
+    }
+    async fn plan_create_database(&self, name: DbName, owner: DbUser) -> DbResult<CreateDbPlan> {
+        Ok(CreateDbPlan {
+            db_name: name,
+            owner,
+        })
+    }
+    async fn apply_create_database(&self, _plan: &CreateDbPlan) -> DbResult<()> {
+        Ok(())
+    }
+    async fn plan_create_user(
+        &self,
+        username: DbUser,
+        password_ref: SecretString,
+    ) -> DbResult<CreateUserPlan> {
+        Ok(CreateUserPlan {
+            username,
+            password_ref,
+        })
+    }
+    async fn apply_create_user(&self, _plan: &CreateUserPlan) -> DbResult<()> {
+        Ok(())
+    }
+    async fn plan_grant(
+        &self,
+        db_name: DbName,
+        username: DbUser,
+        privileges: Vec<String>,
+    ) -> DbResult<GrantPlan> {
+        Ok(GrantPlan {
+            db_name,
+            username,
+            privileges,
+        })
+    }
+    async fn apply_grant(&self, _plan: &GrantPlan) -> DbResult<()> {
+        Ok(())
+    }
+    async fn plan_dump(&self, db_name: DbName, output_path: String) -> DbResult<DumpPlan> {
+        Ok(DumpPlan {
+            db_name,
+            output_path,
+        })
+    }
+    async fn apply_dump(&self, _plan: &DumpPlan) -> DbResult<()> {
+        Ok(())
+    }
+    async fn plan_restore(&self, db_name: DbName, input_path: String) -> DbResult<RestorePlan> {
+        Ok(RestorePlan {
+            db_name,
+            input_path,
+        })
+    }
+    async fn apply_restore(&self, _plan: &RestorePlan) -> DbResult<()> {
+        Ok(())
+    }
 }
 
 fn create_mock_state() -> AppState {
@@ -62,7 +117,6 @@ fn mock_auth_user() -> AuthenticatedUser {
         bindings: vec![],
     }
 }
-
 
 #[tokio::test]
 async fn test_identifier_validation() {
@@ -137,7 +191,12 @@ async fn test_create_database_valid() {
 #[tokio::test]
 async fn test_get_database_invalid_identifier() {
     let state = create_mock_state();
-    let res = get_database(State(state), Extension(mock_auth_user()), Path("invalid-name".to_string())).await;
+    let res = get_database(
+        State(state),
+        Extension(mock_auth_user()),
+        Path("invalid-name".to_string()),
+    )
+    .await;
     match res {
         Err((status, _)) => assert_eq!(status, axum::http::StatusCode::BAD_REQUEST),
         _ => panic!("Expected error"),
@@ -147,7 +206,12 @@ async fn test_get_database_invalid_identifier() {
 #[tokio::test]
 async fn test_delete_database_invalid_identifier() {
     let state = create_mock_state();
-    let res = delete_database(State(state), Extension(mock_auth_user()), Path("invalid-name".to_string())).await;
+    let res = delete_database(
+        State(state),
+        Extension(mock_auth_user()),
+        Path("invalid-name".to_string()),
+    )
+    .await;
     match res {
         Err((status, _)) => assert_eq!(status, axum::http::StatusCode::BAD_REQUEST),
         _ => panic!("Expected error"),
@@ -157,13 +221,17 @@ async fn test_delete_database_invalid_identifier() {
 #[tokio::test]
 async fn test_delete_database_unsupported() {
     let state = create_mock_state();
-    let res = delete_database(State(state), Extension(mock_auth_user()), Path("valid_db".to_string())).await;
+    let res = delete_database(
+        State(state),
+        Extension(mock_auth_user()),
+        Path("valid_db".to_string()),
+    )
+    .await;
     match res {
         Err((status, _)) => assert_eq!(status, axum::http::StatusCode::NOT_IMPLEMENTED),
         _ => panic!("Expected error"),
     }
 }
-
 
 #[tokio::test]
 async fn test_create_user_invalid_identifier() {
@@ -172,7 +240,13 @@ async fn test_create_user_invalid_identifier() {
         username: "invalid-user".to_string(),
         password_hash: "hash".to_string(),
     };
-    let res = create_user(State(state), Extension(mock_auth_user()), Path("valid_db".to_string()), Json(req)).await;
+    let res = create_user(
+        State(state),
+        Extension(mock_auth_user()),
+        Path("valid_db".to_string()),
+        Json(req),
+    )
+    .await;
     match res {
         Err((status, _)) => assert_eq!(status, axum::http::StatusCode::BAD_REQUEST),
         _ => panic!("Expected error"),

@@ -36,15 +36,15 @@ fn check_docker() -> Result<(), String> {
     Ok(())
 }
 
+fn require_docker() {
+    if let Err(reason) = check_docker() {
+        panic!("{reason}");
+    }
+}
+
 #[test]
 fn test_install_health_delete() {
-    if let Err(msg) = check_docker() {
-        println!("{}", msg);
-        if msg.starts_with("BLOCKED") {
-            return;
-        }
-        panic!("{}", msg);
-    }
+    require_docker();
 
     let installer = CatalogInstaller::new();
     let temp_dir = env::temp_dir().join("app-catalog-tests");
@@ -73,35 +73,51 @@ services:
 
 #[test]
 fn test_scanner_real_vulnerability() {
-    if let Err(msg) = check_docker() {
-        println!("{}", msg);
-        if msg.starts_with("BLOCKED") {
-            return;
-        }
-        panic!("{}", msg);
-    }
+    require_docker();
     
     // We scan a known vulnerable image, e.g. python:3.4-alpine
     let result = ImageScanner::scan_image("python:3.4-alpine");
     match result {
         Ok(reports) => {
-            // We should find some vulnerabilities
-            assert!(!reports.is_empty());
-            
-            // Check if gate deployment works
-            let has_critical = reports.iter().any(|r| r.severity == "CRITICAL");
-            if has_critical {
-                assert!(ImageScanner::gate_deployment(&reports).is_err());
-            }
+            assert!(
+                reports.iter().any(|report| report.severity == "CRITICAL"),
+                "the known vulnerable image must produce a critical finding"
+            );
+            assert!(ImageScanner::gate_deployment(&reports).is_err());
         },
         Err(e) => {
             if e.contains("Trivy DB download failed") {
-                println!("BLOCKED: Cannot download Trivy DB");
-                return;
+                panic!("BLOCKED: Cannot download Trivy DB: {e}");
             }
             panic!("Scanner failed: {}", e);
         }
     }
+}
+
+#[test]
+fn test_install_rejects_critical_vulnerability_before_starting_stack() {
+    require_docker();
+
+    let installer = CatalogInstaller::new();
+    let temp_dir = env::temp_dir().join(format!(
+        "app-catalog-vulnerable-install-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&temp_dir).unwrap();
+    let compose = "services:\n  app:\n    image: python:3.4-alpine\n";
+
+    let error = installer
+        .install("vulnerable-app", compose, &temp_dir)
+        .expect_err("critical image findings must block installation");
+    if error.contains("Trivy DB download failed") {
+        panic!("BLOCKED: Trivy vulnerability database is unavailable: {error}");
+    }
+    assert!(error.contains("CRITICAL vulnerability"), "{error}");
+    assert!(!temp_dir.join("vulnerable-app_active").exists());
+    fs::remove_dir_all(temp_dir).unwrap();
 }
 
 use app_catalog::schema::{AppTemplate, Variable};
@@ -139,13 +155,7 @@ fn test_deploy_template_unsupported_hardware() {
 
 #[test]
 fn test_deploy_template_allocation() {
-    if let Err(msg) = check_docker() {
-        println!("{}", msg);
-        if msg.starts_with("BLOCKED") {
-            return;
-        }
-        panic!("{}", msg);
-    }
+    require_docker();
 
     let installer = CatalogInstaller::new();
     let mut vars = HashMap::new();
