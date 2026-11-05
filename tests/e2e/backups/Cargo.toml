@@ -8,3 +8,7 @@ license = "AGPL-3.0-only"
 publish = false
 
 [dependencies]
+backups = { path = "../../../modules/backups" }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = "0.4"
+serde_json = "1.0"

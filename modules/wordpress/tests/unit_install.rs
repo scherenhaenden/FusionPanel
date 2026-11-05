@@ -1,9 +1,9 @@
 use std::fs;
-use std::io::{Write, Read};
+use std::io::Write;
 use tempfile::TempDir;
 use wordpress::install::{verify_file_checksum, DbCredentials, InstallError, Orchestrator};
 use std::os::unix::fs::PermissionsExt;
-use zip::write::FileOptions;
+use zip::write::SimpleFileOptions;
 use std::io::Cursor;
 use mockito::Server;
 
@@ -151,7 +151,7 @@ async fn test_corrupt_traversal_archive_mocked() {
     let mut zip_buf = Vec::new();
     {
         let mut zip = zip::ZipWriter::new(Cursor::new(&mut zip_buf));
-        let options = FileOptions::default();
+        let options = SimpleFileOptions::default();
         // Since `zip` crate escapes strings and doesn't allow ".." easily, let's use an invalid zip file to trigger ZipError
         zip.start_file("wordpress/../../etc/passwd", options).unwrap();
         zip.write_all(b"root:x:0:0:root:/root:/bin/bash").unwrap();
@@ -196,7 +196,7 @@ async fn test_missing_checksum_mocked() {
     let mut zip_buf = Vec::new();
     {
         let mut zip = zip::ZipWriter::new(Cursor::new(&mut zip_buf));
-        let options = FileOptions::default();
+        let options = SimpleFileOptions::default();
         zip.start_file("wordpress/index.php", options).unwrap();
         zip.write_all(b"hello world").unwrap(); // matches 2aae6c35...
         zip.finish().unwrap();
@@ -232,7 +232,7 @@ async fn test_successful_promotion_mocked() {
     let mut zip_buf = Vec::new();
     {
         let mut zip = zip::ZipWriter::new(Cursor::new(&mut zip_buf));
-        let options = FileOptions::default();
+        let options = SimpleFileOptions::default();
         zip.start_file("wordpress/index.php", options).unwrap();
         zip.write_all(b"hello world").unwrap();
         zip.start_file("wordpress/wp-content/themes/index.php", options).unwrap();

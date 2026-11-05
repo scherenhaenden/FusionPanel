@@ -1,0 +1,33 @@
+[package]
+name = "integration-data"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[workspace]
+
+[dependencies]
+axum = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+chrono = "0.4"
+cron = "0.12.1"
+sha2 = "0.10"
+flate2 = "1.0"
+zstd = "0.13"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+thiserror = "1.0"
+
+databases = { path = "../../modules/databases" }
+jobs = { package = "fusionpanel-jobs", path = "../../crates/jobs" }
+identity = { path = "../../modules/identity" }
+integration-identity = { path = "../identity" }
+async-trait = "0.1"
+
+[dev-dependencies]
+tempfile = "3.10"
+rusqlite = { version = "0.31", features = ["bundled"] }
+http-body-util = "0.1"
+tower = { version = "0.5.3", features = ["util"] }
+tokio-test = "0.4"
