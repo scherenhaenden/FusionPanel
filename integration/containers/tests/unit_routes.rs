@@ -9,16 +9,16 @@ use containers::{
     engine::ContainerEngine,
 };
 use http_body_util::BodyExt;
+use identity::{
+    rbac::{Permission, RoleBinding, RoleType, Scope},
+    types::{TenantId, UserId},
+};
 use integration_containers::{
     ports::PortAllocator,
     routes::{create_router, AppState, AuditLogger},
     store::{ContainerStore, SqliteContainerStore},
 };
 use integration_identity::AuthenticatedUser;
-use identity::{
-    rbac::{Permission, RoleBinding, RoleType, Scope},
-    types::{TenantId, UserId},
-};
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
@@ -61,7 +61,12 @@ impl ContainerEngine for MockContainerEngine {
         id: &ContainerId,
     ) -> Result<ContainerStatus, containers::domain::DomainError> {
         self.inspect_calls.lock().unwrap().push(id.clone());
-        Ok(self.status_to_return.lock().unwrap().clone().unwrap_or(ContainerStatus::Created))
+        Ok(self
+            .status_to_return
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or(ContainerStatus::Created))
     }
 }
 
@@ -81,20 +86,70 @@ impl AuditLogger for MockAuditLogger {
     }
 }
 
-fn setup() -> (axum::Router, Arc<MockContainerEngine>, Arc<MockAuditLogger>, Arc<SqliteContainerStore>) {
+fn setup_with_ports(
+    range_start: u16,
+    range_end: u16,
+) -> (
+    axum::Router,
+    Arc<MockContainerEngine>,
+    Arc<MockAuditLogger>,
+    Arc<SqliteContainerStore>,
+    Arc<PortAllocator>,
+) {
     let engine = Arc::new(MockContainerEngine::default());
     let audit_logger = Arc::new(MockAuditLogger::default());
-    let port_allocator = Arc::new(PortAllocator::new(20000, 30000));
+    let port_allocator = Arc::new(PortAllocator::new(range_start, range_end));
     let store = Arc::new(SqliteContainerStore::new(Connection::open_in_memory().unwrap()).unwrap());
 
     let state = Arc::new(AppState {
         engine: engine.clone(),
         audit_logger: audit_logger.clone(),
-        port_allocator,
+        port_allocator: port_allocator.clone(),
         store: store.clone(),
     });
 
-    (create_router(state), engine, audit_logger, store)
+    (
+        create_router(state).expect("router setup should restore persisted port reservations"),
+        engine,
+        audit_logger,
+        store,
+        port_allocator,
+    )
+}
+
+fn setup() -> (
+    axum::Router,
+    Arc<MockContainerEngine>,
+    Arc<MockAuditLogger>,
+    Arc<SqliteContainerStore>,
+    Arc<PortAllocator>,
+) {
+    setup_with_ports(20000, 30000)
+}
+
+#[test]
+fn test_create_router_restores_persisted_port_reservations() {
+    let engine = Arc::new(MockContainerEngine::default());
+    let audit_logger = Arc::new(MockAuditLogger::default());
+    let store = Arc::new(SqliteContainerStore::new(Connection::open_in_memory().unwrap()).unwrap());
+    store
+        .create_container(
+            "00000000-0000-0000-0000-000000000001-00000000-0000-0000-0000-000000000002",
+            "00000000-0000-0000-0000-000000000001",
+            "app",
+            &[20000],
+        )
+        .unwrap();
+    let port_allocator = Arc::new(PortAllocator::new(20000, 30000));
+    let state = Arc::new(AppState {
+        engine,
+        audit_logger,
+        port_allocator: port_allocator.clone(),
+        store,
+    });
+
+    let _router = create_router(state).unwrap();
+    assert_eq!(port_allocator.allocate().unwrap(), 20001);
 }
 
 fn get_mock_user(tenant_id: &str) -> AuthenticatedUser {
@@ -107,8 +162,8 @@ fn get_mock_user(tenant_id: &str) -> AuthenticatedUser {
             role: identity::rbac::Role {
                 role_type: RoleType::TenantAdmin,
                 id: identity::types::RoleId::new_v4(),
-            name: "TenantAdmin".to_string(),
-            permissions: vec![Permission::SiteDeploy].into_iter().collect(),
+                name: "TenantAdmin".to_string(),
+                permissions: vec![Permission::SiteDeploy].into_iter().collect(),
             },
             scope: Scope::Tenant { tenant_id: tid },
         }],
@@ -117,7 +172,7 @@ fn get_mock_user(tenant_id: &str) -> AuthenticatedUser {
 
 #[tokio::test]
 async fn test_create_container() {
-    let (app, engine, audit_logger, store) = setup();
+    let (app, engine, audit_logger, store, _) = setup();
 
     let tenant_id = "00000000-0000-0000-0000-000000000001";
     let user = get_mock_user(tenant_id);
@@ -172,8 +227,86 @@ async fn test_create_container() {
 }
 
 #[tokio::test]
+async fn test_partial_port_allocation_failure_releases_prior_reservations() {
+    let (app, _, _, _, port_allocator) = setup_with_ports(20000, 20000);
+    let tenant_id = "00000000-0000-0000-0000-000000000001";
+    let mut request = Request::builder()
+        .method(Method::POST)
+        .uri("/v1/containers")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "image": "nginx:latest",
+                "ports": [{"container": 80}, {"container": 81}]
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    request.extensions_mut().insert(get_mock_user(tenant_id));
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(port_allocator.allocate().unwrap(), 20000);
+}
+
+#[tokio::test]
+async fn test_missing_authenticated_user_is_unauthorized() {
+    let (app, _, _, _, _) = setup();
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/v1/containers")
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"image":"nginx:latest"}"#))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_remove_container_releases_persisted_port() {
+    let (app, _, _, _, port_allocator) = setup();
+    let tenant_id = "00000000-0000-0000-0000-000000000001";
+    let user = get_mock_user(tenant_id);
+    let mut create = Request::builder()
+        .method(Method::POST)
+        .uri("/v1/containers")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "image": "nginx:latest",
+                "ports": [{"container": 80}]
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    create.extensions_mut().insert(user.clone());
+    let created = app.clone().oneshot(create).await.unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let body = created.into_body().collect().await.unwrap().to_bytes();
+    let container_id: String = serde_json::from_slice::<serde_json::Value>(&body).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let next_port = port_allocator.allocate().unwrap();
+    assert_eq!(next_port, 20001);
+    port_allocator.release(next_port);
+
+    let mut remove = Request::builder()
+        .method(Method::DELETE)
+        .uri(format!("/v1/containers/{container_id}"))
+        .body(Body::empty())
+        .unwrap();
+    remove.extensions_mut().insert(user);
+    let response = app.oneshot(remove).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(port_allocator.allocate().unwrap(), 20000);
+}
+
+#[tokio::test]
 async fn test_create_container_no_identity() {
-    let (app, _engine, _audit_logger, _) = setup();
+    let (app, _engine, _audit_logger, _, _) = setup();
 
     let request = Request::builder()
         .method(Method::POST)
@@ -186,23 +319,20 @@ async fn test_create_container_no_identity() {
 
     let response = app.oneshot(request).await.unwrap();
 
-    // Since we are mocking extractors inside the route we need to make sure the app handles missing auth
-    // Wait, the Extension<AuthenticatedUser> will fail with 500 if missing unless we wrap it.
-    // In Axum, missing Extension returns 500. So we expect 500 here since we didn't add the middleware.
-    // In real app, the auth middleware adds it, if missing it returns 401.
-    // We can assert 500 for missing extension.
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
 async fn test_start_container_success() {
-    let (app, engine, audit_logger, store) = setup();
+    let (app, engine, audit_logger, store, _) = setup();
     let tenant_id = "00000000-0000-0000-0000-000000000001";
     let user = get_mock_user(tenant_id);
     let container_id = format!("{}-{}", tenant_id, Uuid::new_v4());
 
     // Insert ownership
-    store.create_container(&container_id, tenant_id, "app").unwrap();
+    store
+        .create_container(&container_id, tenant_id, "app", &[])
+        .unwrap();
 
     let mut request = Request::builder()
         .method(Method::POST)
@@ -233,13 +363,15 @@ async fn test_start_container_success() {
 
 #[tokio::test]
 async fn test_start_container_wrong_tenant() {
-    let (app, _engine, _audit_logger, store) = setup();
+    let (app, _engine, _audit_logger, store, _) = setup();
     let owner_tenant = "00000000-0000-0000-0000-000000000001";
     let attacker_tenant = "00000000-0000-0000-0000-000000000002";
     let user = get_mock_user(attacker_tenant);
     let container_id = format!("{}-{}", owner_tenant, Uuid::new_v4());
 
-    store.create_container(&container_id, owner_tenant, "app").unwrap();
+    store
+        .create_container(&container_id, owner_tenant, "app", &[])
+        .unwrap();
 
     let mut request = Request::builder()
         .method(Method::POST)
@@ -256,12 +388,14 @@ async fn test_start_container_wrong_tenant() {
 
 #[tokio::test]
 async fn test_stop_container() {
-    let (app, engine, audit_logger, store) = setup();
+    let (app, engine, audit_logger, store, _) = setup();
     let tenant_id = "00000000-0000-0000-0000-000000000001";
     let user = get_mock_user(tenant_id);
     let container_id = format!("{}-{}", tenant_id, Uuid::new_v4());
 
-    store.create_container(&container_id, tenant_id, "app").unwrap();
+    store
+        .create_container(&container_id, tenant_id, "app", &[])
+        .unwrap();
 
     let mut request = Request::builder()
         .method(Method::POST)
@@ -292,12 +426,14 @@ async fn test_stop_container() {
 
 #[tokio::test]
 async fn test_restart_container() {
-    let (app, engine, audit_logger, store) = setup();
+    let (app, engine, audit_logger, store, _) = setup();
     let tenant_id = "00000000-0000-0000-0000-000000000001";
     let user = get_mock_user(tenant_id);
     let container_id = format!("{}-{}", tenant_id, Uuid::new_v4());
 
-    store.create_container(&container_id, tenant_id, "app").unwrap();
+    store
+        .create_container(&container_id, tenant_id, "app", &[])
+        .unwrap();
 
     let mut request = Request::builder()
         .method(Method::POST)
@@ -332,12 +468,14 @@ async fn test_restart_container() {
 
 #[tokio::test]
 async fn test_remove_container() {
-    let (app, engine, audit_logger, store) = setup();
+    let (app, engine, audit_logger, store, _) = setup();
     let tenant_id = "00000000-0000-0000-0000-000000000001";
     let user = get_mock_user(tenant_id);
     let container_id = format!("{}-{}", tenant_id, Uuid::new_v4());
 
-    store.create_container(&container_id, tenant_id, "app").unwrap();
+    store
+        .create_container(&container_id, tenant_id, "app", &[])
+        .unwrap();
 
     let mut request = Request::builder()
         .method(Method::DELETE)
@@ -371,12 +509,14 @@ async fn test_remove_container() {
 
 #[tokio::test]
 async fn test_inspect_container() {
-    let (app, engine, audit_logger, store) = setup();
+    let (app, engine, audit_logger, store, _) = setup();
     let tenant_id = "00000000-0000-0000-0000-000000000001";
     let user = get_mock_user(tenant_id);
     let container_id = format!("{}-{}", tenant_id, Uuid::new_v4());
 
-    store.create_container(&container_id, tenant_id, "app").unwrap();
+    store
+        .create_container(&container_id, tenant_id, "app", &[])
+        .unwrap();
 
     *engine.status_to_return.lock().unwrap() = Some(ContainerStatus::Running);
 

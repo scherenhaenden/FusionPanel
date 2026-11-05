@@ -4,26 +4,21 @@ use axum::{
     body::Body,
     http::{Method, Request, StatusCode},
 };
-use containers::{
-    domain::{ContainerId, ContainerStatus},
-    engine::ContainerEngine,
-};
 use containers::docker::engine::DockerCliEngine;
 use http_body_util::BodyExt;
+use identity::{
+    rbac::{Permission, RoleBinding, RoleType, Scope},
+    types::{TenantId, UserId},
+};
 use integration_containers::{
     ports::PortAllocator,
     routes::{create_router, AppState, AuditLogger},
     store::{ContainerStore, SqliteContainerStore},
 };
 use integration_identity::AuthenticatedUser;
-use identity::{
-    rbac::{Permission, RoleBinding, RoleType, Scope},
-    types::{TenantId, UserId},
-};
 use rusqlite::Connection;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tower::ServiceExt;
-use uuid::Uuid;
 
 #[derive(Default)]
 struct MockAuditLogger;
@@ -51,7 +46,7 @@ fn get_mock_user(tenant_id: &str) -> AuthenticatedUser {
     }
 }
 
-async fn setup_app() -> (axum::Router, Arc<SqliteContainerStore>) {
+async fn setup_app() -> (axum::Router, Arc<SqliteContainerStore>, Arc<PortAllocator>) {
     let engine = Arc::new(DockerCliEngine::new());
     let audit_logger = Arc::new(MockAuditLogger::default());
     let port_allocator = Arc::new(PortAllocator::new(20000, 30000));
@@ -62,16 +57,20 @@ async fn setup_app() -> (axum::Router, Arc<SqliteContainerStore>) {
     let state = Arc::new(AppState {
         engine: engine.clone(),
         audit_logger: audit_logger.clone(),
-        port_allocator,
+        port_allocator: port_allocator.clone(),
         store: store.clone(),
     });
 
-    (create_router(state), store)
+    (
+        create_router(state).expect("router setup should restore persisted port reservations"),
+        store,
+        port_allocator,
+    )
 }
 
 #[tokio::test]
 async fn test_docker_lifecycle_real_integration() {
-    let (app, store) = setup_app().await;
+    let (app, _store, _) = setup_app().await;
 
     let tenant_id = "00000000-0000-0000-0000-000000000001";
     let user = get_mock_user(tenant_id);
@@ -97,9 +96,13 @@ async fn test_docker_lifecycle_real_integration() {
     if status != StatusCode::CREATED {
         println!("Error body: {:?}", String::from_utf8_lossy(&body_bytes));
     }
-    if status == StatusCode::INTERNAL_SERVER_ERROR && String::from_utf8_lossy(&body_bytes).contains("failed to mount") { panic!("BLOCKED: Docker overlayfs restricted"); } assert_eq!(status, StatusCode::CREATED);
+    if status == StatusCode::INTERNAL_SERVER_ERROR
+        && String::from_utf8_lossy(&body_bytes).contains("failed to mount")
+    {
+        panic!("BLOCKED: Docker overlayfs restricted");
+    }
+    assert_eq!(status, StatusCode::CREATED);
     let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-
 
     let container_id = body["id"].as_str().unwrap().to_string();
 
@@ -122,7 +125,6 @@ async fn test_docker_lifecycle_real_integration() {
     request.extensions_mut().insert(user.clone());
     let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-
 
     let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
@@ -160,7 +162,9 @@ async fn test_store_reopen_and_reconcile() {
 
     {
         let store1 = SqliteContainerStore::new(Connection::open(db_path).unwrap()).unwrap();
-        store1.create_container(&container_id, tenant_id, "test_app").unwrap();
+        store1
+            .create_container(&container_id, tenant_id, "test_app", &[24123])
+            .unwrap();
     }
 
     // 2. Restart and reconcile
@@ -175,6 +179,11 @@ async fn test_store_reopen_and_reconcile() {
         // For testing we just ensure the store re-opened correctly and data is there.
         let tenant = store2.get_container_tenant(&container_id).unwrap().unwrap();
         assert_eq!(tenant, tenant_id);
+        assert_eq!(
+            store2.get_container_ports(&container_id).unwrap(),
+            vec![24123]
+        );
+        assert_eq!(store2.get_all_container_ports().unwrap(), vec![24123]);
     }
 
     let _ = std::fs::remove_file(db_path);
