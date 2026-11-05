@@ -14,3 +14,4 @@ reqwest = { version = "0.12.28", default-features = false, features = ["json", "
 serde_json = "1.0"
 tokio = { version = "1.37.0", features = ["full"] }
 tempfile = "3.12"
+uuid = { version = "1.10", features = ["v4", "serde"] }
