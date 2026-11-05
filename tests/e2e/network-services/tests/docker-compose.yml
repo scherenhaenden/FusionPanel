@@ -1,13 +1,15 @@
-version: '3.8'
-
 services:
   bind9:
     image: ubuntu/bind9:9.18-22.04_beta
     environment:
       - BIND9_USER=root
     ports:
-      - "5353:53/udp"
-      - "5353:53/tcp"
+      - target: 53
+        protocol: udp
+        host_ip: 127.0.0.1
+      - target: 53
+        protocol: tcp
+        host_ip: 127.0.0.1
     command: ["-u", "bind", "-g", "-c", "/etc/bind/named.conf"]
 
   mailserver:
@@ -23,7 +25,15 @@ services:
       - ENABLE_SASLAUTHD=0
       - ONE_DIR=1
       - POSTMASTER_ADDRESS=postmaster@example.com
+    volumes:
+      - ./config:/tmp/docker-mailserver
     ports:
-      - "2525:25"
-      - "1433:143"
-      - "5877:587"
+      - target: 25
+        protocol: tcp
+        host_ip: 127.0.0.1
+      - target: 143
+        protocol: tcp
+        host_ip: 127.0.0.1
+      - target: 587
+        protocol: tcp
+        host_ip: 127.0.0.1
