@@ -4,19 +4,21 @@
 mod acme;
 
 use acme::{AcmeClient, AcmeError, AcmeTransport};
-use ring::signature::{self, EcdsaKeyPair};
 use ring::rand::SystemRandom;
+use ring::signature::{self, EcdsaKeyPair};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
 struct LifecycleMockTransport {
     responses: RefCell<HashMap<String, (u16, Vec<(String, String)>, String)>>,
+    request_log: RefCell<Vec<(String, String)>>,
 }
 
 impl LifecycleMockTransport {
     fn new() -> Self {
         Self {
             responses: RefCell::new(HashMap::new()),
+            request_log: RefCell::new(Vec::new()),
         }
     }
 
@@ -46,6 +48,9 @@ impl AcmeTransport for LifecycleMockTransport {
         _headers: &[(&str, &str)],
         _body: Option<&str>,
     ) -> Result<(u16, Vec<(String, String)>, String), AcmeError> {
+        self.request_log
+            .borrow_mut()
+            .push((method.to_string(), url.to_string()));
         let key = format!("{} {}", method, url);
         let responses = self.responses.borrow();
         if let Some((status, hdrs, res_body)) = responses.get(&key) {
@@ -62,7 +67,8 @@ impl AcmeTransport for LifecycleMockTransport {
 
 fn generate_pkcs8() -> Vec<u8> {
     let rng = SystemRandom::new();
-    let pkcs8 = EcdsaKeyPair::generate_pkcs8(&signature::ECDSA_P256_SHA256_FIXED_SIGNING, &rng).unwrap();
+    let pkcs8 =
+        EcdsaKeyPair::generate_pkcs8(&signature::ECDSA_P256_SHA256_FIXED_SIGNING, &rng).unwrap();
     pkcs8.as_ref().to_vec()
 }
 
@@ -88,7 +94,13 @@ fn test_full_acme_lifecycle_mock() {
             nonce_url, account_url, order_url
         ),
     );
-    mock.add_response(nonce_url, "HEAD", 200, vec![("Replay-Nonce", "nonce-1")], "");
+    mock.add_response(
+        nonce_url,
+        "HEAD",
+        200,
+        vec![("Replay-Nonce", "nonce-1")],
+        "",
+    );
     mock.add_response(
         account_url,
         "POST",
@@ -130,7 +142,9 @@ fn test_full_acme_lifecycle_mock() {
     assert_eq!(client.nonce, Some("nonce-3".to_string()));
 
     let cert_key = generate_pkcs8();
-    let finalized_cert_url = client.finalize_order(finalize_url, "example.com", &cert_key).unwrap();
+    let finalized_cert_url = client
+        .finalize_order(finalize_url, "example.com", &cert_key)
+        .unwrap();
     assert_eq!(finalized_cert_url, cert_url);
     assert_eq!(client.nonce, Some("nonce-4".to_string()));
 
@@ -140,11 +154,13 @@ fn test_full_acme_lifecycle_mock() {
 
 #[test]
 fn test_acme_lifecycle_unsupported_wildcard_blocked() {
-    // According to objective: "leave unsupported DNS wildcard issuance unavailable rather than faking it"
-    // Since we don't have a DNS-01 implementation, wildcards aren't supported.
-    // Here we explicitly prove that we don't support wildcard domain names.
-    let domain = "*.example.com";
-    assert!(domain.starts_with("*."));
-    // Our implementation does not have DNS-01 and should not attempt wildcard issuance.
-    // Real validation would fail or return an error, which is the required behavior.
+    let mock = LifecycleMockTransport::new();
+    let pkcs8 = generate_pkcs8();
+    let mut client = AcmeClient::new("https://acme.test/directory".into(), mock, &pkcs8).unwrap();
+    client.account_url = Some("https://acme.test/acct/1".into());
+
+    let result = client.order_certificate("*.example.com");
+
+    assert!(matches!(result, Err(AcmeError::Protocol(_))));
+    assert!(client.transport.request_log.borrow().is_empty());
 }

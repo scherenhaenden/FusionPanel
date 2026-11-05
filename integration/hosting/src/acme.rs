@@ -6,10 +6,11 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use hosting::domain::DomainName;
 use rcgen::{CertificateParams, DnType, KeyPair};
 use ring::digest::{self, Context};
-use ring::signature::{self, EcdsaKeyPair, KeyPair as _};
 use ring::rand::SystemRandom;
+use ring::signature::{self, EcdsaKeyPair, KeyPair as _};
 use serde_json::json;
 
 #[derive(Debug)]
@@ -57,7 +58,11 @@ pub struct AcmeClient<T: AcmeTransport> {
 }
 
 impl<T: AcmeTransport> AcmeClient<T> {
-    pub fn new(directory_url: String, transport: T, key_pair_pkcs8: &[u8]) -> Result<Self, AcmeError> {
+    pub fn new(
+        directory_url: String,
+        transport: T,
+        key_pair_pkcs8: &[u8],
+    ) -> Result<Self, AcmeError> {
         let key_pair = EcdsaKeyPair::from_pkcs8(
             &signature::ECDSA_P256_SHA256_FIXED_SIGNING,
             key_pair_pkcs8,
@@ -97,7 +102,13 @@ impl<T: AcmeTransport> AcmeClient<T> {
         Ok(URL_SAFE_NO_PAD.encode(digest.as_ref()))
     }
 
-    fn sign_jws(&self, url: &str, payload: &str, kid: Option<&str>) -> Result<String, AcmeError> {
+    fn sign_jws(
+        &self,
+        nonce: &str,
+        url: &str,
+        payload: &str,
+        kid: Option<&str>,
+    ) -> Result<String, AcmeError> {
         let b64_payload = if payload.is_empty() {
             "".to_string()
         } else {
@@ -106,17 +117,24 @@ impl<T: AcmeTransport> AcmeClient<T> {
 
         let mut protected_header = json!({
             "alg": "ES256",
-            "nonce": self.nonce.as_ref().unwrap_or(&"".to_string()),
+            "nonce": nonce,
             "url": url,
         });
 
         if let Some(k) = kid {
-            protected_header.as_object_mut().unwrap().insert("kid".to_string(), json!(k));
+            protected_header
+                .as_object_mut()
+                .unwrap()
+                .insert("kid".to_string(), json!(k));
         } else {
-            protected_header.as_object_mut().unwrap().insert("jwk".to_string(), self.jwk());
+            protected_header
+                .as_object_mut()
+                .unwrap()
+                .insert("jwk".to_string(), self.jwk());
         }
 
-        let b64_protected = URL_SAFE_NO_PAD.encode(serde_json::to_string(&protected_header).unwrap());
+        let b64_protected =
+            URL_SAFE_NO_PAD.encode(serde_json::to_string(&protected_header).unwrap());
         let signing_input = format!("{}.{}", b64_protected, b64_payload);
 
         let rng = SystemRandom::new();
@@ -137,9 +155,14 @@ impl<T: AcmeTransport> AcmeClient<T> {
     }
 
     pub fn fetch_nonce(&mut self) -> Result<(), AcmeError> {
-        let (_, _, body) = self
-            .transport
-            .request("GET", &self.directory_url, &[], None)?;
+        let (directory_status, _, body) =
+            self.transport
+                .request("GET", &self.directory_url, &[], None)?;
+        if directory_status != 200 {
+            return Err(AcmeError::Protocol(format!(
+                "Directory request failed with status: {directory_status}"
+            )));
+        }
         let new_nonce_url = Self::extract_json_string(&body, "newNonce").ok_or_else(|| {
             AcmeError::Protocol("newNonce endpoint not found in directory".into())
         })?;
@@ -169,6 +192,16 @@ impl<T: AcmeTransport> AcmeClient<T> {
         Ok(())
     }
 
+    fn update_nonce_from_response(&mut self, headers: &[(String, String)]) {
+        // The request nonce was already consumed by `get_nonce`. If the
+        // response omits Replay-Nonce, leave the cache empty so the next
+        // request obtains a fresh nonce instead of reusing the old one.
+        self.nonce = headers
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case("replay-nonce"))
+            .map(|(_, value)| value.clone());
+    }
+
     pub fn get_nonce(&mut self) -> Result<String, AcmeError> {
         if self.nonce.is_none() {
             self.fetch_nonce()?;
@@ -179,22 +212,27 @@ impl<T: AcmeTransport> AcmeClient<T> {
     }
 
     pub fn create_account(&mut self, email: &str) -> Result<String, AcmeError> {
-        let (_, _, body) = self
-            .transport
-            .request("GET", &self.directory_url, &[], None)?;
+        let (directory_status, _, body) =
+            self.transport
+                .request("GET", &self.directory_url, &[], None)?;
+        if directory_status != 200 {
+            return Err(AcmeError::Protocol(format!(
+                "Directory request failed with status: {directory_status}"
+            )));
+        }
         let new_account_url = Self::extract_json_string(&body, "newAccount").ok_or_else(|| {
             AcmeError::Protocol("newAccount endpoint not found in directory".into())
         })?;
 
-        let nonce = self.get_nonce()?; // Ensure we have a nonce
-        self.nonce = Some(nonce);
+        let nonce = self.get_nonce()?;
 
         let payload = json!({
             "termsOfServiceAgreed": true,
             "contact": [format!("mailto:{}", email)]
-        }).to_string();
+        })
+        .to_string();
 
-        let jws = self.sign_jws(&new_account_url, &payload, None)?;
+        let jws = self.sign_jws(&nonce, &new_account_url, &payload, None)?;
 
         let (status, headers, _) = self.transport.request(
             "POST",
@@ -203,14 +241,13 @@ impl<T: AcmeTransport> AcmeClient<T> {
             Some(&jws),
         )?;
 
+        self.update_nonce_from_response(&headers);
         if status != 201 && status != 200 {
             return Err(AcmeError::Protocol(format!(
                 "Account creation failed with status: {}",
                 status
             )));
         }
-
-        self.extract_nonce_from_response(&headers).ok();
 
         let account_url = headers
             .iter()
@@ -225,25 +262,37 @@ impl<T: AcmeTransport> AcmeClient<T> {
     }
 
     pub fn order_certificate(&mut self, domain: &str) -> Result<String, AcmeError> {
+        DomainName::new(domain.to_string())
+            .map_err(|_| AcmeError::Protocol("Invalid or unsupported domain name".into()))?;
         if self.account_url.is_none() {
             return Err(AcmeError::Protocol("No account URL available".into()));
         }
 
-        let (_, _, body) = self
-            .transport
-            .request("GET", &self.directory_url, &[], None)?;
+        let (directory_status, _, body) =
+            self.transport
+                .request("GET", &self.directory_url, &[], None)?;
+        if directory_status != 200 {
+            return Err(AcmeError::Protocol(format!(
+                "Directory request failed with status: {directory_status}"
+            )));
+        }
         let new_order_url = Self::extract_json_string(&body, "newOrder").ok_or_else(|| {
             AcmeError::Protocol("newOrder endpoint not found in directory".into())
         })?;
 
         let nonce = self.get_nonce()?;
-        self.nonce = Some(nonce);
 
         let payload = json!({
             "identifiers": [{"type": "dns", "value": domain}]
-        }).to_string();
+        })
+        .to_string();
 
-        let jws = self.sign_jws(&new_order_url, &payload, self.account_url.as_deref())?;
+        let jws = self.sign_jws(
+            &nonce,
+            &new_order_url,
+            &payload,
+            self.account_url.as_deref(),
+        )?;
 
         let (status, headers, _) = self.transport.request(
             "POST",
@@ -252,14 +301,13 @@ impl<T: AcmeTransport> AcmeClient<T> {
             Some(&jws),
         )?;
 
+        self.update_nonce_from_response(&headers);
         if status != 201 {
             return Err(AcmeError::Protocol(format!(
                 "Order creation failed with status: {}",
                 status
             )));
         }
-
-        self.extract_nonce_from_response(&headers).ok(); // Optimistically update nonce
 
         let order_url = headers
             .iter()
@@ -272,24 +320,34 @@ impl<T: AcmeTransport> AcmeClient<T> {
         Ok(order_url)
     }
 
-    pub fn finalize_order(&mut self, finalize_url: &str, domain: &str, cert_key_pkcs8: &[u8]) -> Result<String, AcmeError> {
+    pub fn finalize_order(
+        &mut self,
+        finalize_url: &str,
+        domain: &str,
+        cert_key_pkcs8: &[u8],
+    ) -> Result<String, AcmeError> {
+        DomainName::new(domain.to_string())
+            .map_err(|_| AcmeError::Protocol("Invalid or unsupported domain name".into()))?;
         if self.account_url.is_none() {
             return Err(AcmeError::Protocol("No account URL available".into()));
         }
 
         let nonce = self.get_nonce()?;
-        self.nonce = Some(nonce);
 
-        let key_pair = KeyPair::from_der(cert_key_pkcs8).map_err(|_| AcmeError::Crypto("Invalid certificate key".into()))?;
+        let key_pair = KeyPair::from_der(cert_key_pkcs8)
+            .map_err(|_| AcmeError::Crypto("Invalid certificate key".into()))?;
         let mut params = CertificateParams::new(vec![domain.to_string()]);
         params.distinguished_name.push(DnType::CommonName, domain);
         params.key_pair = Some(key_pair);
-        let cert = rcgen::Certificate::from_params(params).map_err(|_| AcmeError::Crypto("Failed to create certificate params".into()))?;
-        let csr = cert.serialize_request_der().map_err(|_| AcmeError::Crypto("Failed to serialize CSR".into()))?;
+        let cert = rcgen::Certificate::from_params(params)
+            .map_err(|_| AcmeError::Crypto("Failed to create certificate params".into()))?;
+        let csr = cert
+            .serialize_request_der()
+            .map_err(|_| AcmeError::Crypto("Failed to serialize CSR".into()))?;
         let csr_b64 = URL_SAFE_NO_PAD.encode(csr);
 
         let payload = json!({ "csr": csr_b64 }).to_string();
-        let jws = self.sign_jws(finalize_url, &payload, self.account_url.as_deref())?;
+        let jws = self.sign_jws(&nonce, finalize_url, &payload, self.account_url.as_deref())?;
 
         let (status, headers, body) = self.transport.request(
             "POST",
@@ -298,11 +356,10 @@ impl<T: AcmeTransport> AcmeClient<T> {
             Some(&jws),
         )?;
 
+        self.update_nonce_from_response(&headers);
         if status != 200 {
             return Err(AcmeError::Protocol(format!("Finalize failed: {}", status)));
         }
-
-        self.extract_nonce_from_response(&headers).ok();
 
         let cert_url = Self::extract_json_string(&body, "certificate").ok_or_else(|| {
             AcmeError::Protocol("certificate url missing in finalize response".into())
@@ -317,9 +374,8 @@ impl<T: AcmeTransport> AcmeClient<T> {
         }
 
         let nonce = self.get_nonce()?;
-        self.nonce = Some(nonce);
 
-        let jws = self.sign_jws(cert_url, "", self.account_url.as_deref())?;
+        let jws = self.sign_jws(&nonce, cert_url, "", self.account_url.as_deref())?;
 
         let (status, headers, body) = self.transport.request(
             "POST",
@@ -328,11 +384,10 @@ impl<T: AcmeTransport> AcmeClient<T> {
             Some(&jws),
         )?;
 
+        self.update_nonce_from_response(&headers);
         if status != 200 {
             return Err(AcmeError::Protocol(format!("Download failed: {}", status)));
         }
-
-        self.extract_nonce_from_response(&headers).ok();
 
         Ok(body)
     }
@@ -348,10 +403,9 @@ impl<T: AcmeTransport> AcmeClient<T> {
         }
 
         let nonce = self.get_nonce()?;
-        self.nonce = Some(nonce);
 
         let payload = json!({}).to_string();
-        let jws = self.sign_jws(challenge_url, &payload, self.account_url.as_deref())?;
+        let jws = self.sign_jws(&nonce, challenge_url, &payload, self.account_url.as_deref())?;
 
         let (status, headers, _) = self.transport.request(
             "POST",
@@ -360,28 +414,30 @@ impl<T: AcmeTransport> AcmeClient<T> {
             Some(&jws),
         )?;
 
+        self.update_nonce_from_response(&headers);
         if status != 200 {
-            return Err(AcmeError::Protocol(format!("Challenge complete failed: {}", status)));
+            return Err(AcmeError::Protocol(format!(
+                "Challenge complete failed: {}",
+                status
+            )));
         }
-
-        self.extract_nonce_from_response(&headers).ok();
 
         Ok(())
     }
 
-    pub fn host_challenge(
-        &self,
-        webroot: &Path,
-        token: &str,
-    ) -> Result<(), AcmeError> {
-        let challenge_dir = webroot.join(".well-known").join("acme-challenge");
-        fs::create_dir_all(&challenge_dir)?;
-
-        // Defend against path traversal in token
-        if token.contains('/') || token.contains('\\') || token.contains("..") {
+    pub fn host_challenge(&self, webroot: &Path, token: &str) -> Result<(), AcmeError> {
+        // ACME tokens are base64url components, never filesystem paths.
+        if token.is_empty()
+            || token.len() > 256
+            || !token
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+        {
             return Err(AcmeError::Protocol("Invalid challenge token".into()));
         }
 
+        let challenge_dir = webroot.join(".well-known").join("acme-challenge");
+        fs::create_dir_all(&challenge_dir)?;
         let key_auth = self.get_challenge_auth(token)?;
 
         let challenge_file = challenge_dir.join(token);
