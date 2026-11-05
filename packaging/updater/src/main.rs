@@ -20,7 +20,8 @@ fn parse_hex_key(hex_str: &str) -> Result<[u8; 32], String> {
 
     let mut key = [0u8; 32];
     for i in 0..32 {
-        let byte_str = &hex_str[i * 2..i * 2 + 2];
+        let byte_str = std::str::from_utf8(&hex_str.as_bytes()[i * 2..i * 2 + 2])
+            .map_err(|_| "Public key must contain only ASCII hexadecimal characters".to_string())?;
         key[i] = u8::from_str_radix(byte_str, 16)
             .map_err(|_| format!("Invalid hexadecimal character in public key: {}", byte_str))?;
     }
@@ -55,6 +56,10 @@ fn main() {
             exit(1);
         }
     };
+    if timeout_secs == 0 {
+        eprintln!("Health check timeout seconds must be greater than zero");
+        exit(1);
+    }
     let health_check_timeout = Duration::from_secs(timeout_secs);
 
     let config = UpdateConfig {
@@ -86,5 +91,28 @@ fn main() {
             eprintln!("Update failed: {}", e);
             exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_hex_key;
+
+    #[test]
+    fn parse_hex_key_accepts_exactly_32_bytes() {
+        assert_eq!(parse_hex_key(&"ab".repeat(32)).unwrap(), [0xab; 32]);
+    }
+
+    #[test]
+    fn parse_hex_key_rejects_invalid_length_and_digits() {
+        assert!(parse_hex_key("abc").is_err());
+        assert!(parse_hex_key(&"gg".repeat(32)).is_err());
+    }
+
+    #[test]
+    fn parse_hex_key_rejects_unicode_without_panicking() {
+        let malformed = format!("aé{}", "0".repeat(61));
+        assert_eq!(malformed.len(), 64);
+        assert!(parse_hex_key(&malformed).is_err());
     }
 }
