@@ -346,6 +346,7 @@ exit 1
 
 #[test]
 fn test_restart_marker_on_failed_rollback() {
+
     // Create a situation where rollback fails by deleting the temporary file manually during test phase
     let hacky_script = r#"#!/bin/sh
 if [ "$1" = "-t" ]; then
