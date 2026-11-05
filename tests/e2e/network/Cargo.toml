@@ -1,0 +1,14 @@
+[workspace]
+
+[package]
+name = "e2e-network"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+publish = false
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+
+[dev-dependencies]
+tempfile = "3.10"
