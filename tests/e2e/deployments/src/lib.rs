@@ -4,25 +4,176 @@
 mod tests {
     use std::env;
     use std::fs;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::ops::{Deref, DerefMut};
     use std::path::PathBuf;
-    use std::process::Command;
+    use std::process::{Child, Command};
+    use std::sync::mpsc::Sender;
     use std::thread;
+    use std::thread::JoinHandle;
     use std::time::Duration;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    fn get_temp_dir() -> PathBuf {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let mut path = env::temp_dir();
-        path.push(format!(
-            "fusionpanel-deployments-e2e-{}-{}",
-            std::process::id(),
-            now
-        ));
-        fs::create_dir_all(&path).unwrap();
-        path
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new() -> Self {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let mut path = env::temp_dir();
+            path.push(format!(
+                "fusionpanel-deployments-e2e-{}-{}",
+                std::process::id(),
+                now
+            ));
+            fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Deref for TempDir {
+        type Target = PathBuf;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl AsRef<std::path::Path> for TempDir {
+        fn as_ref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    struct ChildGuard(Child);
+
+    impl ChildGuard {
+        fn new(child: Child) -> Self {
+            Self(child)
+        }
+    }
+
+    impl Deref for ChildGuard {
+        type Target = Child;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl DerefMut for ChildGuard {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
+    }
+
+    impl Drop for ChildGuard {
+        fn drop(&mut self) {
+            if matches!(self.0.try_wait(), Ok(None)) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+    }
+
+    struct QueryGuard<T> {
+        stop: Sender<()>,
+        thread: Option<JoinHandle<T>>,
+    }
+
+    impl<T> QueryGuard<T> {
+        fn new(stop: Sender<()>, thread: JoinHandle<T>) -> Self {
+            Self {
+                stop,
+                thread: Some(thread),
+            }
+        }
+
+        fn finish(mut self) -> thread::Result<T> {
+            let _ = self.stop.send(());
+            self.thread
+                .take()
+                .expect("query thread already joined")
+                .join()
+        }
+    }
+
+    impl<T> Drop for QueryGuard<T> {
+        fn drop(&mut self) {
+            let _ = self.stop.send(());
+            if let Some(thread) = self.thread.take() {
+                let _ = thread.join();
+            }
+        }
+    }
+
+    fn unused_loopback_port() -> u16 {
+        TcpListener::bind("127.0.0.1:0")
+            .and_then(|listener| listener.local_addr())
+            .expect("BLOCKED: could not allocate an isolated test port")
+            .port()
+    }
+
+    fn wait_for_listener(child: &mut ChildGuard, address: &str) {
+        for _ in 0..600 {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    panic!("BLOCKED: isolated fixture exited before listening with status {status}")
+                }
+                Err(error) => panic!("BLOCKED: could not inspect isolated fixture: {error}"),
+                Ok(None) => {}
+            }
+            if TcpStream::connect(address).is_ok() {
+                return;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        panic!("BLOCKED: isolated fixture did not listen on its assigned loopback port");
+    }
+
+    fn spawn_http_server(root: &std::path::Path) -> (ChildGuard, String) {
+        let port = unused_loopback_port();
+        let mut child = ChildGuard::new(
+            Command::new("python3")
+                .arg("-m")
+                .arg("http.server")
+                .arg(port.to_string())
+                .arg("--bind")
+                .arg("127.0.0.1")
+                .current_dir(root)
+                .spawn()
+                .expect("BLOCKED: python3 is required for the local HTTP fixture"),
+        );
+        let address = format!("127.0.0.1:{port}");
+        wait_for_listener(&mut child, &address);
+        (child, format!("http://{address}"))
+    }
+
+    fn fetch_http_body(server_url: &str, path: &str) -> std::io::Result<String> {
+        let address = server_url
+            .strip_prefix("http://")
+            .expect("fixture URL must be HTTP loopback");
+        let mut stream = TcpStream::connect(address)?;
+        stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+        write!(
+            stream,
+            "GET {path} HTTP/1.1\r\nHost: {address}\r\nConnection: close\r\n\r\n"
+        )?;
+        let mut response = String::new();
+        stream.read_to_string(&mut response)?;
+        Ok(response
+            .split_once("\r\n\r\n")
+            .map(|(_, body)| body.to_string())
+            .unwrap_or_default())
     }
 
     fn run_cli(args: &[&str]) -> std::process::Output {
@@ -46,26 +197,62 @@ mod tests {
         cmd.output().expect("Failed to spawn cargo process")
     }
 
-    fn spawn_api() -> std::process::Child {
+    fn spawn_api() -> (ChildGuard, String) {
         let root_manifest = env::current_dir()
             .unwrap()
             .join("../../..")
             .join("Cargo.toml");
-        Command::new("cargo")
-            .arg("run")
-            .arg("--manifest-path")
-            .arg(root_manifest)
-            .arg("--bin")
-            .arg("fusionpanel-api")
-            .env("FUSIONPANEL_ADMIN_TOKEN", "test-token-123")
-            .env("FUSIONPANEL_LISTEN", "127.0.0.1:8080")
-            .spawn()
-            .expect("Failed to spawn API process")
+        let port = unused_loopback_port();
+        let listen = format!("127.0.0.1:{port}");
+        let mut child = ChildGuard::new(
+            Command::new("cargo")
+                .arg("run")
+                .arg("--manifest-path")
+                .arg(root_manifest)
+                .arg("--bin")
+                .arg("fusionpanel-api")
+                .env("FUSIONPANEL_ADMIN_TOKEN", "test-token-123")
+                .env("FUSIONPANEL_LISTEN", &listen)
+                .spawn()
+                .expect("BLOCKED: could not spawn isolated API fixture"),
+        );
+        wait_for_listener(&mut child, &listen);
+        (child, format!("http://{listen}"))
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn local_server_resolves_current_symlink_for_each_request() {
+        use std::os::unix::fs::symlink;
+
+        let base_dir = TempDir::new();
+        let target_dir = base_dir.join("app");
+        let release_v1 = base_dir.join("releases/v1");
+        let release_v2 = base_dir.join("releases/v2");
+        fs::create_dir_all(&target_dir).unwrap();
+        fs::create_dir_all(&release_v1).unwrap();
+        fs::create_dir_all(&release_v2).unwrap();
+        fs::write(release_v1.join("index.html"), "v1").unwrap();
+        fs::write(release_v2.join("index.html"), "v2").unwrap();
+        symlink(&release_v1, target_dir.join("current")).unwrap();
+
+        let (_server, server_url) = spawn_http_server(&target_dir);
+        assert_eq!(
+            fetch_http_body(&server_url, "/current/index.html").unwrap(),
+            "v1"
+        );
+
+        symlink(&release_v2, target_dir.join("next")).unwrap();
+        fs::rename(target_dir.join("next"), target_dir.join("current")).unwrap();
+        assert_eq!(
+            fetch_http_body(&server_url, "/current/index.html").unwrap(),
+            "v2"
+        );
     }
 
     #[test]
     fn test_atomic_symlink_switching() {
-        let base_dir = get_temp_dir();
+        let base_dir = TempDir::new();
         let target_dir = base_dir.join("app");
         let release_v1 = base_dir.join("releases").join("v1");
         let release_v2 = base_dir.join("releases").join("v2");
@@ -95,13 +282,7 @@ mod tests {
         assert_eq!(fs::read_link(&current_symlink).unwrap(), release_v1);
 
         // Start python http server to serve the app from current_symlink
-        let mut server = Command::new("python3")
-            .arg("-m")
-            .arg("http.server")
-            .arg("8082")
-            .current_dir(&current_symlink)
-            .spawn()
-            .expect("Failed to start test HTTP server");
+        let (mut server, server_url) = spawn_http_server(&target_dir);
 
         thread::sleep(Duration::from_secs(1));
 
@@ -112,10 +293,18 @@ mod tests {
             let mut seen_v2 = false;
             let mut no_downtime = true;
             loop {
-                if let Ok(_) = rx.try_recv() {
-                    break;
+                match rx.try_recv() {
+                    Ok(()) | Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {}
                 }
-                let curl = Command::new("curl").arg("-s").arg("http://127.0.0.1:8082/index.html").output();
+                let curl = Command::new("curl")
+                    .arg("--fail")
+                    .arg("--silent")
+                    .arg("--show-error")
+                    .arg("--max-time")
+                    .arg("2")
+                    .arg(format!("{server_url}/current/index.html"))
+                    .output();
                 if let Ok(out) = curl {
                     let content = String::from_utf8_lossy(&out.stdout);
                     if content.contains("v1") {
@@ -132,6 +321,7 @@ mod tests {
             }
             (seen_v1, seen_v2, no_downtime)
         });
+        let query = QueryGuard::new(tx, query_thread);
 
         // Try deploying v2 via CLI
         let out_v2 = run_cli(&[
@@ -142,8 +332,7 @@ mod tests {
             release_v2.to_str().unwrap(),
         ]);
 
-        tx.send(()).unwrap();
-        let (seen_v1, seen_v2, no_downtime) = query_thread.join().unwrap();
+        let (seen_v1, seen_v2, no_downtime) = query.finish().unwrap();
 
         if !out_v2.status.success() {
             server.kill().unwrap();
@@ -157,7 +346,10 @@ mod tests {
 
         assert!(seen_v1, "Did not see v1 served before switch");
         assert!(seen_v2, "Did not see v2 served after switch");
-        assert!(no_downtime, "Experienced downtime or missing version during switch");
+        assert!(
+            no_downtime,
+            "Experienced downtime or missing version during switch"
+        );
 
         // Verify symlink atomically points to v2
         assert_eq!(fs::read_link(&current_symlink).unwrap(), release_v2);
@@ -173,12 +365,14 @@ mod tests {
 
     #[test]
     fn test_release_rollback() {
-        let base_dir = get_temp_dir();
+        let base_dir = TempDir::new();
         let target_dir = base_dir.join("app");
         let release_v1 = base_dir.join("releases").join("v1");
         let release_v2 = base_dir.join("releases").join("v2");
         fs::create_dir_all(&release_v1).unwrap();
         fs::create_dir_all(&release_v2).unwrap();
+        fs::write(release_v1.join("index.html"), "v1").unwrap();
+        fs::write(release_v2.join("index.html"), "v2").unwrap();
 
         // Initial setup - deploy v1 then v2
         let out_v1 = run_cli(&[
@@ -226,7 +420,7 @@ mod tests {
 
     #[test]
     fn test_git_webhook_pipeline_triggers() {
-        let mut api_child = spawn_api();
+        let (mut api_child, api_url) = spawn_api();
 
         // Wait for API to start
         thread::sleep(Duration::from_secs(2));
@@ -235,6 +429,9 @@ mod tests {
             "ref": "refs/heads/main",
             "commits": [{"id": "123", "message": "test commit"}]
         }"#;
+        let signature = env::var("FUSIONPANEL_TEST_WEBHOOK_SIGNATURE").unwrap_or_else(|_| {
+            panic!("BLOCKED: a valid test signature for this exact payload is not configured")
+        });
 
         // Use curl via Command since we cannot add dependencies like reqwest
         let curl_out = Command::new("curl")
@@ -246,10 +443,10 @@ mod tests {
             .arg("-H")
             .arg("Content-Type: application/json")
             .arg("-H")
-            .arg("x-hmac-signature: dummy-sig")
+            .arg(format!("x-hmac-signature: {signature}"))
             .arg("-d")
             .arg(payload)
-            .arg("http://127.0.0.1:8080/api/v1/webhooks/github")
+            .arg(format!("{api_url}/api/v1/webhooks/github"))
             .output()
             .expect("Failed to execute curl");
 
@@ -266,17 +463,15 @@ mod tests {
             panic!("BLOCKED: Webhook endpoint failed or not fully implemented.");
         }
 
-        // Depending on success behavior, verify 200 or 202
-        if !stdout.ends_with("200") && !stdout.ends_with("202") {
-            panic!("BLOCKED: Unexpected webhook response: {}", stdout);
+        if stdout.ends_with("200") || stdout.ends_with("202") {
+            panic!("BLOCKED: webhook acceptance was returned without a deployment ID or durable status assertion");
         }
-
-        // We would normally verify pipeline side effects here, e.g. checking a DB or state
+        panic!("BLOCKED: Unexpected webhook response: {}", stdout);
     }
 
     #[test]
     fn test_health_failure_rollback() {
-        let base_dir = get_temp_dir();
+        let base_dir = TempDir::new();
         let target_dir = base_dir.join("app");
         let release_v1 = base_dir.join("releases").join("v1");
         let release_bad = base_dir.join("releases").join("bad");
@@ -285,20 +480,23 @@ mod tests {
         fs::write(release_v1.join("index.html"), "v1").unwrap();
         fs::write(release_bad.join("index.html"), "bad").unwrap();
 
-        let out_v1 = run_cli(&["deploy", "--target", target_dir.to_str().unwrap(), "--source", release_v1.to_str().unwrap()]);
+        let out_v1 = run_cli(&[
+            "deploy",
+            "--target",
+            target_dir.to_str().unwrap(),
+            "--source",
+            release_v1.to_str().unwrap(),
+        ]);
         if !out_v1.status.success() {
             let stderr = String::from_utf8_lossy(&out_v1.stderr);
-            panic!("BLOCKED: CLI deploy capability unavailable for health check setup. Output: {}", stderr);
+            panic!(
+                "BLOCKED: CLI deploy capability unavailable for health check setup. Output: {}",
+                stderr
+            );
         }
 
         // Start python http server to serve the app
-        let mut server = Command::new("python3")
-            .arg("-m")
-            .arg("http.server")
-            .arg("8081")
-            .current_dir(target_dir.join("current"))
-            .spawn()
-            .expect("Failed to start test HTTP server");
+        let (mut server, server_url) = spawn_http_server(&target_dir);
 
         thread::sleep(Duration::from_secs(1));
 
@@ -307,10 +505,18 @@ mod tests {
         let query_thread = thread::spawn(move || {
             let mut seen_v1 = false;
             loop {
-                if let Ok(_) = rx.try_recv() {
-                    break;
+                match rx.try_recv() {
+                    Ok(()) | Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {}
                 }
-                let curl = Command::new("curl").arg("-s").arg("http://127.0.0.1:8081/index.html").output();
+                let curl = Command::new("curl")
+                    .arg("--fail")
+                    .arg("--silent")
+                    .arg("--show-error")
+                    .arg("--max-time")
+                    .arg("2")
+                    .arg(format!("{server_url}/current/index.html"))
+                    .output();
                 if let Ok(out) = curl {
                     let content = String::from_utf8_lossy(&out.stdout);
                     if content.contains("v1") {
@@ -321,27 +527,39 @@ mod tests {
             }
             seen_v1
         });
+        let query = QueryGuard::new(tx, query_thread);
 
         // Deploy bad with health check enabled
-        let out_bad = run_cli(&["deploy", "--target", target_dir.to_str().unwrap(), "--source", release_bad.to_str().unwrap(), "--health-check"]);
+        let out_bad = run_cli(&[
+            "deploy",
+            "--target",
+            target_dir.to_str().unwrap(),
+            "--source",
+            release_bad.to_str().unwrap(),
+            "--health-check",
+        ]);
         if !out_bad.status.success() {
             let stderr = String::from_utf8_lossy(&out_bad.stderr);
-            if stderr.contains("unrecognized subcommand") || stderr.contains("error:") {
-                server.kill().unwrap();
-                tx.send(()).unwrap();
-                query_thread.join().unwrap();
-                panic!("BLOCKED: CLI deploy with health-check capability unavailable. Output: {}", stderr);
-            }
+            panic!(
+                "BLOCKED: CLI deploy with health-check capability unavailable. Output: {}",
+                stderr
+            );
         }
 
-        tx.send(()).unwrap();
-        let seen_v1 = query_thread.join().unwrap();
+        let seen_v1 = query.finish().unwrap();
         assert!(seen_v1, "Did not see v1 served during rollback");
 
         // Assert health-failure rollback: the symlink must point back to v1
         let current_symlink = target_dir.join("current");
-        assert_eq!(fs::read_link(&current_symlink).unwrap(), release_v1, "Symlink did not rollback to v1 after health failure");
-        assert_eq!(fs::read_to_string(current_symlink.join("index.html")).unwrap(), "v1");
+        assert_eq!(
+            fs::read_link(&current_symlink).unwrap(),
+            release_v1,
+            "Symlink did not rollback to v1 after health failure"
+        );
+        assert_eq!(
+            fs::read_to_string(current_symlink.join("index.html")).unwrap(),
+            "v1"
+        );
 
         server.kill().unwrap();
         server.wait().unwrap();
@@ -350,187 +568,112 @@ mod tests {
 
     #[test]
     fn test_git_webhook_bad_signature_denial() {
-        let mut api_child = spawn_api();
+        let (mut api_child, api_url) = spawn_api();
         thread::sleep(Duration::from_secs(2));
 
         let payload = r#"{"ref": "refs/heads/main"}"#;
 
         // 1. Invalid signature
         let curl_invalid = Command::new("curl")
-            .arg("-s").arg("-w").arg("%{http_code}")
-            .arg("-X").arg("POST")
-            .arg("-H").arg("Content-Type: application/json")
-            .arg("-H").arg("x-hmac-signature: invalid-sig")
-            .arg("-d").arg(payload)
-            .arg("http://127.0.0.1:8080/api/v1/webhooks/github")
-            .output().expect("Failed to execute curl");
+            .arg("-s")
+            .arg("-w")
+            .arg("%{http_code}")
+            .arg("-X")
+            .arg("POST")
+            .arg("-H")
+            .arg("Content-Type: application/json")
+            .arg("-H")
+            .arg("x-hmac-signature: invalid-sig")
+            .arg("-d")
+            .arg(payload)
+            .arg(format!("{api_url}/api/v1/webhooks/github"))
+            .output()
+            .expect("Failed to execute curl");
 
         let stdout_invalid = String::from_utf8_lossy(&curl_invalid.stdout);
 
-        if stdout_invalid.ends_with("404") || stdout_invalid.ends_with("000") || stdout_invalid.ends_with("501") {
+        if stdout_invalid.ends_with("404")
+            || stdout_invalid.ends_with("000")
+            || stdout_invalid.ends_with("501")
+        {
             api_child.kill().unwrap();
             api_child.wait().unwrap();
             panic!("BLOCKED: Webhook endpoint not implemented.");
         }
 
-        assert!(stdout_invalid.ends_with("401") || stdout_invalid.ends_with("403"), "Bad signature was not denied. Output: {}", stdout_invalid);
+        assert!(
+            stdout_invalid.ends_with("401") || stdout_invalid.ends_with("403"),
+            "Bad signature was not denied. Output: {}",
+            stdout_invalid
+        );
 
-        // 2. Replay attack: Assume we have a valid signature for the payload for testing
-        // Without knowing the actual HMAC secret, we would simulate a replay by capturing a legitimate request,
-        // but here we just simulate sending a valid request twice if we had one.
-        // For E2E we must test replay denial.
-        // We will send a request with a valid-looking signature.
+        // A syntactically plausible signature is not proof of a valid signature.
+        // Require the isolated test fixture to provide one for this exact payload.
+        let valid_signature = env::var("FUSIONPANEL_TEST_WEBHOOK_SIGNATURE").unwrap_or_else(|_| {
+            panic!(
+                "BLOCKED: no valid signature fixture is configured; replay behavior was not tested"
+            )
+        });
         let _curl_valid1 = Command::new("curl")
-            .arg("-s").arg("-w").arg("%{http_code}")
-            .arg("-X").arg("POST")
-            .arg("-H").arg("Content-Type: application/json")
-            .arg("-H").arg("x-hmac-signature: t=123,v1=valid")
-            .arg("-d").arg(payload)
-            .arg("http://127.0.0.1:8080/api/v1/webhooks/github")
-            .output().expect("Failed to execute curl");
+            .arg("-s")
+            .arg("-w")
+            .arg("%{http_code}")
+            .arg("-X")
+            .arg("POST")
+            .arg("-H")
+            .arg("Content-Type: application/json")
+            .arg("-H")
+            .arg(format!("x-hmac-signature: {valid_signature}"))
+            .arg("-d")
+            .arg(payload)
+            .arg(format!("{api_url}/api/v1/webhooks/github"))
+            .output()
+            .expect("Failed to execute curl");
+        let valid1 = String::from_utf8_lossy(&_curl_valid1.stdout);
+        assert!(
+            valid1.ends_with("200") || valid1.ends_with("202"),
+            "The configured valid signature was not accepted; replay was not tested: {valid1}"
+        );
 
         // Send exactly the same payload and signature again
         let curl_valid2 = Command::new("curl")
-            .arg("-s").arg("-w").arg("%{http_code}")
-            .arg("-X").arg("POST")
-            .arg("-H").arg("Content-Type: application/json")
-            .arg("-H").arg("x-hmac-signature: t=123,v1=valid")
-            .arg("-d").arg(payload)
-            .arg("http://127.0.0.1:8080/api/v1/webhooks/github")
-            .output().expect("Failed to execute curl");
+            .arg("-s")
+            .arg("-w")
+            .arg("%{http_code}")
+            .arg("-X")
+            .arg("POST")
+            .arg("-H")
+            .arg("Content-Type: application/json")
+            .arg("-H")
+            .arg(format!("x-hmac-signature: {valid_signature}"))
+            .arg("-d")
+            .arg(payload)
+            .arg(format!("{api_url}/api/v1/webhooks/github"))
+            .output()
+            .expect("Failed to execute curl");
 
         let out2 = String::from_utf8_lossy(&curl_valid2.stdout);
         api_child.kill().unwrap();
         api_child.wait().unwrap();
 
-        assert!(out2.ends_with("401") || out2.ends_with("403") || out2.ends_with("409"), "Replayed signature was not denied");
+        assert!(
+            out2.ends_with("401") || out2.ends_with("403") || out2.ends_with("409"),
+            "Replayed signature was not denied"
+        );
     }
 
     #[test]
     fn test_deployment_second_person_approval() {
-        let mut api_child = spawn_api();
-        thread::sleep(Duration::from_secs(2));
-
-        // 1. Creator attempts to approve their own deployment
-        let curl_self = Command::new("curl")
-            .arg("-s").arg("-w").arg("%{http_code}")
-            .arg("-X").arg("POST")
-            .arg("-H").arg("Authorization: Bearer test-token-123") // Creator token
-            .arg("http://127.0.0.1:8080/api/v1/deployments/pending/1/approve")
-            .output().expect("Failed to execute curl");
-
-        let self_stdout = String::from_utf8_lossy(&curl_self.stdout);
-
-        if self_stdout.ends_with("404") || self_stdout.ends_with("000") || self_stdout.ends_with("501") {
-            api_child.kill().unwrap();
-            api_child.wait().unwrap();
-            panic!("BLOCKED: Deployments API not implemented.");
-        }
-
-        assert!(self_stdout.ends_with("403"), "Creator was allowed to approve their own deployment");
-
-        // 2. Second person approves
-        let curl_approve = Command::new("curl")
-            .arg("-s").arg("-w").arg("%{http_code}")
-            .arg("-X").arg("POST")
-            .arg("-H").arg("Authorization: Bearer another-token-456") // Second person token
-            .arg("http://127.0.0.1:8080/api/v1/deployments/pending/1/approve")
-            .output().expect("Failed to execute curl");
-
-        let approve_stdout = String::from_utf8_lossy(&curl_approve.stdout);
-        api_child.kill().unwrap();
-        api_child.wait().unwrap();
-
-        assert!(approve_stdout.ends_with("200") || approve_stdout.ends_with("202"), "Second person approval failed");
+        panic!("BLOCKED: the running API has no deployment approval route or provisioned second test identity");
     }
 
     #[test]
     fn test_worker_interruption_recovery() {
-        let base_dir = get_temp_dir();
-        let _target_dir = base_dir.join("app");
-        let release = base_dir.join("releases").join("v1");
-        fs::create_dir_all(&release).unwrap();
-
-        // Spawn a background API/worker
-        let mut worker_child = spawn_api();
-        thread::sleep(Duration::from_secs(2));
-
-        // Start deploy via API (which should take some time)
-        let curl_out = Command::new("curl")
-            .arg("-s").arg("-w").arg("%{http_code}")
-            .arg("-X").arg("POST")
-            .arg("-H").arg("Authorization: Bearer test-token-123")
-            .arg("http://127.0.0.1:8080/api/v1/deployments")
-            .output().expect("Failed to execute curl");
-
-        let stdout = String::from_utf8_lossy(&curl_out.stdout);
-        if stdout.ends_with("404") || stdout.ends_with("000") || stdout.ends_with("501") {
-            worker_child.kill().unwrap();
-            worker_child.wait().unwrap();
-            fs::remove_dir_all(&base_dir).unwrap();
-            panic!("BLOCKED: Deployments API unavailable for worker interruption test.");
-        }
-
-        // Kill worker mid-flight
-        thread::sleep(Duration::from_millis(100));
-        worker_child.kill().unwrap();
-        worker_child.wait().unwrap();
-
-        // Restart worker
-        let mut new_worker = spawn_api();
-        thread::sleep(Duration::from_secs(2));
-
-        // Wait for it to recover and finish the deployment
-        thread::sleep(Duration::from_secs(2));
-
-        // Check if deployment finished
-        let curl_check = Command::new("curl")
-            .arg("-s").arg("-w").arg("%{http_code}")
-            .arg("-H").arg("Authorization: Bearer test-token-123")
-            .arg("http://127.0.0.1:8080/api/v1/deployments/1")
-            .output().expect("Failed to execute curl");
-
-        let check_stdout = String::from_utf8_lossy(&curl_check.stdout);
-        new_worker.kill().unwrap();
-        new_worker.wait().unwrap();
-
-        assert!(check_stdout.contains("success") || check_stdout.contains("completed") || check_stdout.contains("Active"), "Deployment did not recover after worker interruption");
-        fs::remove_dir_all(&base_dir).unwrap();
+        panic!("BLOCKED: this package can start the API binary but has no separate durable worker process to interrupt and restart");
     }
 
     #[test]
     fn test_stable_history_after_restart() {
-        let mut api_child = spawn_api();
-        thread::sleep(Duration::from_secs(2));
-
-        let curl_out = Command::new("curl")
-            .arg("-s").arg("-w").arg("%{http_code}")
-            .arg("-H").arg("Authorization: Bearer test-token-123")
-            .arg("http://127.0.0.1:8080/api/v1/deployments/history")
-            .output().expect("Failed to execute curl");
-
-        let stdout = String::from_utf8_lossy(&curl_out.stdout);
-        api_child.kill().unwrap();
-        api_child.wait().unwrap();
-
-        if stdout.ends_with("404") || stdout.ends_with("000") || stdout.ends_with("501") {
-            panic!("BLOCKED: Deployments history API not implemented.");
-        }
-
-        // Restart API
-        let mut new_api = spawn_api();
-        thread::sleep(Duration::from_secs(2));
-
-        let curl_out2 = Command::new("curl")
-            .arg("-s").arg("-w").arg("%{http_code}")
-            .arg("-H").arg("Authorization: Bearer test-token-123")
-            .arg("http://127.0.0.1:8080/api/v1/deployments/history")
-            .output().expect("Failed to execute curl");
-
-        let stdout2 = String::from_utf8_lossy(&curl_out2.stdout);
-        new_api.kill().unwrap();
-        new_api.wait().unwrap();
-
-        assert_eq!(stdout, stdout2, "History was not stable after restart");
+        panic!("BLOCKED: the API package has no deployment history route or durable deployment store to verify across restart");
     }
 }
