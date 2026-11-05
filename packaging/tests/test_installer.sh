@@ -267,6 +267,20 @@ EOF
     echo "PASS: Missing Binaries Fail-Closed"
 }
 
+test_dry_run() {
+    echo "--- Test: Dry Run ---"
+    local test_prefix="$TEST_DIR/opt/fusionpanel_dryrun"
+
+    "$INSTALL_SCRIPT" --prefix "$test_prefix" --dry-run > /dev/null
+
+    if [ -d "$test_prefix" ]; then
+        echo "FAIL: Dry run created the prefix directory"
+        exit 1
+    fi
+
+    echo "PASS: Dry Run"
+}
+
 # Run tests
 test_clean_install
 test_idempotency_and_reinstall
@@ -275,5 +289,6 @@ test_start_restart_mock
 test_valid_auth
 test_partial_install_recovery
 test_missing_binaries_fail_closed
+test_dry_run
 
 echo "All tests passed successfully."
