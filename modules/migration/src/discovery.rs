@@ -27,7 +27,10 @@ impl CloudPanelDiscovery {
 
         // Validate supported versions. Explicitly unsupported for versions other than 2.4.x or 2.3.x, for example.
         if !version.starts_with("2.4") && !version.starts_with("2.3") {
-             return Err(DiscoveryError::UnsupportedSchema(format!("Version {} is not explicitly supported.", version)));
+            return Err(DiscoveryError::UnsupportedSchema(format!(
+                "Version {} is not explicitly supported.",
+                version
+            )));
         }
 
         Self::discover_sites(&conn, &mut inventory)?;
@@ -38,7 +41,8 @@ impl CloudPanelDiscovery {
     }
 
     fn discover_version(conn: &Connection) -> Result<String, DiscoveryError> {
-        let mut stmt = conn.prepare("SELECT value FROM setting WHERE name = 'version'")
+        let mut stmt = conn
+            .prepare("SELECT value FROM setting WHERE name = 'version'")
             .or_else(|_| conn.prepare("SELECT version FROM app_settings"))
             .map_err(|e| DiscoveryError::SchemaMissing(format!("No version table found: {}", e)))?;
 
@@ -47,15 +51,23 @@ impl CloudPanelDiscovery {
             let version: String = row.get(0)?;
             Ok(version)
         } else {
-            Err(DiscoveryError::VersionUnknown("Version row not found".to_string()))
+            Err(DiscoveryError::VersionUnknown(
+                "Version row not found".to_string(),
+            ))
         }
     }
 
-    fn discover_sites(conn: &Connection, inventory: &mut MigrationInventory) -> Result<(), DiscoveryError> {
+    fn discover_sites(
+        conn: &Connection,
+        inventory: &mut MigrationInventory,
+    ) -> Result<(), DiscoveryError> {
         let mut stmt = match conn.prepare("SELECT id, domain_name, php_version FROM site") {
             Ok(stmt) => stmt,
             Err(e) => {
-                return Err(DiscoveryError::SchemaMissing(format!("site table error: {}", e)));
+                return Err(DiscoveryError::SchemaMissing(format!(
+                    "site table error: {}",
+                    e
+                )));
             }
         };
 
@@ -90,14 +102,19 @@ impl CloudPanelDiscovery {
         Ok(())
     }
 
-    fn discover_site_database_associations(conn: &Connection, site_id: i64) -> Result<Vec<String>, DiscoveryError> {
+    fn discover_site_database_associations(
+        conn: &Connection,
+        site_id: i64,
+    ) -> Result<Vec<String>, DiscoveryError> {
         // Assume CloudPanel schema maps site_id to database in a relation table or on the database itself
         // Example: SELECT id FROM database WHERE site_id = ?
         let mut stmt = match conn.prepare("SELECT id FROM database WHERE site_id = ?") {
             Ok(stmt) => stmt,
             Err(_) => {
                 // If table is missing, return empty or error. Assuming schema demands it for strictness
-                return Err(DiscoveryError::SchemaMissing("database table missing site_id relation".to_string()));
+                return Err(DiscoveryError::SchemaMissing(
+                    "database table missing site_id relation".to_string(),
+                ));
             }
         };
 
@@ -110,11 +127,17 @@ impl CloudPanelDiscovery {
         Ok(associations)
     }
 
-    fn discover_databases(conn: &Connection, inventory: &mut MigrationInventory) -> Result<(), DiscoveryError> {
+    fn discover_databases(
+        conn: &Connection,
+        inventory: &mut MigrationInventory,
+    ) -> Result<(), DiscoveryError> {
         let mut stmt = match conn.prepare("SELECT id, database_name, site_id FROM database") {
             Ok(stmt) => stmt,
             Err(e) => {
-                return Err(DiscoveryError::SchemaMissing(format!("database table error: {}", e)));
+                return Err(DiscoveryError::SchemaMissing(format!(
+                    "database table error: {}",
+                    e
+                )));
             }
         };
 
@@ -146,11 +169,17 @@ impl CloudPanelDiscovery {
         Ok(())
     }
 
-    fn discover_users(conn: &Connection, inventory: &mut MigrationInventory) -> Result<(), DiscoveryError> {
+    fn discover_users(
+        conn: &Connection,
+        inventory: &mut MigrationInventory,
+    ) -> Result<(), DiscoveryError> {
         let mut stmt = match conn.prepare("SELECT id, user_name, role FROM user") {
             Ok(stmt) => stmt,
             Err(e) => {
-                return Err(DiscoveryError::SchemaMissing(format!("user table error: {}", e)));
+                return Err(DiscoveryError::SchemaMissing(format!(
+                    "user table error: {}",
+                    e
+                )));
             }
         };
 
@@ -195,19 +224,51 @@ mod tests {
         // Setup fixture
         {
             let conn = Connection::open(db_path).unwrap();
-            conn.execute("CREATE TABLE setting (name TEXT PRIMARY KEY, value TEXT)", []).unwrap();
-            conn.execute("INSERT INTO setting (name, value) VALUES ('version', '2.4.1')", []).unwrap();
+            conn.execute(
+                "CREATE TABLE setting (name TEXT PRIMARY KEY, value TEXT)",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO setting (name, value) VALUES ('version', '2.4.1')",
+                [],
+            )
+            .unwrap();
 
-            conn.execute("CREATE TABLE site (id INTEGER PRIMARY KEY, domain_name TEXT, php_version TEXT)", []).unwrap();
-            conn.execute("INSERT INTO site (id, domain_name, php_version) VALUES (1, 'mysite.com', '8.2')", []).unwrap();
+            conn.execute(
+                "CREATE TABLE site (id INTEGER PRIMARY KEY, domain_name TEXT, php_version TEXT)",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO site (id, domain_name, php_version) VALUES (1, 'mysite.com', '8.2')",
+                [],
+            )
+            .unwrap();
 
             conn.execute("CREATE TABLE database (id INTEGER PRIMARY KEY, database_name TEXT, site_id INTEGER)", []).unwrap();
             // Two databases attached to the same site
-            conn.execute("INSERT INTO database (id, database_name, site_id) VALUES (10, 'my_db_1', 1)", []).unwrap();
-            conn.execute("INSERT INTO database (id, database_name, site_id) VALUES (11, 'my_db_2', 1)", []).unwrap();
+            conn.execute(
+                "INSERT INTO database (id, database_name, site_id) VALUES (10, 'my_db_1', 1)",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO database (id, database_name, site_id) VALUES (11, 'my_db_2', 1)",
+                [],
+            )
+            .unwrap();
 
-            conn.execute("CREATE TABLE user (id INTEGER PRIMARY KEY, user_name TEXT, role TEXT)", []).unwrap();
-            conn.execute("INSERT INTO user (id, user_name, role) VALUES (100, 'admin_user', 'admin')", []).unwrap();
+            conn.execute(
+                "CREATE TABLE user (id INTEGER PRIMARY KEY, user_name TEXT, role TEXT)",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO user (id, user_name, role) VALUES (100, 'admin_user', 'admin')",
+                [],
+            )
+            .unwrap();
         }
 
         // Run discovery
@@ -216,22 +277,38 @@ mod tests {
         assert_eq!(inventory.source_panel, "CloudPanel");
         assert_eq!(inventory.source_version, "2.4.1");
 
-        let site = inventory.items.iter().find(|i| i.item_type == InventoryItemType::Site).unwrap();
+        let site = inventory
+            .items
+            .iter()
+            .find(|i| i.item_type == InventoryItemType::Site)
+            .unwrap();
         assert_eq!(site.name, "mysite.com");
         assert_eq!(site.version, Some("8.2".to_string()));
         assert_eq!(site.associations.len(), 2);
         assert!(site.associations.contains(&"db_10".to_string()));
         assert!(site.associations.contains(&"db_11".to_string()));
 
-        let db1 = inventory.items.iter().find(|i| i.item_type == InventoryItemType::Database && i.id == "db_10").unwrap();
+        let db1 = inventory
+            .items
+            .iter()
+            .find(|i| i.item_type == InventoryItemType::Database && i.id == "db_10")
+            .unwrap();
         assert_eq!(db1.name, "my_db_1");
         assert_eq!(db1.associations, vec!["site_1".to_string()]);
 
-        let db2 = inventory.items.iter().find(|i| i.item_type == InventoryItemType::Database && i.id == "db_11").unwrap();
+        let db2 = inventory
+            .items
+            .iter()
+            .find(|i| i.item_type == InventoryItemType::Database && i.id == "db_11")
+            .unwrap();
         assert_eq!(db2.name, "my_db_2");
         assert_eq!(db2.associations, vec!["site_1".to_string()]);
 
-        let user = inventory.items.iter().find(|i| i.item_type == InventoryItemType::User).unwrap();
+        let user = inventory
+            .items
+            .iter()
+            .find(|i| i.item_type == InventoryItemType::User)
+            .unwrap();
         assert_eq!(user.name, "admin_user");
         assert_eq!(user.metadata.get("role").unwrap(), "admin");
     }
@@ -244,7 +321,8 @@ mod tests {
         // Setup fixture
         {
             let conn = Connection::open(db_path).unwrap();
-            conn.execute("CREATE TABLE dummy (id INTEGER PRIMARY KEY)", []).unwrap();
+            conn.execute("CREATE TABLE dummy (id INTEGER PRIMARY KEY)", [])
+                .unwrap();
         }
 
         let result = CloudPanelDiscovery::discover(db_path);
@@ -259,8 +337,16 @@ mod tests {
         // Setup fixture
         {
             let conn = Connection::open(db_path).unwrap();
-            conn.execute("CREATE TABLE setting (name TEXT PRIMARY KEY, value TEXT)", []).unwrap();
-            conn.execute("INSERT INTO setting (name, value) VALUES ('version', '1.0.0')", []).unwrap(); // Unsupported
+            conn.execute(
+                "CREATE TABLE setting (name TEXT PRIMARY KEY, value TEXT)",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO setting (name, value) VALUES ('version', '1.0.0')",
+                [],
+            )
+            .unwrap(); // Unsupported
         }
 
         let result = CloudPanelDiscovery::discover(db_path);

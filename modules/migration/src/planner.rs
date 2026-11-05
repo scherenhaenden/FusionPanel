@@ -41,7 +41,8 @@ impl Planner {
         let mut actions = Vec::new();
 
         for item in &inventory.items {
-            let (action_type, reason) = Self::evaluate_item(item, dry_run, &inventory.source_version);
+            let (action_type, reason) =
+                Self::evaluate_item(item, dry_run, &inventory.source_version);
             actions.push(PlanAction {
                 action: action_type,
                 item_id: item.id.clone(),
@@ -73,12 +74,19 @@ impl Planner {
         }
     }
 
-    fn evaluate_item(item: &InventoryItem, dry_run: bool, source_version: &str) -> (PlanActionType, Option<String>) {
+    fn evaluate_item(
+        item: &InventoryItem,
+        dry_run: bool,
+        source_version: &str,
+    ) -> (PlanActionType, Option<String>) {
         // Only these exact adapter versions are qualified for planning.
         if !dry_run && !matches!(source_version, "2.3.0" | "2.4.0") {
             return (
                 PlanActionType::Unsupported,
-                Some("Real runtime apply operations require exact source-version adapter support.".to_string()),
+                Some(
+                    "Real runtime apply operations require exact source-version adapter support."
+                        .to_string(),
+                ),
             );
         }
 
@@ -86,12 +94,18 @@ impl Planner {
             InventoryItemType::Site => {
                 if let Some(version) = &item.version {
                     if version == "5.6" {
-                        return (PlanActionType::Unsupported, Some("PHP 5.6 is unsupported".to_string()));
+                        return (
+                            PlanActionType::Unsupported,
+                            Some("PHP 5.6 is unsupported".to_string()),
+                        );
                     }
                 }
 
                 if item.version.is_none() {
-                    return (PlanActionType::Conflict, Some("Site is missing PHP version definition".to_string()));
+                    return (
+                        PlanActionType::Conflict,
+                        Some("Site is missing PHP version definition".to_string()),
+                    );
                 }
 
                 (PlanActionType::Create, None)
@@ -99,11 +113,17 @@ impl Planner {
             InventoryItemType::Database => (PlanActionType::Create, None),
             InventoryItemType::User => {
                 if item.name == "root" || item.name == "admin" {
-                    return (PlanActionType::Conflict, Some(format!("User {} conflicts with system users", item.name)));
+                    return (
+                        PlanActionType::Conflict,
+                        Some(format!("User {} conflicts with system users", item.name)),
+                    );
                 }
                 (PlanActionType::Create, None)
             }
-            InventoryItemType::Unknown(ref s) => (PlanActionType::Unsupported, Some(format!("Unknown type: {}", s))),
+            InventoryItemType::Unknown(ref s) => (
+                PlanActionType::Unsupported,
+                Some(format!("Unknown type: {}", s)),
+            ),
         }
     }
 }
@@ -121,7 +141,12 @@ mod tests {
         }
     }
 
-    fn create_test_item(id: &str, item_type: InventoryItemType, name: &str, version: Option<String>) -> InventoryItem {
+    fn create_test_item(
+        id: &str,
+        item_type: InventoryItemType,
+        name: &str,
+        version: Option<String>,
+    ) -> InventoryItem {
         InventoryItem {
             id: id.to_string(),
             item_type,
@@ -140,10 +165,30 @@ mod tests {
     #[test]
     fn test_planner_creates_actions_correctly() {
         let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-        inventory.items.push(create_test_item("site_1", InventoryItemType::Site, "example.com", Some("8.1".to_string())));
-        inventory.items.push(create_test_item("site_2", InventoryItemType::Site, "old-site.com", Some("5.6".to_string())));
-        inventory.items.push(create_test_item("site_3", InventoryItemType::Site, "missing-php-site.com", None));
-        inventory.items.push(create_test_item("user_1", InventoryItemType::User, "root", None));
+        inventory.items.push(create_test_item(
+            "site_1",
+            InventoryItemType::Site,
+            "example.com",
+            Some("8.1".to_string()),
+        ));
+        inventory.items.push(create_test_item(
+            "site_2",
+            InventoryItemType::Site,
+            "old-site.com",
+            Some("5.6".to_string()),
+        ));
+        inventory.items.push(create_test_item(
+            "site_3",
+            InventoryItemType::Site,
+            "missing-php-site.com",
+            None,
+        ));
+        inventory.items.push(create_test_item(
+            "user_1",
+            InventoryItemType::User,
+            "root",
+            None,
+        ));
 
         let plan = Planner::create_plan(&inventory, true);
         assert_eq!(plan.is_dry_run, true);
@@ -158,19 +203,35 @@ mod tests {
     #[test]
     fn test_planner_dry_run_false_is_blocked_for_unsupported_version() {
         let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "1.0.0".to_string());
-        inventory.items.push(create_test_item("site_1", InventoryItemType::Site, "example.com", Some("8.1".to_string())));
+        inventory.items.push(create_test_item(
+            "site_1",
+            InventoryItemType::Site,
+            "example.com",
+            Some("8.1".to_string()),
+        ));
 
         let plan = Planner::create_plan(&inventory, false);
         assert_eq!(plan.is_dry_run, false);
         assert_eq!(plan.actions.len(), 1);
         assert_eq!(plan.actions[0].action, PlanActionType::Unsupported);
-        assert_eq!(plan.actions[0].reason, Some("Real runtime apply operations require exact source-version adapter support.".to_string()));
+        assert_eq!(
+            plan.actions[0].reason,
+            Some(
+                "Real runtime apply operations require exact source-version adapter support."
+                    .to_string()
+            )
+        );
     }
 
     #[test]
     fn test_planner_dry_run_false_is_allowed_for_supported_version() {
         let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-        inventory.items.push(create_test_item("site_1", InventoryItemType::Site, "example.com", Some("8.1".to_string())));
+        inventory.items.push(create_test_item(
+            "site_1",
+            InventoryItemType::Site,
+            "example.com",
+            Some("8.1".to_string()),
+        ));
 
         let plan = Planner::create_plan(&inventory, false);
         assert_eq!(plan.is_dry_run, false);
@@ -181,11 +242,21 @@ mod tests {
     #[test]
     fn test_planner_rejects_version_prefix_collisions() {
         for source_version in ["2.40.0", "2.4.0-rc1", "2.4.1"] {
-            let mut inventory = MigrationInventory::new("CloudPanel".to_string(), source_version.to_string());
-            inventory.items.push(create_test_item("site_1", InventoryItemType::Site, "example.com", Some("8.1".to_string())));
+            let mut inventory =
+                MigrationInventory::new("CloudPanel".to_string(), source_version.to_string());
+            inventory.items.push(create_test_item(
+                "site_1",
+                InventoryItemType::Site,
+                "example.com",
+                Some("8.1".to_string()),
+            ));
 
             let plan = Planner::create_plan(&inventory, false);
-            assert_eq!(plan.actions[0].action, PlanActionType::Unsupported, "{source_version}");
+            assert_eq!(
+                plan.actions[0].action,
+                PlanActionType::Unsupported,
+                "{source_version}"
+            );
         }
     }
 
@@ -199,7 +270,12 @@ mod tests {
     #[test]
     fn test_review_plan_dry_run_decommission_not_allowed() {
         let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-        inventory.items.push(create_test_item("site_1", InventoryItemType::Site, "example.com", Some("8.1".to_string())));
+        inventory.items.push(create_test_item(
+            "site_1",
+            InventoryItemType::Site,
+            "example.com",
+            Some("8.1".to_string()),
+        ));
         let plan = Planner::create_review_plan(&inventory, true, Some(&get_full_evidence()));
         assert_eq!(plan.decommission_allowed, false);
     }
@@ -207,7 +283,12 @@ mod tests {
     #[test]
     fn test_review_plan_unsupported_item_decommission_not_allowed() {
         let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-        inventory.items.push(create_test_item("site_1", InventoryItemType::Site, "old-site.com", Some("5.6".to_string()))); // PHP 5.6 is unsupported
+        inventory.items.push(create_test_item(
+            "site_1",
+            InventoryItemType::Site,
+            "old-site.com",
+            Some("5.6".to_string()),
+        )); // PHP 5.6 is unsupported
         let plan = Planner::create_review_plan(&inventory, true, Some(&get_full_evidence()));
         assert_eq!(plan.decommission_allowed, false);
     }
@@ -215,7 +296,12 @@ mod tests {
     #[test]
     fn test_review_plan_conflict_item_decommission_not_allowed() {
         let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-        inventory.items.push(create_test_item("user_1", InventoryItemType::User, "root", None));
+        inventory.items.push(create_test_item(
+            "user_1",
+            InventoryItemType::User,
+            "root",
+            None,
+        ));
         let plan = Planner::create_review_plan(&inventory, true, Some(&get_full_evidence()));
         assert_eq!(plan.decommission_allowed, false);
     }
@@ -223,7 +309,12 @@ mod tests {
     #[test]
     fn test_review_plan_unknown_item_decommission_not_allowed() {
         let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-        inventory.items.push(create_test_item("unknown_1", InventoryItemType::Unknown("some_type".to_string()), "unknown-item", None));
+        inventory.items.push(create_test_item(
+            "unknown_1",
+            InventoryItemType::Unknown("some_type".to_string()),
+            "unknown-item",
+            None,
+        ));
         let plan = Planner::create_review_plan(&inventory, true, Some(&get_full_evidence()));
         assert_eq!(plan.decommission_allowed, false);
     }
@@ -231,7 +322,12 @@ mod tests {
     #[test]
     fn test_review_plan_missing_evidence_decommission_not_allowed() {
         let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-        inventory.items.push(create_test_item("site_1", InventoryItemType::Site, "example.com", Some("8.1".to_string())));
+        inventory.items.push(create_test_item(
+            "site_1",
+            InventoryItemType::Site,
+            "example.com",
+            Some("8.1".to_string()),
+        ));
         let plan = Planner::create_review_plan(&inventory, false, None);
         assert_eq!(plan.decommission_allowed, false);
     }
@@ -239,13 +335,38 @@ mod tests {
     #[test]
     fn test_review_plan_incomplete_evidence_decommission_not_allowed() {
         let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-        inventory.items.push(create_test_item("site_1", InventoryItemType::Site, "example.com", Some("8.1".to_string())));
+        inventory.items.push(create_test_item(
+            "site_1",
+            InventoryItemType::Site,
+            "example.com",
+            Some("8.1".to_string()),
+        ));
 
         let evs = vec![
-            ReviewEvidence { execution_completed: false, target_verified: true, restore_verified: true, handoff_completed: true },
-            ReviewEvidence { execution_completed: true, target_verified: false, restore_verified: true, handoff_completed: true },
-            ReviewEvidence { execution_completed: true, target_verified: true, restore_verified: false, handoff_completed: true },
-            ReviewEvidence { execution_completed: true, target_verified: true, restore_verified: true, handoff_completed: false },
+            ReviewEvidence {
+                execution_completed: false,
+                target_verified: true,
+                restore_verified: true,
+                handoff_completed: true,
+            },
+            ReviewEvidence {
+                execution_completed: true,
+                target_verified: false,
+                restore_verified: true,
+                handoff_completed: true,
+            },
+            ReviewEvidence {
+                execution_completed: true,
+                target_verified: true,
+                restore_verified: false,
+                handoff_completed: true,
+            },
+            ReviewEvidence {
+                execution_completed: true,
+                target_verified: true,
+                restore_verified: true,
+                handoff_completed: false,
+            },
         ];
 
         for ev in evs {
@@ -257,7 +378,12 @@ mod tests {
     #[test]
     fn test_caller_supplied_review_evidence_never_allows_decommission() {
         let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-        inventory.items.push(create_test_item("site_1", InventoryItemType::Site, "example.com", Some("8.1".to_string())));
+        inventory.items.push(create_test_item(
+            "site_1",
+            InventoryItemType::Site,
+            "example.com",
+            Some("8.1".to_string()),
+        ));
         let plan = Planner::create_review_plan(&inventory, false, Some(&get_full_evidence()));
         assert!(!plan.decommission_allowed);
     }
