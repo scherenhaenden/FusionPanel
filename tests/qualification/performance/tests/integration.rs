@@ -1,6 +1,8 @@
 use performance_tests::runner::run_load_test;
-use std::process::Command;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 #[tokio::test]
 async fn test_actual_api_load() {
@@ -8,142 +10,111 @@ async fn test_actual_api_load() {
         .timeout(Duration::from_secs(2))
         .build()
         .unwrap();
+    let health_url = "http://127.0.0.1:8080/v1/health";
 
-    let res = client.get("http://127.0.0.1:8080/v1/health").send().await;
-
-    if let Err(e) = res {
-        panic!(
-            "BLOCKED: Prerequisites not available for E2E. Could not reach FusionPanel API: {}",
-            e
-        );
-    }
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(2))
-        .build()
-        .unwrap();
+    let probe = client.get(health_url).send().await.unwrap_or_else(|error| {
+        panic!("BLOCKED: disposable FusionPanel API is unavailable at {health_url}: {error}")
+    });
+    assert!(
+        probe.status().is_success(),
+        "FusionPanel API health endpoint returned {}",
+        probe.status()
+    );
 
     let result = run_load_test(10, 100, move || {
-        let client_clone = client.clone();
+        let client = client.clone();
         async move {
-            let res = client_clone.get("http://127.0.0.1:8080/v1/health").send().await;
-            if res.is_ok() && res.unwrap().status().is_success() {
-                Ok(())
-            } else {
-                Err(())
+            match client.get(health_url).send().await {
+                Ok(response) if response.status().is_success() => Ok(()),
+                _ => Err(()),
             }
         }
     })
     .await;
 
-    println!("Total Duration: {:?}", result.duration);
-    println!("p50: {:?}", result.p50());
-    println!("p95: {:?}", result.p95());
-    println!("p99: {:?}", result.p99());
-    
-    assert_eq!(result.success_count + result.error_count, 1000);
-    assert!(result.success_count > 0);
+    let total = result.success_count + result.error_count;
+    let error_rate = result.error_count as f64 / total as f64;
+    println!(
+        "API health workload: requests={total}, successes={}, errors={}, error_rate={error_rate:.4}, duration={:?}, p50={:?}, p95={:?}, p99={:?}",
+        result.success_count,
+        result.error_count,
+        result.duration,
+        result.p50(),
+        result.p95(),
+        result.p99()
+    );
+
+    assert_eq!(total, 1000);
+    assert_eq!(
+        result.error_count, 0,
+        "health workload returned failed requests"
+    );
+    assert!(result.p50().is_some());
+    assert!(result.p95().is_some());
+    assert!(result.p99().is_some());
 }
 
 #[tokio::test]
-async fn test_failure_budget() {
-    // A test that simulates partial failure to ensure we can budget error_count.
-    // If the prerequisite API is not available, we explicitly log a BLOCKED requirement.
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(2))
-        .build()
-        .unwrap();
+#[cfg(unix)]
+async fn test_worker_failure_is_persisted_by_real_runtime() {
+    use fusionpanel_jobs::{JobState, JobStore};
+    use integration_jobs::{agent_subprocess::SubprocessAgentClient, Worker};
 
-    let res = client.get("http://127.0.0.1:8080/v1/health").send().await;
+    const REQUEST_ID: &str = "00000000-0000-0000-0000-000000000001";
 
-    if let Err(e) = res {
-        panic!(
-            "BLOCKED: Prerequisites not available for E2E. Could not reach FusionPanel API: {}",
-            e
-        );
-    }
-
-    let result = run_load_test(5, 20, || async {
-        let n = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .subsec_nanos();
-        if n % 5 == 0 {
-            Err(()) // partial failure
-        } else {
-            Ok(())
+    let temporary = tempfile::tempdir().unwrap();
+    let database_path = temporary.path().join("jobs.sqlite");
+    let agent_path = temporary.path().join("controlled-agent.sh");
+    let response = serde_json::json!({
+        "version": 1,
+        "request_id": REQUEST_ID,
+        "error": {
+            "code": "injected",
+            "message": "controlled failure"
         }
-    })
-    .await;
+    });
+    let script = format!("#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '{}'\n", response);
+    std::fs::write(&agent_path, script).unwrap();
+    let mut permissions = std::fs::metadata(&agent_path).unwrap().permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o700);
+    std::fs::set_permissions(&agent_path, permissions).unwrap();
 
-    assert_eq!(result.success_count + result.error_count, 100);
-}
+    let request = serde_json::json!({
+        "version": 1,
+        "request_id": REQUEST_ID,
+        "operation": "system.info",
+        "payload": {}
+    });
+    let store = JobStore::new(&database_path).unwrap();
+    let job_id = store.create("agent_operation", &request).unwrap();
+    let shared_store = Arc::new(Mutex::new(store));
+    let agent = Arc::new(SubprocessAgentClient {
+        executable_path: agent_path.to_string_lossy().into_owned(),
+    });
+    let worker = Worker::new(
+        "performance-fixture".to_string(),
+        Arc::clone(&shared_store),
+        agent,
+        Duration::from_secs(2),
+    );
 
-#[tokio::test]
-async fn test_queue_worker_failure_and_recovery() {
-    // Implement Bounded Disposable Failure Injection
-    let temp_dir = std::env::temp_dir().join(format!("fusionpanel_test_{}", std::process::id()));
-    if !temp_dir.exists() {
-        std::fs::create_dir_all(&temp_dir).unwrap();
-    }
-    
-    // Create a mock worker script
-    let worker_script = temp_dir.join("worker.sh");
-    let script_content = r#"#!/bin/bash
-    FILE=$1
-    echo "STARTED" >> $FILE
-    sleep 2
-    echo "PROCESSED" >> $FILE
-    "#;
-    std::fs::write(&worker_script, script_content).unwrap();
-    std::process::Command::new("chmod").arg("+x").arg(&worker_script).status().unwrap();
+    let started = Instant::now();
+    assert!(worker.run_once().await.unwrap());
+    let failure_processing_time = started.elapsed();
 
-    let data_file = temp_dir.join("data.txt");
-    
-    // Spawn worker
-    let mut child = Command::new(&worker_script)
-        .arg(&data_file)
-        .spawn()
-        .expect("Failed to start worker");
+    drop(worker);
+    drop(shared_store);
 
-    // Let it run for a moment, then kill it
-    tokio::time::sleep(Duration::from_millis(500)).await;
-    
-    // Inject failure
-    child.kill().expect("Failed to kill worker");
-    child.wait().unwrap();
-    
-    let content = std::fs::read_to_string(&data_file).unwrap_or_default();
-    assert!(content.contains("STARTED"), "Worker should have started");
-    assert!(!content.contains("PROCESSED"), "Worker should not have finished");
-    
-    // Measure RTO by restarting
-    let start = std::time::Instant::now();
-    let mut recovery_child = Command::new(&worker_script)
-        .arg(&data_file)
-        .spawn()
-        .expect("Failed to start worker");
-        
-    recovery_child.wait().unwrap();
-    let rto = start.elapsed();
-    
-    let content_after = std::fs::read_to_string(&data_file).unwrap_or_default();
-    assert!(content_after.contains("PROCESSED"), "Recovery worker should have finished");
-    
-    // Ensure no duplicate effects by asserting proper tracking
-    // In a real DB test, we'd verify 'acknowledged writes' and 'duplicate effects'
-    
-    println!("Worker failure recovery RTO: {:?}", rto);
-    
-    // Clean up
-    let _ = std::fs::remove_dir_all(temp_dir);
-}
-
-#[test]
-fn test_system_dependency_presence() {
-    // Real system dependency probe.
-    let status = Command::new("docker").arg("info").output();
-    if status.is_err() || !status.unwrap().status.success() {
-        panic!("BLOCKED: Prerequisites not available for E2E. Docker not available.");
-    }
+    let reopened = JobStore::new(&database_path).unwrap();
+    let job = reopened.get(&job_id).unwrap();
+    assert_eq!(job.state, JobState::Failed);
+    assert_eq!(job.worker_id.as_deref(), Some("performance-fixture"));
+    assert_eq!(
+        job.error_text.as_deref(),
+        Some("Agent error: controlled failure")
+    );
+    println!(
+        "Persisted controlled agent failure in {:?}; worker restart recovery is not exercised.",
+        failure_processing_time
+    );
 }
