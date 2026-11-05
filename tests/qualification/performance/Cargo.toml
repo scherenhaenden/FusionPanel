@@ -1,0 +1,17 @@
+[workspace]
+
+[package]
+name = "performance-tests"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+tokio = { version = "1.0", features = ["full"] }
+
+[dev-dependencies]
+fusionpanel-jobs = { path = "../../../crates/jobs" }
+integration-jobs = { path = "../../../integration/jobs" }
+serde_json = "1.0"
+tempfile = "3.12"

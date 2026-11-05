@@ -1,0 +1,22 @@
+[package]
+name = "e2e-security"
+version = "0.1.0-dev.1"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[workspace]
+
+[dependencies]
+axum = "0.8.9"
+identity = { path = "../../../modules/identity" }
+integration-identity = { path = "../../../integration/identity" }
+reqwest = { version = "0.12.28", default-features = false, features = ["json", "rustls-tls"] }
+secrets = { path = "../../../modules/secrets" }
+serde_json = "1.0"
+tempfile = "3.27.0"
+tokio = { version = "1.37.0", features = ["macros", "net", "rt-multi-thread", "sync"] }
+tower-cookies = "0.11"
+
+[[test]]
+name = "e2e"
+path = "e2e.rs"

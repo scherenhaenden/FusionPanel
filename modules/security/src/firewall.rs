@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -162,7 +164,7 @@ impl FirewallPolicy {
             return Err(FirewallError::InvalidSshListenPort);
         }
 
-        let mut ssh_allowed = false;
+        let mut ssh_allowed = None;
 
         for rule in &self.rules {
             if let Some(ref pr) = rule.port_range {
@@ -171,18 +173,29 @@ impl FirewallPolicy {
                 }
             }
 
-            if rule.action == Action::Allow && rule.protocol == Protocol::Tcp {
-                match rule.port_range {
-                    Some(ref pr) if pr.start <= ssh_listen_port && pr.end >= ssh_listen_port => {
-                        ssh_allowed = true
+            let port_matches = match rule.port_range {
+                Some(ref pr) => pr.start <= ssh_listen_port && pr.end >= ssh_listen_port,
+                None => true,
+            };
+
+            let protocol_matches = rule.protocol == Protocol::Tcp;
+
+            if port_matches && protocol_matches
+                && ssh_allowed.is_none() {
+                    match rule.action {
+                        Action::Allow => ssh_allowed = Some(true),
+                        Action::Deny => {
+                            if rule.source_ip.is_none() {
+                                ssh_allowed = Some(false);
+                            }
+                        }
                     }
-                    None => ssh_allowed = true, // 'None' port range implies ALL ports allowed
-                    _ => {}
                 }
-            }
         }
 
-        if !ssh_allowed && self.default_action == Action::Deny {
+        let is_allowed = ssh_allowed.unwrap_or(self.default_action == Action::Allow);
+
+        if !is_allowed {
             return Err(FirewallError::LockoutPreventionFailed(ssh_listen_port));
         }
 
@@ -194,7 +207,7 @@ impl FirewallPolicy {
 
         // Generate a pseudo-config / plan (e.g. ufw or iptables representation)
         let mut plan = String::new();
-        plan.push_str(&format!("# Firewall Apply Plan\n"));
+        plan.push_str("# Firewall Apply Plan\n");
         plan.push_str(&format!("DEFAULT_ACTION={:?}\n", self.default_action));
         for rule in &self.rules {
             let port = if let Some(ref p) = rule.port_range {
@@ -365,6 +378,51 @@ mod tests {
         assert!(matches!(
             policy.validate(0),
             Err(FirewallError::InvalidSshListenPort)
+        ));
+    }
+
+    #[test]
+    fn test_lockout_prevention_default_allow_with_deny_ssh() {
+        let policy = FirewallPolicy {
+            rules: vec![FirewallRule {
+                name: "Deny SSH".into(),
+                action: Action::Deny,
+                protocol: Protocol::Tcp,
+                port_range: Some(PortRange::single(22)),
+                source_ip: None,
+            }],
+            default_action: Action::Allow,
+        };
+        assert!(matches!(
+            policy.validate(22),
+            Err(FirewallError::LockoutPreventionFailed(22))
+        ));
+    }
+
+    #[test]
+    fn test_lockout_prevention_default_deny_with_deny_all_before_allow_ssh() {
+        let policy = FirewallPolicy {
+            rules: vec![
+                FirewallRule {
+                    name: "Deny All".into(),
+                    action: Action::Deny,
+                    protocol: Protocol::Tcp,
+                    port_range: None,
+                    source_ip: None,
+                },
+                FirewallRule {
+                    name: "Allow SSH".into(),
+                    action: Action::Allow,
+                    protocol: Protocol::Tcp,
+                    port_range: Some(PortRange::single(22)),
+                    source_ip: None,
+                },
+            ],
+            default_action: Action::Deny,
+        };
+        assert!(matches!(
+            policy.validate(22),
+            Err(FirewallError::LockoutPreventionFailed(22))
         ));
     }
 }

@@ -39,8 +39,3 @@ Do not treat the ignored case or the passing unit suite as integration/E2E evide
 ## Workspace integration
 
 This crate has its own Cargo workspace for isolated development. Root workspace membership and lockfile updates belong to the integration owner.
-
-
-## Release versioning
-
-This package PR does not publish a product release. No SemVer change or release tag is intended (`+semver: none`); evaluate the strict version/date/hash identity in the authorized release batch.

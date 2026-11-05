@@ -1,0 +1,26 @@
+[Unit]
+Description=FusionPanel Agent Service
+After=network.target
+Documentation=https://github.com/scherenhaenden/FusionPanel
+
+[Service]
+Type=simple
+User=fusionpanel
+Group=fusionpanel
+ExecStart=/opt/fusionpanel/bin/fusionpanel-agent
+EnvironmentFile=-/etc/fusionpanel/fusionpanel-agent.env
+
+# Restart backoff configuration
+Restart=on-failure
+RestartSec=5s
+
+# Security hardening directives
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+NoNewPrivileges=true
+CapabilityBoundingSet=
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

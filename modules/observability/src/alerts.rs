@@ -27,7 +27,11 @@ pub struct WebhookDelivery {
 
 impl AlertDelivery for WebhookDelivery {
     fn deliver(&self, alert: &Alert) -> Result<(), String> {
-        let client = reqwest::blocking::Client::new();
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .unwrap_or_else(|_| reqwest::blocking::Client::new());
+
         match client.post(&self.url).json(alert).send() {
             Ok(res) if res.status().is_success() => Ok(()),
             Ok(res) => Err(format!("Webhook failed with status: {}", res.status())),

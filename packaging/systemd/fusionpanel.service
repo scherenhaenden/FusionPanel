@@ -1,0 +1,28 @@
+[Unit]
+Description=FusionPanel API Service
+After=network.target
+Documentation=https://github.com/scherenhaenden/FusionPanel
+
+[Service]
+Type=simple
+User=fusionpanel
+Group=fusionpanel
+ExecStart=/opt/fusionpanel/bin/fusionpanel-api
+EnvironmentFile=-/etc/fusionpanel/fusionpanel.env
+
+# Restart backoff configuration
+Restart=on-failure
+RestartSec=5s
+# Note: StartLimitIntervalSec is supported in [Unit] for older systemd, but in [Service] for newer systemd.
+# Let's put it in [Unit] just in case or keep it in Service if newer. Systemd-analyze verify might complain depending on version.
+
+# Security hardening directives
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+NoNewPrivileges=true
+CapabilityBoundingSet=
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

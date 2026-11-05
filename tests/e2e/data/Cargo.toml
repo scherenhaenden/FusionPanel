@@ -1,0 +1,18 @@
+[workspace]
+
+[package]
+name = "e2e-data"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+publish = false
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+databases = { path = "../../../modules/databases" }
+integration-data = { path = "../../../integration/data" }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tempfile = "3.10"
+zstd = "0.13"

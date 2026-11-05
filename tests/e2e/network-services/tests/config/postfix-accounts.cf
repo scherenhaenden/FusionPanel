@@ -1,0 +1,2 @@
+# Test-only account; this fixture is used only to let the disposable Dovecot service start.
+postmaster@example.com|{SHA512-CRYPT}$6$FusionPanelTest$UE7JJL2B9olxZufe8P0bqfizUZsfgA3fUCLYd.kZr09CqDm0hl3/KuxGtgQ9OU4wZwJ70Dqv1vCCeLkBz7M1Y/
