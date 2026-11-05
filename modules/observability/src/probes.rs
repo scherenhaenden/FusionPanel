@@ -63,7 +63,7 @@ pub fn check_tcp(address: &str, timeout_secs: u64) -> ProbeResult {
     }
 
     let mut last_error = None;
-    let attempt_budget = {
+    let per_attempt_budget = {
         let budget = total_timeout / (addrs.len() as u32);
         if budget.is_zero() {
             Duration::from_millis(1)
@@ -72,7 +72,7 @@ pub fn check_tcp(address: &str, timeout_secs: u64) -> ProbeResult {
         }
     };
 
-    for addr in addrs.iter() {
+    for addr in &addrs {
         let elapsed = start.elapsed();
         if elapsed >= total_timeout {
             return ProbeResult {
@@ -83,7 +83,11 @@ pub fn check_tcp(address: &str, timeout_secs: u64) -> ProbeResult {
             };
         }
 
-        match TcpStream::connect_timeout(addr, attempt_budget) {
+        // DNS resolution and earlier attempts consume the same total probe
+        // deadline. Never give a later address a fresh full per-address budget.
+        let remaining = total_timeout.saturating_sub(elapsed);
+        let attempt_timeout = std::cmp::min(per_attempt_budget, remaining);
+        match TcpStream::connect_timeout(addr, attempt_timeout) {
             Ok(_) => {
                 return ProbeResult {
                     success: true,

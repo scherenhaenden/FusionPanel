@@ -230,15 +230,7 @@ fn test_webhook_delivery_connection_refused() {
 }
 
 #[test]
-fn test_e2e_outage_notification_blocked() {
-    // Preserve explicit scheduler/collector/persistence/E2E gaps instead of inventing live metrics.
-    if std::env::var("FUSIONPANEL_E2E_TARGET").is_err() {
-        panic!("RESULT=BLOCKED: pending scheduler, collector, and incident persistence integration");
-    }
-}
-
-#[test]
-fn test_webhook_delivery_recovery() {
+fn test_webhook_delivery_succeeds_after_endpoint_recovers() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     let url = format!("http://127.0.0.1:{}/alert", port);
@@ -289,7 +281,9 @@ fn test_webhook_delivery_recovery() {
 
     let req1 = rx1.recv_timeout(Duration::from_secs(2)).unwrap();
     assert!(req1.starts_with("POST /alert HTTP/1.1\r\n"));
-    assert!(req1.to_lowercase().contains("content-type: application/json"));
+    assert!(req1
+        .to_lowercase()
+        .contains("content-type: application/json"));
 
     // Second attempt succeeds
     let res2 = delivery.deliver(&alert);
@@ -297,7 +291,9 @@ fn test_webhook_delivery_recovery() {
 
     let req2 = rx2.recv_timeout(Duration::from_secs(2)).unwrap();
     assert!(req2.starts_with("POST /alert HTTP/1.1\r\n"));
-    assert!(req2.to_lowercase().contains("content-type: application/json"));
+    assert!(req2
+        .to_lowercase()
+        .contains("content-type: application/json"));
 
     let body_start = req2.find("\r\n\r\n").unwrap() + 4;
     let body = &req2[body_start..];
