@@ -8,7 +8,7 @@ fn test_render_compose() {
     config.insert("TAG".to_string(), "latest".to_string());
     config.insert("DB_PASSWORD".to_string(), "secret".to_string());
 
-    let rendered = CatalogInstaller::render_compose(template, &config);
+    let rendered = CatalogInstaller::render_compose(template, &config).unwrap();
 
     assert!(rendered.contains("image: myapp:latest"));
     assert!(rendered.contains("- DB_PASS=secret"));
@@ -21,9 +21,12 @@ fn test_render_compose_brackets_and_no_brackets() {
     config.insert("VAR1".to_string(), "val1".to_string());
     config.insert("VAR2".to_string(), "val2".to_string());
 
-    let rendered = CatalogInstaller::render_compose(template, &config);
+    let rendered = CatalogInstaller::render_compose(template, &config).unwrap();
 
-    assert_eq!(rendered, "var1=val1 var2=val2");
+    assert_eq!(
+        serde_yaml::from_str::<String>(&rendered).unwrap(),
+        "var1=val1 var2=val2"
+    );
 }
 
 #[test]
