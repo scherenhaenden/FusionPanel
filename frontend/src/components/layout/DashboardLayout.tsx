@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, Link } from 'react-router-dom';
-import { Menu, Sun, Moon, LayoutDashboard, Globe, Database, Archive, Shield } from 'lucide-react';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
+import { Menu, Sun, Moon, LayoutDashboard, Globe, Database, Archive, Shield, LogOut } from 'lucide-react';
+import { SessionManager } from '../../auth/session';
+import { api } from '../../api';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -9,6 +11,7 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (darkMode) {
@@ -17,6 +20,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
+
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch (e) {
+      // Ignore errors on logout
+    }
+    SessionManager.clearToken();
+    navigate('/login');
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors duration-200">
@@ -38,12 +51,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </span>
               </Link>
             </div>
-            <div className="flex items-center">
+            <div className="flex items-center space-x-2">
               <button
                 onClick={() => setDarkMode(!darkMode)}
                 className="p-2 text-gray-500 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600"
               >
                 {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
+              <button
+                onClick={handleLogout}
+                className="p-2 text-gray-500 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600"
+                title="Logout"
+              >
+                <LogOut className="w-5 h-5" />
               </button>
             </div>
           </div>
