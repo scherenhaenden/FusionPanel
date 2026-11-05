@@ -1,72 +1,42 @@
-#![forbid(unsafe_code)]
+use administration::{audit::AuditLog, quotas::QuotaEngine};
+use axum::Router;
+use integration_administration::routes::{AppState, DurableInvitations};
+use std::{net::SocketAddr, path::Path, sync::Arc};
+use tokio::{net::TcpListener, sync::Mutex, task::JoinHandle};
 
-use std::time::Duration;
+pub const ADMIN_TOKEN: &str = "fusionpanel-e2e-admin-token";
 
-use reqwest::{Client, Method, Url};
-
-pub fn client_and_target() -> Result<(Client, String), String> {
-    if std::env::var("FUSIONPANEL_E2E_DISPOSABLE").as_deref() != Ok("1") {
-        return Err(
-            "BLOCKED: set FUSIONPANEL_E2E_DISPOSABLE=1 only for an owned disposable target".into(),
-        );
-    }
-    let raw_url = std::env::var("FUSIONPANEL_API_URL")
-        .map_err(|_| "BLOCKED: FUSIONPANEL_API_URL must name the disposable loopback target")?;
-    let url =
-        Url::parse(&raw_url).map_err(|_| "BLOCKED: FUSIONPANEL_API_URL is not a valid URL")?;
-    if url.scheme() != "http"
-        || !matches!(url.host_str(), Some("127.0.0.1" | "localhost" | "::1"))
-        || url.port().is_none()
-        || !url.username().is_empty()
-        || url.password().is_some()
-        || url.query().is_some()
-        || url.fragment().is_some()
-        || !matches!(url.path(), "" | "/")
-    {
-        return Err(
-            "BLOCKED: E2E mutation target must be an explicit HTTP loopback URL with a port".into(),
-        );
-    }
-    let target = raw_url.trim_end_matches('/').to_string();
-    let client = Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(5))
-        .build()
-        .map_err(|_| "BLOCKED: could not create a bounded HTTP client")?;
-    Ok((client, target))
+pub struct RunningServer {
+    pub base_url: String,
+    task: JoinHandle<()>,
 }
 
-pub async fn require_health(client: &Client, target: &str) -> Result<(), String> {
-    let response = client
-        .get(format!("{target}/v1/health"))
-        .send()
-        .await
-        .map_err(|_| "BLOCKED: disposable API health endpoint is unreachable")?;
-    if response.status().is_success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "BLOCKED: disposable API health returned {}",
-            response.status()
-        ))
-    }
-}
-
-pub async fn require_route(client: &Client, target: &str, path: &str) -> Result<(), String> {
-    let response = client
-        .request(Method::OPTIONS, format!("{target}{path}"))
-        .send()
-        .await
-        .map_err(|_| "BLOCKED: could not safely probe the disposable API route")?;
-    match response.status() {
-        reqwest::StatusCode::NOT_FOUND | reqwest::StatusCode::NOT_IMPLEMENTED => {
-            Err(format!("BLOCKED: disposable API does not expose {path}"))
+impl RunningServer {
+    pub async fn start(app: Router) -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address: SocketAddr = listener.local_addr().unwrap();
+        let task = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        Self {
+            base_url: format!("http://{address}"),
+            task,
         }
-        reqwest::StatusCode::METHOD_NOT_ALLOWED
-        | reqwest::StatusCode::OK
-        | reqwest::StatusCode::NO_CONTENT => Ok(()),
-        status => Err(format!(
-            "BLOCKED: safe route probe for {path} returned {status}"
-        )),
+    }
+
+    pub async fn stop(self) {
+        self.task.abort();
+        let _ = self.task.await;
+    }
+}
+
+pub fn app_state(audit_path: &Path, invitations_path: &Path) -> AppState {
+    AppState {
+        quotas: Arc::new(QuotaEngine::new()),
+        audit: Arc::new(Mutex::new(AuditLog::with_path(audit_path).unwrap())),
+        invitations: Arc::new(Mutex::new(DurableInvitations::new(
+            invitations_path.to_path_buf(),
+        ))),
+        admin_token: Arc::new(ADMIN_TOKEN.to_string()),
     }
 }

@@ -1,114 +1,108 @@
 #![forbid(unsafe_code)]
 
-#[path = "common/mod.rs"]
 mod common;
 
-use reqwest::StatusCode;
+use administration::quotas::{QuotaEngine, ResourceQuotas};
+use common::{app_state, RunningServer, ADMIN_TOKEN};
+use integration_administration::routes::router;
 use serde_json::json;
+use std::sync::Arc;
+use uuid::Uuid;
 
 #[tokio::test]
-async fn test_organization_tenant_quotas() {
-    let (client, api_url) = common::client_and_target().unwrap_or_else(|error| panic!("{error}"));
-    common::require_health(&client, &api_url)
-        .await
-        .unwrap_or_else(|error| panic!("{error}"));
+async fn quota_routes_enforce_limits_under_concurrent_http_requests() {
+    let temp = tempfile::tempdir().unwrap();
+    let quotas = Arc::new(QuotaEngine::new());
+    let tenant = Uuid::new_v4();
+    quotas.set_limits(
+        tenant,
+        ResourceQuotas {
+            cpu_cores: 4,
+            memory_mb: 4096,
+            disk_mb: 4096,
+            domain_count: 4,
+            database_count: 4,
+        },
+    );
+    let mut state = app_state(
+        &temp.path().join("audit.jsonl"),
+        &temp.path().join("invitations.jsonl"),
+    );
+    state.quotas = quotas;
+    let server = RunningServer::start(router(state)).await;
+    let client = reqwest::Client::new();
 
-    let auth_token = std::env::var("FUSIONPANEL_TOKEN").unwrap_or_else(|_| {
-        panic!("BLOCKED: FUSIONPANEL_TOKEN is required for the disposable target")
-    });
-    for path in [
-        "/api/v1/tenants",
-        "/api/v1/tenants/test-probe/allocate",
-        "/api/v1/tenants/test-probe",
-    ] {
-        common::require_route(&client, &api_url, path)
-            .await
-            .unwrap_or_else(|error| panic!("{error}"));
-    }
-
-    let tenant_id = uuid::Uuid::new_v4().to_string();
-    let create_res = client
-        .post(format!("{api_url}/api/v1/tenants"))
-        .bearer_auth(&auth_token)
-        .json(&json!({"id": tenant_id, "quota_limit": 5}))
-        .send()
-        .await
-        .unwrap_or_else(|_| panic!("BLOCKED: tenant fixture creation failed"));
-    if !create_res.status().is_success() {
-        panic!(
-            "BLOCKED: tenant fixture creation returned {}",
-            create_res.status()
-        );
-    }
-
-    let mut tasks = Vec::new();
-    for _ in 0..10 {
+    let mut requests = Vec::new();
+    for _ in 0..8 {
         let client = client.clone();
-        let api_url = api_url.clone();
-        let tenant_id = tenant_id.clone();
-        let auth_token = auth_token.clone();
-        tasks.push(tokio::spawn(async move {
+        let url = format!("{}/quotas/reserve", server.base_url);
+        requests.push(tokio::spawn(async move {
             client
-                .post(format!("{api_url}/api/v1/tenants/{tenant_id}/allocate"))
-                .bearer_auth(auth_token)
-                .json(&json!({"amount": 1}))
+                .post(url)
+                .bearer_auth(ADMIN_TOKEN)
+                .json(&json!({
+                    "tenant_id": tenant,
+                    "resources": {
+                        "cpu_cores": 1,
+                        "memory_mb": 1024,
+                        "disk_mb": 1024,
+                        "domain_count": 1,
+                        "database_count": 1
+                    }
+                }))
                 .send()
                 .await
-                .map(|response| response.status())
-                .map_err(|_| "allocation request failed".to_string())
+                .unwrap()
+                .status()
         }));
     }
 
-    let mut statuses = Vec::with_capacity(tasks.len());
-    let mut task_errors = Vec::new();
-    for task in tasks {
-        match task.await {
-            Ok(Ok(status)) => statuses.push(status),
-            Ok(Err(error)) => task_errors.push(error),
-            Err(error) => task_errors.push(format!("allocation task failed: {error}")),
+    let mut succeeded = 0;
+    let mut rejected = 0;
+    for request in requests {
+        match request.await.unwrap() {
+            reqwest::StatusCode::OK => succeeded += 1,
+            reqwest::StatusCode::PAYLOAD_TOO_LARGE => rejected += 1,
+            status => panic!("unexpected quota response: {status}"),
         }
     }
+    assert_eq!(succeeded, 4);
+    assert_eq!(rejected, 4);
 
-    // Delete the synthetic tenant before asserting the measured race result so
-    // a failed assertion does not leave the fixture behind.
-    let cleanup = client
-        .delete(format!("{api_url}/api/v1/tenants/{tenant_id}"))
-        .bearer_auth(&auth_token)
+    let released = client
+        .post(format!("{}/quotas/release", server.base_url))
+        .bearer_auth(ADMIN_TOKEN)
+        .json(&json!({
+            "tenant_id": tenant,
+            "resources": {
+                "cpu_cores": 1,
+                "memory_mb": 1024,
+                "disk_mb": 1024,
+                "domain_count": 1,
+                "database_count": 1
+            }
+        }))
         .send()
         .await
-        .unwrap_or_else(|_| panic!("BLOCKED: could not clean up the synthetic tenant"));
-    if !cleanup.status().is_success() {
-        panic!(
-            "BLOCKED: synthetic tenant cleanup returned {}",
-            cleanup.status()
-        );
-    }
+        .unwrap();
+    assert_eq!(released.status(), reqwest::StatusCode::OK);
 
-    assert!(
-        task_errors.is_empty(),
-        "quota requests failed: {task_errors:?}"
-    );
-    let admitted = statuses.iter().filter(|status| status.is_success()).count();
-    let rejected = statuses
-        .iter()
-        .filter(|status| {
-            matches!(
-                **status,
-                StatusCode::CONFLICT | StatusCode::TOO_MANY_REQUESTS
-            )
-        })
-        .count();
-    assert_eq!(
-        admitted, 5,
-        "quota race admitted an unexpected number of allocations"
-    );
-    assert_eq!(
-        rejected, 5,
-        "quota race did not reject all excess allocations"
-    );
-    assert_eq!(
-        statuses.len(),
-        10,
-        "quota race did not produce ten HTTP responses"
-    );
+    let admitted = client
+        .post(format!("{}/quotas/reserve", server.base_url))
+        .bearer_auth(ADMIN_TOKEN)
+        .json(&json!({
+            "tenant_id": tenant,
+            "resources": {
+                "cpu_cores": 1,
+                "memory_mb": 1024,
+                "disk_mb": 1024,
+                "domain_count": 1,
+                "database_count": 1
+            }
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(admitted.status(), reqwest::StatusCode::OK);
+    server.stop().await;
 }

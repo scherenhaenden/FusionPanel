@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-#[path = "common/mod.rs"]
+#[path = "live_api/common.rs"]
 mod common;
 
 use serde_json::{json, Value};
