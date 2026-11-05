@@ -61,47 +61,25 @@ impl Planner {
     pub fn create_review_plan(
         inventory: &MigrationInventory,
         dry_run: bool,
-        evidence: Option<&ReviewEvidence>,
+        _evidence: Option<&ReviewEvidence>,
     ) -> MigrationPlan {
         let plan = Self::create_plan(inventory, dry_run);
-
-        let mut decommission_allowed = false;
-
-        // "decommission safety mandates failing closed: decommissioning must be explicitly disallowed in the planner
-        // if the source inventory is empty, is a dry-run, lacks explicit ReviewEvidence, contains unknown schema types,
-        // or yields conflicting/unsupported actions."
-
-        if !inventory.items.is_empty() && !dry_run {
-            if let Some(ev) = evidence {
-                if ev.execution_completed && ev.target_verified && ev.restore_verified && ev.handoff_completed {
-                    let has_invalid_actions = plan.actions.iter().any(|a| {
-                        a.action == PlanActionType::Unsupported || a.action == PlanActionType::Conflict
-                    });
-
-                    let has_unknown_types = inventory.items.iter().any(|i| {
-                        matches!(i.item_type, InventoryItemType::Unknown(_))
-                    });
-
-                    if !has_invalid_actions && !has_unknown_types {
-                        decommission_allowed = true;
-                    }
-                }
-            }
-        }
 
         MigrationPlan {
             actions: plan.actions,
             is_dry_run: dry_run,
-            decommission_allowed,
+            // Caller-supplied booleans are not independent migration or recovery evidence.
+            decommission_allowed: false,
         }
     }
 
     fn evaluate_item(item: &InventoryItem, dry_run: bool, source_version: &str) -> (PlanActionType, Option<String>) {
-        // Now require exact source-version adapter support if dry_run=false
-        if !dry_run {
-             if !source_version.starts_with("2.4") && !source_version.starts_with("2.3") {
-                 return (PlanActionType::Unsupported, Some("Real runtime apply operations require exact source-version adapter support.".to_string()));
-             }
+        // Only these exact adapter versions are qualified for planning.
+        if !dry_run && !matches!(source_version, "2.3.0" | "2.4.0") {
+            return (
+                PlanActionType::Unsupported,
+                Some("Real runtime apply operations require exact source-version adapter support.".to_string()),
+            );
         }
 
         match item.item_type {
@@ -201,6 +179,17 @@ mod tests {
     }
 
     #[test]
+    fn test_planner_rejects_version_prefix_collisions() {
+        for source_version in ["2.40.0", "2.4.0-rc1", "2.4.1"] {
+            let mut inventory = MigrationInventory::new("CloudPanel".to_string(), source_version.to_string());
+            inventory.items.push(create_test_item("site_1", InventoryItemType::Site, "example.com", Some("8.1".to_string())));
+
+            let plan = Planner::create_plan(&inventory, false);
+            assert_eq!(plan.actions[0].action, PlanActionType::Unsupported, "{source_version}");
+        }
+    }
+
+    #[test]
     fn test_review_plan_empty_inventory_decommission_not_allowed() {
         let inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
         let plan = Planner::create_review_plan(&inventory, false, Some(&get_full_evidence()));
@@ -263,5 +252,13 @@ mod tests {
             let plan = Planner::create_review_plan(&inventory, false, Some(&ev));
             assert_eq!(plan.decommission_allowed, false);
         }
+    }
+
+    #[test]
+    fn test_caller_supplied_review_evidence_never_allows_decommission() {
+        let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
+        inventory.items.push(create_test_item("site_1", InventoryItemType::Site, "example.com", Some("8.1".to_string())));
+        let plan = Planner::create_review_plan(&inventory, false, Some(&get_full_evidence()));
+        assert!(!plan.decommission_allowed);
     }
 }

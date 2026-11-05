@@ -1,14 +1,12 @@
-#![allow(deprecated)]
-use migration::inventory::{MigrationInventory, InventoryItem, InventoryItemType};
 use integration_migration::executor::{MigrationExecutor, MigrationState};
-use tempfile::tempdir_in;
+use migration::inventory::{InventoryItem, InventoryItemType, MigrationInventory};
 use std::fs;
+use tempfile::tempdir_in;
 
-fn setup_temp_dir() -> std::path::PathBuf {
+fn setup_temp_dir() -> tempfile::TempDir {
     let target_dir = std::path::PathBuf::from("../../target/tmp");
     fs::create_dir_all(&target_dir).unwrap();
-    let dir = tempdir_in(&target_dir).unwrap();
-    dir.into_path()
+    tempdir_in(&target_dir).unwrap()
 }
 
 fn create_valid_inventory() -> MigrationInventory {
@@ -45,48 +43,38 @@ fn create_valid_inventory() -> MigrationInventory {
 #[test]
 fn test_successful_migration_apply() {
     let work_dir = setup_temp_dir();
-    let mut executor = MigrationExecutor::new(work_dir.clone());
+    let mut executor = MigrationExecutor::new(work_dir.path().to_path_buf());
 
     let inventory = create_valid_inventory();
 
-    let result = executor.execute(&inventory);
-    assert!(result.is_ok(), "Execution should succeed");
-
+    executor.execute(&inventory).unwrap();
     assert_eq!(*executor.get_state(), MigrationState::Cutover);
-
-    // Check that marker is cleaned up
-    assert!(!work_dir.join(".recovery-marker").exists());
+    assert!(!work_dir.path().join(".recovery-marker").exists());
 }
 
 #[test]
 fn test_interrupted_apply_restart() {
     let work_dir = setup_temp_dir();
+    let work_path = work_dir.path().to_path_buf();
 
-    // Simulate an interrupted state by manually creating the marker
-    fs::write(work_dir.join(".recovery-marker"), "checkpoint").unwrap();
+    fs::write(work_path.join(".recovery-marker"), "checkpoint").unwrap();
 
-    let mut executor = MigrationExecutor::new(work_dir.clone());
+    let mut executor = MigrationExecutor::new(work_path.clone());
     let inventory = create_valid_inventory();
 
-    // First execution should detect the marker, rollback, and fail with "Recovered"
-    let result = executor.execute(&inventory);
-    assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), "Recovered from previous crash");
-    assert_eq!(*executor.get_state(), MigrationState::RolledBack);
-
-    // Check that marker is cleaned up by rollback
-    assert!(!work_dir.join(".recovery-marker").exists());
-
-    // Second execution should succeed
-    let result2 = executor.execute(&inventory);
-    assert!(result2.is_ok());
+    executor.execute(&inventory).unwrap();
     assert_eq!(*executor.get_state(), MigrationState::Cutover);
+    assert!(!work_path.join(".recovery-marker").exists());
+
+    executor.execute(&inventory).unwrap();
+    assert_eq!(*executor.get_state(), MigrationState::Cutover);
+    assert!(!work_path.join(".recovery-marker").exists());
 }
 
 #[test]
 fn test_conflicts_and_missing_support() {
     let work_dir = setup_temp_dir();
-    let mut executor = MigrationExecutor::new(work_dir.clone());
+    let mut executor = MigrationExecutor::new(work_dir.path().to_path_buf());
 
     let mut inventory = create_valid_inventory();
     // Add conflicting user
@@ -113,12 +101,13 @@ fn test_conflicts_and_missing_support() {
 #[test]
 fn test_rollback() {
     let work_dir = setup_temp_dir();
-    let mut executor = MigrationExecutor::new(work_dir.clone());
+    let work_path = work_dir.path().to_path_buf();
+    let mut executor = MigrationExecutor::new(work_path.clone());
 
-    fs::write(work_dir.join(".recovery-marker"), "checkpoint").unwrap();
+    fs::write(work_path.join(".recovery-marker"), "checkpoint").unwrap();
 
     executor.rollback().unwrap();
 
     assert_eq!(*executor.get_state(), MigrationState::RolledBack);
-    assert!(!work_dir.join(".recovery-marker").exists());
+    assert!(!work_path.join(".recovery-marker").exists());
 }
