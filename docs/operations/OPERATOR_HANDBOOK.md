@@ -55,8 +55,9 @@ If a migration or self-update fails:
 
 1. **Identify the Failure Domain**: Determine if the failure occurred at the node agent level or control plane.
 2. **Crash Recovery Marker Check**:
-   - The self-updater uses atomic file replacements. Check for `.recovery-marker` alongside the executable.
-   - If present, a mid-update crash occurred. Delete the marker and manually restore the `.backup` executable if needed.
+   - Check for `.<executable-name>.recovery-marker` and `<executable-name>.backup` beside the executable. The older shared `.recovery-marker` format is ambiguous unless exactly one matching backup exists.
+   - Stop the updater process before recovery. The release package exposes `Updater::recover()`, which restores the previous binary from its backup or removes a candidate when no previous target existed. This library method is not wired to a startup command or CLI, so operators must not restart the service on the strength of the marker check alone.
+   - Preserve markers and backups if the marker is invalid, the previous binary is missing, or more than one legacy backup exists; resolve the artifacts manually before restarting.
 3. **Revert the Release Directory**:
    - For control plane, stop `fusionpanel-api.service`, switch the active release symlink to the previous build, and restart.
 4. **Job Reconciliation**:
