@@ -49,12 +49,16 @@ In the event of a catastrophic failure, follow this sequence:
    - Manually verify DNS responses, TLS endpoints, and database connection grants on the restored nodes.
    - Do not redirect production traffic until verification completes.
 
-## Rollback
+## In-Place Updates and Rollbacks
 
-If a migration or update fails:
+If a migration or self-update fails:
 
 1. **Identify the Failure Domain**: Determine if the failure occurred at the node agent level or control plane.
-2. **Revert the Release Directory**:
+2. **Crash Recovery Marker Check**:
+   - Check for `.<executable-name>.recovery-marker` and `<executable-name>.backup` beside the executable. The older shared `.recovery-marker` format is ambiguous unless exactly one matching backup exists.
+   - Stop the updater process before recovery. The release package exposes `Updater::recover()`, which restores the previous binary from its backup or removes a candidate when no previous target existed. This library method is not wired to a startup command or CLI, so operators must not restart the service on the strength of the marker check alone.
+   - Preserve markers and backups if the marker is invalid, the previous binary is missing, or more than one legacy backup exists; resolve the artifacts manually before restarting.
+3. **Revert the Release Directory**:
    - For control plane, stop `fusionpanel-api.service`, switch the active release symlink to the previous build, and restart.
-3. **Job Reconciliation**:
+4. **Job Reconciliation**:
    - Restarted jobs may need manual intervention if stuck in an incomplete state. Check SQLite backend `job_records`.

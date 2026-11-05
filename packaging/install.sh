@@ -7,6 +7,7 @@ PORT="8080"
 VERSION="latest"
 OS=""
 ARCH=""
+DRY_RUN=0
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -14,6 +15,7 @@ usage() {
     echo "  --prefix <path>   Installation prefix (default: /opt/fusionpanel)"
     echo "  --port <port>     Port for FusionPanel (default: 8080)"
     echo "  --version <ver>   Version to install (default: latest)"
+    echo "  --dry-run         Perform a trial run with no changes made"
     echo "  --help            Show this message"
 }
 
@@ -31,6 +33,10 @@ while [ $# -gt 0 ]; do
         --version)
             VERSION="$2"
             shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=1
+            shift
             ;;
         --help)
             usage
@@ -78,14 +84,29 @@ check_dependencies() {
 setup_users() {
     if ! id "fusionpanel" >/dev/null 2>&1; then
         echo "Creating fusionpanel system group..."
-        groupadd --system fusionpanel
+        if [ "$DRY_RUN" -eq 0 ]; then
+            groupadd --system fusionpanel
+        else
+            echo "[Dry-run] Would run: groupadd --system fusionpanel"
+        fi
         echo "Creating fusionpanel system user..."
-        useradd --system -g fusionpanel -s /sbin/nologin -d "$PREFIX" -c "FusionPanel Service User" fusionpanel
+        if [ "$DRY_RUN" -eq 0 ]; then
+            useradd --system -g fusionpanel -s /sbin/nologin -d "$PREFIX" -c "FusionPanel Service User" fusionpanel
+        else
+            echo "[Dry-run] Would run: useradd --system -g fusionpanel -s /sbin/nologin -d \"$PREFIX\" -c \"FusionPanel Service User\" fusionpanel"
+        fi
     fi
 }
 
 install() {
     echo "Installing FusionPanel $VERSION to $PREFIX (Port: $PORT) on $OS ($ARCH)"
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "[Dry-run] Would download and install FusionPanel $VERSION to $PREFIX"
+        echo "[Dry-run] Would create symlinks and systemd units"
+        echo "[Dry-run] Installation skipped."
+        return 0
+    fi
 
     local version_file="$PREFIX/.version"
 
@@ -219,8 +240,15 @@ install() {
             "$source_dir/systemd/fusionpanel-agent.service" > "$systemd_dir/fusionpanel-agent.service"
 
         if [ -z "$FUSIONPANEL_INSTALLER_NO_SYSTEMD_RELOAD" ]; then
-            systemctl daemon-reload || true
-            systemctl enable fusionpanel.service fusionpanel-agent.service || true
+            if ! systemctl daemon-reload; then
+                echo "Error: systemd daemon-reload failed; service enablement was not attempted. Staged files and existing unit state were not rolled back." >&2
+                exit 1
+            fi
+
+            if ! systemctl enable fusionpanel.service fusionpanel-agent.service; then
+                echo "Error: systemd could not enable both FusionPanel services; either service may now be enabled. Staged files and existing unit state were not rolled back." >&2
+                exit 1
+            fi
         fi
     fi
 

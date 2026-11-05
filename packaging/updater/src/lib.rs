@@ -35,7 +35,11 @@ use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 
 pub fn run_update(config: &UpdateConfig) -> Result<std::process::Child, UpdaterError> {
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(300))
+        .build()
+        .map_err(|e| UpdaterError::Download(e.to_string()))?;
 
     // 1. Download binary
     let bin_resp = client
@@ -126,13 +130,31 @@ pub fn run_update(config: &UpdateConfig) -> Result<std::process::Child, UpdaterE
             break;
         }
 
-        if let Ok(resp) = client.get(&config.health_check_url).send() {
+        let remaining = config
+            .health_check_timeout
+            .saturating_sub(start_time.elapsed());
+        if remaining.is_zero() {
+            break;
+        }
+
+        if let Ok(resp) = client
+            .get(&config.health_check_url)
+            .timeout(remaining)
+            .send()
+        {
             if resp.status().is_success() {
                 healthy = true;
                 break;
             }
         }
-        std::thread::sleep(Duration::from_millis(500));
+
+        let remaining = config
+            .health_check_timeout
+            .saturating_sub(start_time.elapsed());
+        if remaining.is_zero() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(500).min(remaining));
     }
 
     if !healthy {
