@@ -1,65 +1,114 @@
 #![forbid(unsafe_code)]
 
-use tokio;
-use reqwest;
+#[path = "common/mod.rs"]
+mod common;
+
+use reqwest::StatusCode;
 use serde_json::json;
 
 #[tokio::test]
 async fn test_organization_tenant_quotas() {
-    let api_url = std::env::var("FUSIONPANEL_API_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
+    let (client, api_url) = common::client_and_target().unwrap_or_else(|error| panic!("{error}"));
+    common::require_health(&client, &api_url)
+        .await
+        .unwrap_or_else(|error| panic!("{error}"));
 
-    let client = reqwest::Client::new();
-    let res = client.get(&format!("{}/health", api_url)).send().await;
-
-    if res.is_err() {
-        panic!("BLOCKED: Missing real target running at {} for tenant quotas E2E verification. Failed to connect.", api_url);
+    let auth_token = std::env::var("FUSIONPANEL_TOKEN").unwrap_or_else(|_| {
+        panic!("BLOCKED: FUSIONPANEL_TOKEN is required for the disposable target")
+    });
+    for path in [
+        "/api/v1/tenants",
+        "/api/v1/tenants/test-probe/allocate",
+        "/api/v1/tenants/test-probe",
+    ] {
+        common::require_route(&client, &api_url, path)
+            .await
+            .unwrap_or_else(|error| panic!("{error}"));
     }
 
-    let auth_token = std::env::var("FUSIONPANEL_TOKEN").unwrap_or_default();
-    if auth_token.is_empty() {
-        panic!("BLOCKED: Missing FUSIONPANEL_TOKEN for authenticated API calls.");
-    }
-
-    // Test logic: Create a tenant with a quota limit
     let tenant_id = uuid::Uuid::new_v4().to_string();
-    let create_res = client.post(&format!("{}/api/v1/tenants", api_url))
-        .header("Authorization", format!("Bearer {}", auth_token))
-        .json(&json!({
-            "id": tenant_id,
-            "quota_limit": 5
-        }))
-        .send().await.expect("Failed to send request");
-
-    if create_res.status() == reqwest::StatusCode::NOT_IMPLEMENTED {
-        panic!("BLOCKED: Endpoint not implemented");
+    let create_res = client
+        .post(format!("{api_url}/api/v1/tenants"))
+        .bearer_auth(&auth_token)
+        .json(&json!({"id": tenant_id, "quota_limit": 5}))
+        .send()
+        .await
+        .unwrap_or_else(|_| panic!("BLOCKED: tenant fixture creation failed"));
+    if !create_res.status().is_success() {
+        panic!(
+            "BLOCKED: tenant fixture creation returned {}",
+            create_res.status()
+        );
     }
 
-    assert!(create_res.status().is_success(), "Failed to create tenant");
-
-    // Launch concurrent requests to allocate resources
-    let mut tasks = vec![];
+    let mut tasks = Vec::new();
     for _ in 0..10 {
-        let t_id = tenant_id.clone();
-        let api_url_c = api_url.clone();
-        let auth_token_c = auth_token.clone();
-        let client_c = client.clone();
-
+        let client = client.clone();
+        let api_url = api_url.clone();
+        let tenant_id = tenant_id.clone();
+        let auth_token = auth_token.clone();
         tasks.push(tokio::spawn(async move {
-            client_c.post(&format!("{}/api/v1/tenants/{}/allocate", api_url_c, t_id))
-                .header("Authorization", format!("Bearer {}", auth_token_c))
-                .json(&json!({ "amount": 1 }))
-                .send().await
+            client
+                .post(format!("{api_url}/api/v1/tenants/{tenant_id}/allocate"))
+                .bearer_auth(auth_token)
+                .json(&json!({"amount": 1}))
+                .send()
+                .await
+                .map(|response| response.status())
+                .map_err(|_| "allocation request failed".to_string())
         }));
     }
 
-    let mut success_count = 0;
+    let mut statuses = Vec::with_capacity(tasks.len());
+    let mut task_errors = Vec::new();
     for task in tasks {
-        if let Ok(Ok(res)) = task.await {
-            if res.status().is_success() {
-                success_count += 1;
-            }
+        match task.await {
+            Ok(Ok(status)) => statuses.push(status),
+            Ok(Err(error)) => task_errors.push(error),
+            Err(error) => task_errors.push(format!("allocation task failed: {error}")),
         }
     }
 
-    assert_eq!(success_count, 5, "Quota races allowed over-allocation");
+    // Delete the synthetic tenant before asserting the measured race result so
+    // a failed assertion does not leave the fixture behind.
+    let cleanup = client
+        .delete(format!("{api_url}/api/v1/tenants/{tenant_id}"))
+        .bearer_auth(&auth_token)
+        .send()
+        .await
+        .unwrap_or_else(|_| panic!("BLOCKED: could not clean up the synthetic tenant"));
+    if !cleanup.status().is_success() {
+        panic!(
+            "BLOCKED: synthetic tenant cleanup returned {}",
+            cleanup.status()
+        );
+    }
+
+    assert!(
+        task_errors.is_empty(),
+        "quota requests failed: {task_errors:?}"
+    );
+    let admitted = statuses.iter().filter(|status| status.is_success()).count();
+    let rejected = statuses
+        .iter()
+        .filter(|status| {
+            matches!(
+                **status,
+                StatusCode::CONFLICT | StatusCode::TOO_MANY_REQUESTS
+            )
+        })
+        .count();
+    assert_eq!(
+        admitted, 5,
+        "quota race admitted an unexpected number of allocations"
+    );
+    assert_eq!(
+        rejected, 5,
+        "quota race did not reject all excess allocations"
+    );
+    assert_eq!(
+        statuses.len(),
+        10,
+        "quota race did not produce ten HTTP responses"
+    );
 }
