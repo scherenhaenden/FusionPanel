@@ -1,7 +1,12 @@
+#![forbid(unsafe_code)]
+
 #[path = "../src/acme.rs"]
 mod acme;
 
 use acme::{AcmeClient, AcmeError, AcmeTransport};
+use rcgen::KeyPair;
+use ring::signature::{self, EcdsaKeyPair};
+use ring::rand::SystemRandom;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
@@ -29,14 +34,13 @@ impl MockTransport {
         headers: Vec<(&str, &str)>,
         body: &str,
     ) {
+        let mut responses = self.responses.borrow_mut();
         let key = format!("{} {}", method, url);
-        let h = headers
+        let hdrs = headers
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
-        self.responses
-            .borrow_mut()
-            .insert(key, (status, h, body.to_string()));
+        responses.insert(key, (status, hdrs, body.to_string()));
     }
 }
 
@@ -45,48 +49,37 @@ impl AcmeTransport for MockTransport {
         &self,
         method: &str,
         url: &str,
-        _headers: &[(&str, &str)],
-        _body: Option<&str>,
+        headers: &[(&str, &str)],
+        body: Option<&str>,
     ) -> Result<(u16, Vec<(String, String)>, String), AcmeError> {
-        self.request_log
-            .borrow_mut()
-            .push((method.to_string(), url.to_string()));
-
         let key = format!("{} {}", method, url);
-        if let Some(resp) = self.responses.borrow().get(&key) {
-            let mut headers_to_return = resp.1.clone();
-            // Automatically add replay-nonce to all POST/HEAD requests if not already there to simulate ACME server
-            if method == "POST" || method == "HEAD" {
-                if !headers_to_return
-                    .iter()
-                    .any(|(k, _)| k.eq_ignore_ascii_case("replay-nonce"))
-                {
-                    headers_to_return
-                        .push(("Replay-Nonce".to_string(), "mock-nonce-123".to_string()));
-                }
-            }
-            return Ok((resp.0, headers_to_return, resp.2.clone()));
-        }
+        let mut log = self.request_log.borrow_mut();
+        log.push((method.to_string(), url.to_string()));
 
-        Err(AcmeError::Network(format!(
-            "Mock response not found for {} {}",
-            method, url
-        )))
+        let responses = self.responses.borrow();
+        if let Some((status, hdrs, res_body)) = responses.get(&key) {
+            Ok((*status, hdrs.clone(), res_body.clone()))
+        } else {
+            Ok((
+                404,
+                vec![],
+                format!("{{\"error\": \"Not Found: {}\"}}", key),
+            ))
+        }
     }
 }
 
 fn create_temp_dir(name: &str) -> PathBuf {
     let mut path = env::temp_dir();
-    path.push(format!(
-        "acme_test_{}_{}",
-        name,
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    path.push(format!("fusionpanel-acme-test-{}", name));
     fs::create_dir_all(&path).unwrap();
     path
+}
+
+fn generate_pkcs8() -> Vec<u8> {
+    let rng = SystemRandom::new();
+    let pkcs8 = EcdsaKeyPair::generate_pkcs8(&signature::ECDSA_P256_SHA256_FIXED_SIGNING, &rng).unwrap();
+    pkcs8.as_ref().to_vec()
 }
 
 #[test]
@@ -107,10 +100,12 @@ fn test_acme_client_fetch_nonce() {
         "",
     );
 
+    let pkcs8 = generate_pkcs8();
     let mut client = AcmeClient::new(
         "https://acme-staging-v02.api.letsencrypt.org/directory".to_string(),
         mock,
-    );
+        &pkcs8,
+    ).unwrap();
 
     assert!(client.fetch_nonce().is_ok());
     assert_eq!(client.get_nonce().unwrap(), "initial-nonce");
@@ -144,10 +139,12 @@ fn test_acme_client_create_account() {
         "{}",
     );
 
+    let pkcs8 = generate_pkcs8();
     let mut client = AcmeClient::new(
         "https://acme-v02.api.letsencrypt.org/directory".to_string(),
         mock,
-    );
+        &pkcs8,
+    ).unwrap();
 
     let account_url = client.create_account("admin@example.com").unwrap();
     assert_eq!(
@@ -184,10 +181,13 @@ fn test_acme_client_order_certificate() {
         "{}",
     );
 
+    let pkcs8 = generate_pkcs8();
     let mut client = AcmeClient::new(
         "https://acme-v02.api.letsencrypt.org/directory".to_string(),
         mock,
-    );
+        &pkcs8,
+    ).unwrap();
+    client.account_url = Some("https://acme-v02.api.letsencrypt.org/acme/acct/12345".to_string());
 
     let order_url = client.order_certificate("example.com").unwrap();
     assert_eq!(
@@ -202,12 +202,12 @@ fn test_acme_challenge_hosting() {
     let webroot = temp_dir.as_path();
 
     let mock = MockTransport::new();
-    let client = AcmeClient::new("dummy".to_string(), mock);
+    let pkcs8 = generate_pkcs8();
+    let client = AcmeClient::new("dummy".to_string(), mock, &pkcs8).unwrap();
 
     let token = "test-token-123";
-    let key_auth = "test-token-123.account-thumbprint";
 
-    client.host_challenge(webroot, token, key_auth).unwrap();
+    client.host_challenge(webroot, token).unwrap();
 
     let challenge_path = webroot
         .join(".well-known")
@@ -216,7 +216,8 @@ fn test_acme_challenge_hosting() {
     assert!(challenge_path.exists());
 
     let content = std::fs::read_to_string(&challenge_path).unwrap();
-    assert_eq!(content, key_auth);
+    let expected_auth = client.get_challenge_auth(token).unwrap();
+    assert_eq!(content, expected_auth);
 
     fs::remove_dir_all(&temp_dir).unwrap();
 }
@@ -228,7 +229,8 @@ fn test_acme_persistence_permissions() {
     let account_dir = temp_dir.join("account");
 
     let mock = MockTransport::new();
-    let client = AcmeClient::new("dummy".to_string(), mock);
+    let pkcs8 = generate_pkcs8();
+    let client = AcmeClient::new("dummy".to_string(), mock, &pkcs8).unwrap();
 
     let cert_pem = "-----BEGIN CERTIFICATE-----\nMOCK\n-----END CERTIFICATE-----";
     let key_pem = "-----BEGIN PRIVATE KEY-----\nMOCK\n-----END PRIVATE KEY-----";
@@ -257,4 +259,120 @@ fn test_acme_persistence_permissions() {
     assert_eq!(account_meta.permissions().mode() & 0o777, 0o600);
 
     fs::remove_dir_all(&temp_dir).unwrap();
+}
+
+#[test]
+fn test_acme_finalize_order() {
+    let mock = MockTransport::new();
+    mock.add_response(
+        "https://acme-v02.api.letsencrypt.org/directory",
+        "GET",
+        200,
+        vec![],
+        r#"{"newNonce": "https://acme-v02.api.letsencrypt.org/acme/new-nonce"}"#,
+    );
+    mock.add_response(
+        "https://acme-v02.api.letsencrypt.org/acme/new-nonce",
+        "HEAD",
+        200,
+        vec![("Replay-Nonce", "nonce-for-finalize")],
+        "",
+    );
+    mock.add_response(
+        "https://acme-v02.api.letsencrypt.org/acme/finalize/123",
+        "POST",
+        200,
+        vec![("Replay-Nonce", "nonce-after-finalize")],
+        r#"{"certificate": "https://acme-v02.api.letsencrypt.org/acme/cert/456"}"#,
+    );
+
+    let pkcs8 = generate_pkcs8();
+    let mut client = AcmeClient::new(
+        "https://acme-v02.api.letsencrypt.org/directory".to_string(),
+        mock,
+        &pkcs8,
+    ).unwrap();
+    client.account_url = Some("https://acme-v02.api.letsencrypt.org/acme/acct/12345".to_string());
+
+    let cert_key_pkcs8 = generate_pkcs8();
+    let cert_url = client.finalize_order(
+        "https://acme-v02.api.letsencrypt.org/acme/finalize/123",
+        "example.com",
+        &cert_key_pkcs8
+    ).unwrap();
+
+    assert_eq!(cert_url, "https://acme-v02.api.letsencrypt.org/acme/cert/456");
+}
+
+#[test]
+fn test_acme_download_certificate() {
+    let mock = MockTransport::new();
+    mock.add_response(
+        "https://acme-v02.api.letsencrypt.org/directory",
+        "GET",
+        200,
+        vec![],
+        r#"{"newNonce": "https://acme-v02.api.letsencrypt.org/acme/new-nonce"}"#,
+    );
+    mock.add_response(
+        "https://acme-v02.api.letsencrypt.org/acme/new-nonce",
+        "HEAD",
+        200,
+        vec![("Replay-Nonce", "nonce-for-download")],
+        "",
+    );
+    mock.add_response(
+        "https://acme-v02.api.letsencrypt.org/acme/cert/456",
+        "POST",
+        200,
+        vec![("Replay-Nonce", "nonce-after-download")],
+        "-----BEGIN CERTIFICATE-----\nMOCK\n-----END CERTIFICATE-----",
+    );
+
+    let pkcs8 = generate_pkcs8();
+    let mut client = AcmeClient::new(
+        "https://acme-v02.api.letsencrypt.org/directory".to_string(),
+        mock,
+        &pkcs8,
+    ).unwrap();
+    client.account_url = Some("https://acme-v02.api.letsencrypt.org/acme/acct/12345".to_string());
+
+    let cert = client.download_certificate("https://acme-v02.api.letsencrypt.org/acme/cert/456").unwrap();
+    assert_eq!(cert, "-----BEGIN CERTIFICATE-----\nMOCK\n-----END CERTIFICATE-----");
+}
+
+#[test]
+fn test_acme_complete_challenge() {
+    let mock = MockTransport::new();
+    mock.add_response(
+        "https://acme-v02.api.letsencrypt.org/directory",
+        "GET",
+        200,
+        vec![],
+        r#"{"newNonce": "https://acme-v02.api.letsencrypt.org/acme/new-nonce"}"#,
+    );
+    mock.add_response(
+        "https://acme-v02.api.letsencrypt.org/acme/new-nonce",
+        "HEAD",
+        200,
+        vec![("Replay-Nonce", "nonce-for-challenge")],
+        "",
+    );
+    mock.add_response(
+        "https://acme-v02.api.letsencrypt.org/acme/chall/789",
+        "POST",
+        200,
+        vec![("Replay-Nonce", "nonce-after-challenge")],
+        "{}",
+    );
+
+    let pkcs8 = generate_pkcs8();
+    let mut client = AcmeClient::new(
+        "https://acme-v02.api.letsencrypt.org/directory".to_string(),
+        mock,
+        &pkcs8,
+    ).unwrap();
+    client.account_url = Some("https://acme-v02.api.letsencrypt.org/acme/acct/12345".to_string());
+
+    assert!(client.complete_challenge("https://acme-v02.api.letsencrypt.org/acme/chall/789").is_ok());
 }
