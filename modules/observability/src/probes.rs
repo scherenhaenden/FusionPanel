@@ -63,8 +63,16 @@ pub fn check_tcp(address: &str, timeout_secs: u64) -> ProbeResult {
     }
 
     let mut last_error = None;
+    let attempt_budget = {
+        let budget = total_timeout / (addrs.len() as u32);
+        if budget.is_zero() {
+            Duration::from_millis(1)
+        } else {
+            budget
+        }
+    };
 
-    for (i, addr) in addrs.iter().enumerate() {
+    for addr in addrs.iter() {
         let elapsed = start.elapsed();
         if elapsed >= total_timeout {
             return ProbeResult {
@@ -74,10 +82,6 @@ pub fn check_tcp(address: &str, timeout_secs: u64) -> ProbeResult {
                 error: Some("Timeout exceeded before trying all addresses".to_string()),
             };
         }
-
-        let remaining = total_timeout - elapsed;
-        let remaining_attempts = (addrs.len() - i) as u32;
-        let attempt_budget = remaining / remaining_attempts;
 
         match TcpStream::connect_timeout(addr, attempt_budget) {
             Ok(_) => {
