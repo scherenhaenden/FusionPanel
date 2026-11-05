@@ -27,7 +27,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     } catch (e) {
       // Ignore errors on logout
     }
-    SessionManager.clearToken();
+    SessionManager.clear();
     navigate('/login');
   };
 

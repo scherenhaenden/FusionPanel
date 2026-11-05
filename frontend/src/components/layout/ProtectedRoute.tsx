@@ -16,7 +16,7 @@ export const ProtectedRoute: React.FC = () => {
     };
   }, [navigate]);
 
-  if (!SessionManager.getToken()) {
+  if (!SessionManager.isAuthenticated()) {
     return <Navigate to="/login" replace />;
   }
 

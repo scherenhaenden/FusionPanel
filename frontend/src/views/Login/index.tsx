@@ -6,8 +6,6 @@ import { SessionManager } from '../../auth/session';
 export const LoginView: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [token, setToken] = useState('');
-  const [authMethod, setAuthMethod] = useState<'credentials' | 'token'>('credentials');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -18,9 +16,8 @@ export const LoginView: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const payload = authMethod === 'credentials' ? { username, password } : { token };
-      const response = await api.login(payload);
-      SessionManager.setToken(response.token);
+      await api.login({ username, password });
+      SessionManager.markAuthenticated();
       navigate('/');
     } catch (e: any) {
       setError(e?.response?.data?.error?.message || e?.response?.data?.error || e.message || 'Login failed');
@@ -40,62 +37,31 @@ export const LoginView: React.FC = () => {
         <form className="mt-8 space-y-6" onSubmit={handleLogin}>
           {error && <div className="text-red-500 text-sm text-center">{error}</div>}
 
-          <div className="flex justify-center space-x-4 mb-4">
-            <button
-              type="button"
-              className={`px-4 py-2 text-sm font-medium rounded-md ${authMethod === 'credentials' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-              onClick={() => setAuthMethod('credentials')}
-            >
-              Credentials
-            </button>
-            <button
-              type="button"
-              className={`px-4 py-2 text-sm font-medium rounded-md ${authMethod === 'token' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-              onClick={() => setAuthMethod('token')}
-            >
-              Token
-            </button>
-          </div>
-
           <div className="rounded-md shadow-sm -space-y-px">
-            {authMethod === 'credentials' ? (
-              <>
-                <div>
-                  <input
-                    name="username"
-                    type="text"
-                    required
-                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                    placeholder="Username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <input
-                    name="password"
-                    type="password"
-                    required
-                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
-              </>
-            ) : (
+            <>
               <div>
                 <input
-                  name="token"
+                  name="username"
                   type="text"
                   required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Admin Token"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  placeholder="Username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
-            )}
+              <div>
+                <input
+                  name="password"
+                  type="password"
+                  required
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+            </>
           </div>
 
           <div>

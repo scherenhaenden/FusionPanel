@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { HealthResponse, CapabilitiesResponse, AuthResponse } from '../types';
+import { HealthResponse, CapabilitiesResponse } from '../types';
 
 export const api = {
   getHealth: async (): Promise<HealthResponse> => {
@@ -12,13 +12,12 @@ export const api = {
     return response.data;
   },
 
-  login: async (payload: { username?: string, password?: string, token?: string }): Promise<AuthResponse> => {
-    const response = await apiClient.post<AuthResponse>('/v1/auth/login', payload);
-    return response.data;
+  login: async (payload: { username: string, password: string }): Promise<void> => {
+    await apiClient.post('/api/v1/auth/login', payload);
   },
 
   logout: async (): Promise<void> => {
-    await apiClient.post('/v1/auth/logout');
+    await apiClient.post('/api/v1/auth/logout');
   },
 
   // Websites
