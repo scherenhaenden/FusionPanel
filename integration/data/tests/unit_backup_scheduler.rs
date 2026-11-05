@@ -13,6 +13,7 @@ use databases::adapter::{
     DatabaseEngine, DatabaseError, DbName, DbUser, DumpPlan, GrantPlan, RestorePlan,
     Result as DbResult, SecretString,
 };
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -107,10 +108,11 @@ impl StorageBackend for MockStorageBackend {
         local_path: &Path,
         remote_filename: &str,
     ) -> Result<BackupReceipt, String> {
-        let size = local_path.metadata().unwrap().len();
+        let bytes = std::fs::read(local_path).unwrap();
+        let size = bytes.len() as u64;
         Ok(BackupReceipt {
             path_or_key: format!("s3://mock-bucket/{}", remote_filename),
-            hash_sha256: "mock-hash-from-s3".to_string(), // In real app, S3 upload might compute ETag, we compute sha256 locally
+            hash_sha256: format!("{:x}", Sha256::digest(&bytes)),
             size_bytes: size,
         })
     }
@@ -178,9 +180,7 @@ async fn test_execute_dump_mock_success() {
         adapter,
         temp_dir.path().to_path_buf(),
         Compression::Zstd,
-        Some(EncryptionConfig {
-            key_ref: "secret-key".to_string(),
-        }),
+        None,
         Arc::new(MockStorageBackend),
         5,
     )
@@ -189,11 +189,84 @@ async fn test_execute_dump_mock_success() {
     let res = scheduler.execute_dump("mydb", "test_db_dump.sql.zst").await;
     assert!(res.is_ok());
     let receipt = res.unwrap();
-    assert_eq!(receipt.path_or_key, "s3://mock-bucket/test_db_dump.sql.zst");
-    assert!(temp_dir
-        .path()
-        .join("test_db_dump.sql.zst.encrypted")
-        .exists());
+    let remote_name = receipt
+        .path_or_key
+        .strip_prefix("s3://mock-bucket/")
+        .unwrap();
+    assert!(remote_name.ends_with("-test_db_dump.sql.zst"));
+    assert_eq!(
+        receipt.size_bytes,
+        std::fs::metadata(
+            temp_dir
+                .path()
+                .join(".fusionpanel-backups")
+                .join(remote_name)
+        )
+        .unwrap()
+        .len()
+    );
+    assert_eq!(
+        receipt.hash_sha256,
+        format!(
+            "{:x}",
+            Sha256::digest(
+                std::fs::read(
+                    temp_dir
+                        .path()
+                        .join(".fusionpanel-backups")
+                        .join(remote_name)
+                )
+                .unwrap()
+            )
+        )
+    );
+}
+
+#[tokio::test]
+async fn encrypted_dump_fails_closed_without_key_resolution_and_restore_support() {
+    let adapter = create_mock_adapter(false);
+    let temp_dir = tempfile::tempdir().unwrap();
+    let scheduler = DumpScheduler::new(
+        "0 0 0 * * * *",
+        adapter,
+        temp_dir.path().to_path_buf(),
+        Compression::Zstd,
+        Some(EncryptionConfig {
+            key_ref: "key://test".into(),
+        }),
+        Arc::new(MockStorageBackend),
+        5,
+    )
+    .unwrap();
+
+    let error = scheduler
+        .execute_dump("mydb", "test.sql.zst")
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("BLOCKED"));
+    assert!(!temp_dir.path().join(".fusionpanel-backups").exists());
+}
+
+#[tokio::test]
+async fn rejects_path_components_in_backup_filename() {
+    let adapter = create_mock_adapter(false);
+    let temp_dir = tempfile::tempdir().unwrap();
+    let scheduler = DumpScheduler::new(
+        "0 0 0 * * * *",
+        adapter,
+        temp_dir.path().to_path_buf(),
+        Compression::Gzip,
+        None,
+        Arc::new(MockStorageBackend),
+        5,
+    )
+    .unwrap();
+
+    assert!(scheduler
+        .execute_dump("mydb", "../escape.sql")
+        .await
+        .is_err());
+    assert!(!temp_dir.path().join("escape.sql").exists());
 }
 
 #[tokio::test]
@@ -216,11 +289,12 @@ async fn test_execute_dump_mock_failure_cleans_up() {
     assert!(res.is_err());
 
     // Ensure uncompressed file is not left behind on failure
-    assert!(!temp_dir
-        .path()
-        .join("test_db_dump.sql.zst.uncompressed")
-        .exists());
-    assert!(!temp_dir.path().join("test_db_dump.sql.zst").exists());
+    assert!(
+        std::fs::read_dir(temp_dir.path().join(".fusionpanel-backups"))
+            .unwrap()
+            .next()
+            .is_none()
+    );
 }
 
 #[tokio::test]
@@ -229,12 +303,14 @@ async fn test_local_retention() {
 
     let temp_dir = tempfile::tempdir().unwrap();
 
-    // Create 3 old files
-    std::fs::write(temp_dir.path().join("old1.sql.zst"), b"1").unwrap();
+    // Files in the scheduler-owned directory are eligible for its retention policy.
+    let backup_dir = temp_dir.path().join(".fusionpanel-backups");
+    std::fs::create_dir(&backup_dir).unwrap();
+    std::fs::write(backup_dir.join("old1.sql.zst"), b"1").unwrap();
     std::thread::sleep(std::time::Duration::from_millis(10));
-    std::fs::write(temp_dir.path().join("old2.sql.zst"), b"2").unwrap();
+    std::fs::write(backup_dir.join("old2.sql.zst"), b"2").unwrap();
     std::thread::sleep(std::time::Duration::from_millis(10));
-    std::fs::write(temp_dir.path().join("old3.sql.zst"), b"3").unwrap();
+    std::fs::write(backup_dir.join("old3.sql.zst"), b"3").unwrap();
 
     let scheduler = DumpScheduler::new(
         "0 0 0 * * * *",
@@ -250,6 +326,6 @@ async fn test_local_retention() {
     let res = scheduler.execute_dump("mydb", "test_db_dump.sql.zst").await;
     assert!(res.is_ok());
 
-    let entries: Vec<_> = std::fs::read_dir(temp_dir.path()).unwrap().collect();
+    let entries: Vec<_> = std::fs::read_dir(backup_dir).unwrap().collect();
     assert_eq!(entries.len(), 2); // The new dump + the newest old dump
 }

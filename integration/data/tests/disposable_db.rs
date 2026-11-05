@@ -149,7 +149,11 @@ async fn test_adapter_lifecycle(
         .unwrap();
 
     // Check local path
-    let local_path = temp_dir.path().join(&filename);
+    let artifact_name = dump_res.path_or_key.strip_prefix("null://").unwrap();
+    let local_path = temp_dir
+        .path()
+        .join(".fusionpanel-backups")
+        .join(artifact_name);
     assert!(local_path.exists());
 
     // 5. Test Restore

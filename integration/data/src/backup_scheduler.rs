@@ -12,8 +12,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use databases::adapter::{DatabaseAdapter, DatabaseError, DbName};
-use ring::aead::{self, BoundKey, Nonce, NonceSequence, SealingKey, UnboundKey};
 use std::process::Command;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Compression {
@@ -23,7 +23,11 @@ pub enum Compression {
 
 #[derive(Debug, Clone)]
 pub struct EncryptionConfig {
-    pub key_ref: String, // Secret key reference
+    /// Reference resolved by a key-management service.
+    ///
+    /// A reference is not key material. `DumpScheduler` currently has no key
+    /// resolver or restore implementation, so encrypted dumps fail closed.
+    pub key_ref: String,
 }
 
 #[derive(Debug, Clone)]
@@ -43,14 +47,27 @@ pub trait StorageBackend: Send + Sync {
     async fn delete(&self, remote_filename: &str) -> Result<(), String>;
 }
 
-struct SimpleNonceSequence(u64);
-impl NonceSequence for SimpleNonceSequence {
-    fn advance(&mut self) -> Result<Nonce, ring::error::Unspecified> {
-        let mut nonce = [0u8; 12];
-        let bytes = self.0.to_be_bytes();
-        nonce[4..12].copy_from_slice(&bytes);
-        self.0 += 1;
-        Ok(Nonce::assume_unique_for_key(nonce))
+struct CleanupPaths(Vec<PathBuf>);
+
+impl CleanupPaths {
+    fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    fn track(&mut self, path: PathBuf) {
+        self.0.push(path);
+    }
+
+    fn preserve(&mut self, path: &Path) {
+        self.0.retain(|tracked| tracked != path);
+    }
+}
+
+impl Drop for CleanupPaths {
+    fn drop(&mut self) {
+        for path in &self.0 {
+            let _ = std::fs::remove_file(path);
+        }
     }
 }
 
@@ -169,32 +186,79 @@ impl DumpScheduler {
         db_name_str: &str,
         filename: &str,
     ) -> Result<BackupReceipt, DatabaseError> {
-        let db_name = DbName(db_name_str.to_string());
+        if self.encryption.is_some() {
+            return Err(DatabaseError::OperationFailed(
+                "BLOCKED: encryption key resolution and restore verification are not configured"
+                    .into(),
+            ));
+        }
+        if db_name_str.is_empty()
+            || db_name_str.len() > 128
+            || db_name_str.chars().any(char::is_control)
+        {
+            return Err(DatabaseError::OperationFailed(
+                "Invalid database name for backup".into(),
+            ));
+        }
+        if filename.is_empty()
+            || filename.len() > 128
+            || filename == "."
+            || filename == ".."
+            || filename.starts_with('.')
+            || !filename
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+        {
+            return Err(DatabaseError::OperationFailed(
+                "Backup filename must be a plain ASCII filename component".into(),
+            ));
+        }
 
-        let output_path = self.output_dir.join(filename);
-        let uncompressed_path = self.output_dir.join(format!("{}.uncompressed", filename));
-        let encrypted_path = self.output_dir.join(format!("{}.encrypted", filename));
+        // Keep retention scoped to a scheduler-owned directory. The caller's
+        // output directory may contain files owned by other components.
+        let backup_dir = self.output_dir.join(".fusionpanel-backups");
+        std::fs::create_dir_all(&backup_dir).map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to create backup directory: {e}"))
+        })?;
+        let dir_metadata = std::fs::symlink_metadata(&backup_dir).map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to inspect backup directory: {e}"))
+        })?;
+        if dir_metadata.file_type().is_symlink() || !dir_metadata.is_dir() {
+            return Err(DatabaseError::OperationFailed(
+                "Backup directory must be a real directory, not a symlink".into(),
+            ));
+        }
+
+        let run_id = Uuid::new_v4();
+        let artifact_name = format!("{run_id}-{filename}");
+        let output_path = backup_dir.join(&artifact_name);
+        let uncompressed_path = backup_dir.join(format!(".{run_id}.uncompressed"));
+        let compressed_path = backup_dir.join(format!(".{run_id}.compressed"));
+        let mut cleanup = CleanupPaths::new();
+        cleanup.track(uncompressed_path.clone());
+        cleanup.track(compressed_path.clone());
+        cleanup.track(output_path.clone());
+
+        let db_name = DbName(db_name_str.to_string());
 
         // 1. Plan and apply the dump
         let plan = self
             .adapter
             .plan_dump(db_name, uncompressed_path.to_string_lossy().to_string())
             .await?;
-        if let Err(e) = self.adapter.apply_dump(&plan).await {
-            // Ensure we don't leave partial dumps marked complete on subprocess failure
-            let _ = std::fs::remove_file(&uncompressed_path);
-            return Err(e);
-        }
+        self.adapter.apply_dump(&plan).await?;
 
         // 2. Compress and compute hash
         let mut file = File::open(&uncompressed_path).map_err(|e| {
             DatabaseError::OperationFailed(format!("Failed to open uncompressed dump: {}", e))
         })?;
-        let compressed_file = File::create(&output_path).map_err(|e| {
-            DatabaseError::OperationFailed(format!("Failed to create compressed dump: {}", e))
-        })?;
-
-        let mut hasher = Sha256::new();
+        let compressed_file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&compressed_path)
+            .map_err(|e| {
+                DatabaseError::OperationFailed(format!("Failed to create compressed dump: {}", e))
+            })?;
 
         match self.compression {
             Compression::Gzip => {
@@ -211,7 +275,6 @@ impl DumpScheduler {
                     if n == 0 {
                         break;
                     }
-                    hasher.update(&buffer[..n]);
                     encoder.write_all(&buffer[..n]).map_err(|e| {
                         DatabaseError::OperationFailed(format!(
                             "Failed to write compressed dump: {}",
@@ -241,7 +304,6 @@ impl DumpScheduler {
                     if n == 0 {
                         break;
                     }
-                    hasher.update(&buffer[..n]);
                     encoder.write_all(&buffer[..n]).map_err(|e| {
                         DatabaseError::OperationFailed(format!(
                             "Failed to write compressed dump: {}",
@@ -255,83 +317,61 @@ impl DumpScheduler {
             }
         }
 
-        let mut final_upload_path = output_path.clone();
-
-        if let Some(ref enc) = self.encryption {
-            // Apply real encryption (ChaCha20-Poly1305 via Ring)
-            let mut key_bytes = [0u8; 32]; // For simplicity here, we hash the key ref to get 32 bytes
-            let mut key_hasher = Sha256::new();
-            key_hasher.update(enc.key_ref.as_bytes());
-            key_bytes.copy_from_slice(&key_hasher.finalize());
-
-            let unbound_key = UnboundKey::new(&aead::CHACHA20_POLY1305, &key_bytes)
-                .map_err(|_| DatabaseError::OperationFailed("Failed to load key".into()))?;
-            let mut sealing_key = SealingKey::new(unbound_key, SimpleNonceSequence(0));
-
-            let mut input_data = vec![];
-            File::open(&output_path)
-                .map_err(|e| DatabaseError::OperationFailed(format!("Open compressed: {}", e)))?
-                .read_to_end(&mut input_data)
-                .map_err(|e| DatabaseError::OperationFailed(format!("Read compressed: {}", e)))?;
-
-            let mut in_out = input_data.clone();
-            sealing_key
-                .seal_in_place_append_tag(aead::Aad::empty(), &mut in_out)
-                .map_err(|_| DatabaseError::OperationFailed("Encryption failed".into()))?;
-
-            use std::os::unix::fs::OpenOptionsExt;
-            let mut encrypted_out = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .mode(0o600)
-                .open(&encrypted_path)
-                .map_err(|e| DatabaseError::OperationFailed(format!("Open encrypted: {}", e)))?;
-            encrypted_out
-                .write_all(&in_out)
-                .map_err(|e| DatabaseError::OperationFailed(format!("Write encrypted: {}", e)))?;
-
-            final_upload_path = encrypted_path.clone();
-
-            // Clean up plaintext compressed
-            let _ = std::fs::remove_file(&output_path);
-        }
-
-        // Clean up uncompressed dump
+        std::fs::rename(&compressed_path, &output_path).map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to finalize compressed dump: {e}"))
+        })?;
         std::fs::remove_file(&uncompressed_path).map_err(|e| {
-            DatabaseError::OperationFailed(format!("Failed to clean up uncompressed dump: {}", e))
+            DatabaseError::OperationFailed(format!("Failed to remove uncompressed dump: {e}"))
         })?;
 
-        self.enforce_local_retention(self.retention_count)?;
-
         // 3. Upload to remote storage
-        let hash_result = format!("{:x}", hasher.finalize());
-
         let receipt = self
             .storage_backend
-            .upload(&final_upload_path, filename)
+            .upload(&output_path, &artifact_name)
             .await
             .map_err(|e| DatabaseError::OperationFailed(format!("Storage upload failed: {}", e)))?;
 
-        Ok(BackupReceipt {
-            path_or_key: receipt.path_or_key,
-            hash_sha256: hash_result, // we return hash of the unencrypted uncompressed content for verification
-            size_bytes: receipt.size_bytes,
-        })
+        self.enforce_local_retention(self.retention_count)?;
+        cleanup.preserve(&output_path);
+
+        // The storage backend's receipt describes the uploaded artifact bytes.
+        // Returning a hash of the uncompressed input here would describe a
+        // different object and make restore verification unreliable.
+        Ok(receipt)
     }
 
     fn enforce_local_retention(&self, count: usize) -> Result<(), DatabaseError> {
-        let mut entries: Vec<_> = std::fs::read_dir(&self.output_dir)
+        let backup_dir = self.output_dir.join(".fusionpanel-backups");
+        let mut entries: Vec<(std::time::SystemTime, PathBuf)> = std::fs::read_dir(&backup_dir)
             .map_err(|e| DatabaseError::OperationFailed(format!("Failed to read dir: {}", e)))?
-            .filter_map(Result::ok)
-            .filter(|e| e.path().is_file())
+            .map(|entry| {
+                let entry = entry.map_err(|e| {
+                    DatabaseError::OperationFailed(format!("Failed to read backup entry: {e}"))
+                })?;
+                let file_type = entry.file_type().map_err(|e| {
+                    DatabaseError::OperationFailed(format!("Failed to inspect backup entry: {e}"))
+                })?;
+                if !file_type.is_file() {
+                    return Ok(None);
+                }
+                let modified = entry
+                    .metadata()
+                    .and_then(|metadata| metadata.modified())
+                    .map_err(|e| {
+                        DatabaseError::OperationFailed(format!("Failed to read backup time: {e}"))
+                    })?;
+                Ok(Some((modified, entry.path())))
+            })
+            .collect::<Result<Vec<_>, DatabaseError>>()?
+            .into_iter()
+            .flatten()
             .collect();
 
-        entries.sort_by_key(|e| e.metadata().unwrap().modified().unwrap());
-
+        entries.sort_by_key(|(modified, _)| *modified);
         if entries.len() > count {
             let to_remove = entries.len() - count;
-            for entry in entries.iter().take(to_remove) {
-                std::fs::remove_file(entry.path()).map_err(|e| {
+            for (_, path) in entries.iter().take(to_remove) {
+                std::fs::remove_file(path).map_err(|e| {
                     DatabaseError::OperationFailed(format!("Failed to remove old backup: {}", e))
                 })?;
             }

@@ -19,5 +19,4 @@ chrono = { version = "0.4", features = ["serde"] }
 
 [dev-dependencies]
 tower = { version = "0.4", features = ["util"] }
-reqwest = { version = "0.11", features = ["json"] }
 tempfile = "3.8"
