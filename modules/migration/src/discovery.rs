@@ -1,22 +1,20 @@
+use crate::inventory::{InventoryItem, InventoryItemType, MigrationInventory};
 use rusqlite::{Connection, OpenFlags};
 use std::path::Path;
 use thiserror::Error;
-
-use crate::inventory::{InventoryItem, InventoryItemType, MigrationInventory};
 
 #[derive(Error, Debug)]
 pub enum DiscoveryError {
     #[error("Database error: {0}")]
     Database(#[from] rusqlite::Error),
-    #[error("Missing expected table or column: {0}")]
-    SchemaMissing(String),
-    #[error("Failed to determine version: {0}")]
+    #[error("Unknown version: {0}")]
     VersionUnknown(String),
-    #[error("Unsupported schema version: {0}")]
+    #[error("Schema missing: {0}")]
+    SchemaMissing(String),
+    #[error("Unsupported schema: {0}")]
     UnsupportedSchema(String),
 }
 
-/// Discovers CloudPanel version and inventory by reading its SQLite database (read-only).
 pub struct CloudPanelDiscovery;
 
 impl CloudPanelDiscovery {
@@ -82,6 +80,11 @@ impl CloudPanelDiscovery {
                 version: php_version,
                 metadata,
                 associations,
+                ownership: None,
+                aliases: Vec::new(),
+                schedules: Vec::new(),
+                variants: Vec::new(),
+                user_mappings: std::collections::HashMap::new(),
             });
         }
         Ok(())
@@ -133,6 +136,11 @@ impl CloudPanelDiscovery {
                 version: None,
                 metadata: std::collections::HashMap::new(),
                 associations,
+                ownership: None,
+                aliases: Vec::new(),
+                schedules: Vec::new(),
+                variants: Vec::new(),
+                user_mappings: std::collections::HashMap::new(),
             });
         }
         Ok(())
@@ -162,6 +170,11 @@ impl CloudPanelDiscovery {
                 version: None,
                 metadata,
                 associations: Vec::new(),
+                ownership: None,
+                aliases: Vec::new(),
+                schedules: Vec::new(),
+                variants: Vec::new(),
+                user_mappings: std::collections::HashMap::new(),
             });
         }
         Ok(())
