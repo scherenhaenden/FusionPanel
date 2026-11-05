@@ -26,6 +26,8 @@ for cmd in curl systemctl tar useradd groupadd id chown openssl; do
         echo "echo 'mocked-secure-token-1234567890abcdef'" >> "$TEST_DIR/bin/$cmd"
     elif [ "$cmd" = "id" ]; then
         echo "if [ \"\$1\" = 'fusionpanel' ] && [ -f \"$TEST_DIR/fusionpanel_user_created\" ]; then exit 0; elif [ \"\$1\" = 'fusionpanel' ]; then exit 1; else exit 0; fi" >> "$TEST_DIR/bin/$cmd"
+    elif [ "$cmd" = "groupadd" ]; then
+        echo "touch \"$TEST_DIR/fusionpanel_group_created\"" >> "$TEST_DIR/bin/$cmd"
     elif [ "$cmd" = "useradd" ]; then
         echo "touch \"$TEST_DIR/fusionpanel_user_created\"" >> "$TEST_DIR/bin/$cmd"
     elif [ "$cmd" = "systemctl" ]; then
@@ -267,6 +269,35 @@ EOF
     echo "PASS: Missing Binaries Fail-Closed"
 }
 
+test_dry_run() {
+    echo "--- Test: Dry Run ---"
+    local test_prefix="$TEST_DIR/opt/fusionpanel_dryrun"
+    local output
+
+    rm -f "$TEST_DIR/fusionpanel_group_created" "$TEST_DIR/fusionpanel_user_created"
+    clear_systemctl_log
+    output=$("$INSTALL_SCRIPT" --prefix "$test_prefix" --dry-run)
+
+    if [ -d "$test_prefix" ]; then
+        echo "FAIL: Dry run created the prefix directory"
+        exit 1
+    fi
+    if [ -e "$TEST_DIR/fusionpanel_group_created" ] || [ -e "$TEST_DIR/fusionpanel_user_created" ]; then
+        echo "FAIL: Dry run created a system group or user"
+        exit 1
+    fi
+    if [ -s "$TEST_DIR/systemctl_calls.log" ]; then
+        echo "FAIL: Dry run invoked systemctl"
+        exit 1
+    fi
+    if ! echo "$output" | grep -q "\[Dry-run\] Installation skipped."; then
+        echo "FAIL: Dry run did not report that installation was skipped"
+        exit 1
+    fi
+
+    echo "PASS: Dry Run"
+}
+
 # Run tests
 test_clean_install
 test_idempotency_and_reinstall
@@ -275,5 +306,6 @@ test_start_restart_mock
 test_valid_auth
 test_partial_install_recovery
 test_missing_binaries_fail_closed
+test_dry_run
 
 echo "All tests passed successfully."
