@@ -1,0 +1,10 @@
+[package]
+name = "adoption"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+description = "Adoption and decommission attestation across real resources"
+
+[workspace]
+
+[dependencies]

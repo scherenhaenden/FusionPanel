@@ -162,3 +162,99 @@ async fn test_system_boot_and_identity_lifecycle() {
         Err(IdentityError::Unauthorized { .. })
     ));
 }
+
+#[tokio::test]
+async fn test_identity_flows_blocked() {
+    let port = 8087;
+    let _server = ApiServer::start("blocked-test-token", port);
+
+    let base_url = format!("http://127.0.0.1:{}", port);
+    let mut ok = false;
+    let client = Client::new();
+    for _ in 0..30 {
+        sleep(Duration::from_secs(1)).await;
+        if let Ok(resp) = client.get(format!("{}/v1/health", base_url)).send().await {
+            if resp.status() == StatusCode::OK {
+                ok = true;
+                break;
+            }
+        }
+    }
+    assert!(ok, "API Server failed to start");
+
+    // Missing required capabilities via CLI should exit nonzero
+    let login_cli = Command::new("cargo")
+        .args([
+            "run",
+            "--manifest-path",
+            "../../../Cargo.toml",
+            "--bin",
+            "fusionpanel-cli",
+            "--",
+            "--server",
+            &base_url,
+            "login",
+        ])
+        .output()
+        .expect("Failed to run CLI login");
+    assert!(!login_cli.status.success(), "BLOCKED capabilities must return nonzero");
+
+    let user_cli = Command::new("cargo")
+        .args([
+            "run",
+            "--manifest-path",
+            "../../../Cargo.toml",
+            "--bin",
+            "fusionpanel-cli",
+            "--",
+            "--server",
+            &base_url,
+            "users",
+            "create",
+        ])
+        .output()
+        .expect("Failed to run CLI user create");
+    assert!(!user_cli.status.success(), "BLOCKED capabilities must return nonzero");
+    
+    // HTTP capabilities should be BLOCKED over HTTP (404 Not Found)
+    
+    let user_creation_res = client
+        .post(format!("{}/v1/users", base_url))
+        .header("Authorization", "Bearer blocked-test-token")
+        .json(&serde_json::json!({
+            "username": "e2e_user",
+            "email": "e2e@example.com",
+            "password": "SecurePassword123!"
+        }))
+        .send()
+        .await
+        .expect("Request failed");
+    assert_eq!(user_creation_res.status(), reqwest::StatusCode::NOT_FOUND);
+
+    let login_res = client
+        .post(format!("{}/v1/login", base_url))
+        .json(&serde_json::json!({
+            "username": "e2e_user",
+            "password": "SecurePassword123!"
+        }))
+        .send()
+        .await
+        .expect("Request failed");
+    assert_eq!(login_res.status(), reqwest::StatusCode::NOT_FOUND);
+    
+    let get_tenant_res = client
+        .get(format!("{}/v1/tenants/current", base_url))
+        .header("Authorization", "Bearer blocked-test-token")
+        .send()
+        .await
+        .expect("Request failed");
+    assert_eq!(get_tenant_res.status(), reqwest::StatusCode::NOT_FOUND);
+    
+    let revoke_session_res = client
+        .delete(format!("{}/v1/sessions/current", base_url))
+        .header("Authorization", "Bearer blocked-test-token")
+        .send()
+        .await
+        .expect("Request failed");
+    assert_eq!(revoke_session_res.status(), reqwest::StatusCode::NOT_FOUND);
+}

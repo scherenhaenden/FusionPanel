@@ -1,0 +1,13 @@
+[package]
+name = "adoption-integration"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+publish = false
+
+[workspace]
+
+[dependencies]
+adoption = { path = "../../../../modules/adoption" }
+adopt07_tls = { path = "../adopt07", package = "adopt07-tls-sni-verification" }
+tempfile = "3.10.1"
