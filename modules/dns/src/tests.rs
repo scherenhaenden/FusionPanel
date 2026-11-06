@@ -235,7 +235,7 @@ mod blocked_integration_tests {
     const BLOCKED_REASON: &str = "BLOCKED: this package has no concrete DNS provider implementation and no disposable authoritative DNS fixture, test zone, or endpoint. The S13 create/update, answer verification, and zone export/restore E2E cannot run until those dependencies are implemented and provisioned.";
 
     #[test]
-
+    #[ignore = "BLOCKED: no concrete DNS provider or disposable authoritative DNS fixture is implemented/provisioned; see modules/dns/README.md"]
     fn e2e_authoritative_dns_create_update_resolve_restore() {
         panic!("{BLOCKED_REASON}");
     }
