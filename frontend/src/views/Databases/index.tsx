@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { api } from '../../api';
 
 interface Database {
+  id?: string;
   name: string;
   owner: string;
 }
@@ -16,16 +18,33 @@ interface FormErrors {
 
 const DatabasesView: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [databases, setDatabases] = useState<Database[]>([
-    { name: 'app_db', owner: 'app_user' },
-    { name: 'analytics_db', owner: 'analytics_user' }
-  ]);
-  const [users, setUsers] = useState<User[]>([
-    { name: 'app_user' },
-    { name: 'analytics_user' },
-    { name: 'readonly_user' }
-  ]);
+  const [databases, setDatabases] = useState<Database[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [privileges, setPrivileges] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const dbData = await api.getDatabases();
+      setDatabases(dbData || []);
+
+      // In a real app we'd fetch users and privileges too.
+      // For now we'll just extract unique owners from databases as mock users if empty
+      const uniqueOwners = Array.from(new Set((dbData || []).map((db: Database) => db.owner)));
+      setUsers(uniqueOwners.map(name => ({ name: name as string })));
+    } catch (e: any) {
+      setError(e?.response?.data?.error?.message || e.message || 'Failed to load databases');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const [newDb, setNewDb] = useState<Database>({ name: '', owner: '' });
   const [errors, setErrors] = useState<FormErrors>({ nameError: '', ownerError: '' });
@@ -64,15 +83,21 @@ const DatabasesView: React.FC = () => {
     validateIdentifier(val, 'ownerError');
   };
 
-  const createDatabase = (e: React.FormEvent) => {
+  const createDatabase = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isFormValid) {
-      setDatabases(prev => [...prev, { ...newDb }]);
-      if (!users.find(u => u.name === newDb.owner)) {
-        setUsers(prev => [...prev, { name: newDb.owner }]);
+      setError(null);
+      try {
+        const created = await api.createDatabase(newDb);
+        setDatabases(prev => [...prev, created]);
+        if (!users.find(u => u.name === created.owner)) {
+          setUsers(prev => [...prev, { name: created.owner }]);
+        }
+        setShowCreateModal(false);
+        setNewDb({ name: '', owner: '' });
+      } catch (e: any) {
+        setError(e?.response?.data?.error?.message || e.message || 'Failed to create database');
       }
-      setShowCreateModal(false);
-      setNewDb({ name: '', owner: '' });
     }
   };
 
@@ -93,64 +118,76 @@ const DatabasesView: React.FC = () => {
         <button onClick={() => setShowCreateModal(true)}>Create Database</button>
       </header>
 
-      <section style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
-        <div style={{ flex: 1 }}>
-          <h2>Databases</h2>
-          <ul>
-            {databases.map(db => (
-              <li key={db.name} style={{ marginBottom: '10px' }}>
-                {db.name} (Owner: {db.owner}){' '}
-                <button onClick={() => triggerDump(db.name)}>Download Dump</button>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {error && <div className="error-banner text-red-500 mb-4">{error} <button onClick={loadData} className="underline ml-2">Retry</button></div>}
 
-        <div style={{ flex: 1 }}>
-          <h2>Users</h2>
-          <ul>
-            {users.map(user => (
-              <li key={user.name}>
-                {user.name}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      <section>
-        <h2>Privilege Assignment</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'left' }}>Database \ User</th>
-              {users.map(user => (
-                <th key={user.name} style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'left' }}>{user.name}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {databases.map(db => (
-              <tr key={db.name}>
-                <td style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'left' }}>{db.name}</td>
-                {users.map(user => (
-                  <td key={user.name} style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'left' }}>
-                    <select
-                      value={privileges[`${db.name}-${user.name}`] || ''}
-                      onChange={(e) => assignPrivilege(db.name, user.name, e.target.value)}
-                    >
-                      <option value="">None</option>
-                      <option value="SELECT">SELECT</option>
-                      <option value="INSERT">INSERT</option>
-                      <option value="ALL">ALL PRIVILEGES</option>
-                    </select>
-                  </td>
+      {isLoading ? (
+        <div>Loading...</div>
+      ) : (
+        <>
+          <section style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+            <div style={{ flex: 1 }}>
+              <h2>Databases</h2>
+              <ul>
+                {databases.map(db => (
+                  <li key={db.name} style={{ marginBottom: '10px' }}>
+                    {db.name} (Owner: {db.owner}){' '}
+                    <button onClick={() => triggerDump(db.name)}>Download Dump</button>
+                  </li>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+                {databases.length === 0 && <li>No databases found.</li>}
+              </ul>
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <h2>Users</h2>
+              <ul>
+                {users.map(user => (
+                  <li key={user.name}>
+                    {user.name}
+                  </li>
+                ))}
+                {users.length === 0 && <li>No users found.</li>}
+              </ul>
+            </div>
+          </section>
+
+          {databases.length > 0 && users.length > 0 && (
+            <section>
+              <h2>Privilege Assignment</h2>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'left' }}>Database \ User</th>
+                    {users.map(user => (
+                      <th key={user.name} style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'left' }}>{user.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {databases.map(db => (
+                    <tr key={db.name}>
+                      <td style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'left' }}>{db.name}</td>
+                      {users.map(user => (
+                        <td key={user.name} style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'left' }}>
+                          <select
+                            value={privileges[`${db.name}-${user.name}`] || ''}
+                            onChange={(e) => assignPrivilege(db.name, user.name, e.target.value)}
+                          >
+                            <option value="">None</option>
+                            <option value="SELECT">SELECT</option>
+                            <option value="INSERT">INSERT</option>
+                            <option value="ALL">ALL PRIVILEGES</option>
+                          </select>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
+        </>
+      )}
 
       {/* Create Database Modal */}
       {showCreateModal && (
