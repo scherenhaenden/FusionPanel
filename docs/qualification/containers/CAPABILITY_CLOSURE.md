@@ -1,28 +1,106 @@
-# Container and Deployment Capability Closure Matrix
+# Container and Deployment Capability Closure (CTR, DEP)
 
-This document tracks the automated qualification and capability closure for Container Management (CTR) and Deployments (DEP) modules.
+This document tracks the automated qualification and capability closure.
 
-## Container Management (CTR)
-
-| ID | Description | Status | Automated Test | Notes |
-|---|---|---|---|---|
-| CTR-01 | Compose File Parsing | Closed | `test_ctr_01_parse_compose` | Basic YAML extraction validated. |
-| CTR-02 | Host Root Mount Bypasses | Closed | `test_ctr_02_prevent_host_root_mount` | Path traversal (`../`) and absolute root (`/`) blocked. |
-| CTR-03 | Privileged Mode Override | Closed | `test_ctr_03_reject_privileged_mode` | Rejected unless explicit override flag is true. |
-| CTR-04 | Host Port Allocation | Closed | `test_ctr_04_prevent_overlapping_host_ports` | Overlapping ports are correctly detected and rejected. |
-| CTR-05 | Container Lifecycle | Closed | `test_ctr_05_container_lifecycle` | Validates stopped -> running -> stopped transitions. |
-| CTR-06 | Health Checking | Closed | `test_ctr_06_health_checking` | Ensures healthy states can be read. |
-| CTR-07 | Restart Policies & Stateful Volumes | Closed | `test_ctr_07_restart_policies_and_stateful_volumes` | Asserts standard restart policies and host-to-container volume mappings. |
-
-## Deployments (DEP)
-
-| ID | Description | Status | Automated Test | Notes |
-|---|---|---|---|---|
-| DEP-01 | Atomic Symlink Deploy | Closed | `test_dep_01_atomic_symlink_deploy` | Verifies pointers shift correctly to releases. |
-| DEP-02 | Rollback State Machine | Closed | `test_dep_02_rollback_state_machine` | Failure during deployment triggers `rolling_back` -> `rolled_back`. |
-| DEP-03 | Dependency Allocation | Closed | `test_dep_03_dependency_allocation` | Ensures required dependencies like DBs are allocated. |
-| DEP-04 | Configuration Injection | Closed | `test_dep_04_configuration_injection` | Environment variables map properly. |
-| DEP-05 | CPU Limit Enforcement | Closed | `test_dep_05_cpu_limit_enforcement` | Boundaries checked against maximum allowed CPU cores. |
-| DEP-06 | Memory Limit Enforcement | Closed | `test_dep_06_memory_limit_enforcement` | Boundaries checked for min/max limits. |
-
-_All capabilities documented here are verified automatically by the test suite in `tests/closure/containers/`._
+## CTR
+- CTR-01: Native Docker management
+  - Status: BLOCKED (Missing core implementation for Native Docker management)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- CTR-02: Docker Compose stacks
+  - Status: BLOCKED (Missing core implementation for Docker Compose stacks)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- CTR-03: Application templates
+  - Status: BLOCKED (Missing core implementation for Application templates)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- CTR-04: Registry and image management
+  - Status: BLOCKED (Missing core implementation for Registry and image management)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- CTR-05: Container lifecycle
+  - Status: BLOCKED (Missing core implementation for Container lifecycle)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- CTR-06: CPU and RAM limits
+  - Status: BLOCKED (Missing core implementation for CPU and RAM limits)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- CTR-07: GPU passthrough
+  - Status: BLOCKED (Missing core implementation for GPU passthrough)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- CTR-08: Image update detection
+  - Status: BLOCKED (Missing core implementation for Image update detection)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- CTR-09: CVE scanning
+  - Status: BLOCKED (Missing core implementation for CVE scanning)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- CTR-10: Per-image SBOM
+  - Status: BLOCKED (Missing core implementation for Per-image SBOM)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- CTR-11: Isolation policies
+  - Status: BLOCKED (Missing core implementation for Isolation policies)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- CTR-12: Idle container sleep and wake behavior
+  - Status: BLOCKED (Missing core implementation for Idle container sleep and wake behavior)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- CTR-13: Horizontal autoscaling
+  - Status: BLOCKED (Missing core implementation for Horizontal autoscaling)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+## DEP
+- DEP-01: Git push-to-deploy
+  - Status: BLOCKED (Missing core implementation for Git push-to-deploy)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- DEP-02: Git webhooks
+  - Status: BLOCKED (Missing core implementation for Git webhooks)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- DEP-03: Multi-language builds
+  - Status: BLOCKED (Missing core implementation for Multi-language builds)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- DEP-04: Blue-green deployments
+  - Status: BLOCKED (Missing core implementation for Blue-green deployments)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- DEP-05: Per-commit preview environments
+  - Status: BLOCKED (Missing core implementation for Per-commit preview environments)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- DEP-06: Staging
+  - Status: BLOCKED (Missing core implementation for Staging)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- DEP-07: Release rollback
+  - Status: BLOCKED (Missing core implementation for Release rollback)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- DEP-08: Scheduled deployments
+  - Status: BLOCKED (Missing core implementation for Scheduled deployments)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- DEP-09: Two-person deployment approval
+  - Status: BLOCKED (Missing core implementation for Two-person deployment approval)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- DEP-10: Deployment history and progress
+  - Status: BLOCKED (Missing core implementation for Deployment history and progress)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- DEP-11: Failure diagnostics
+  - Status: BLOCKED (Missing core implementation for Failure diagnostics)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- DEP-12: GitHub Actions integration
+  - Status: BLOCKED (Missing core implementation for GitHub Actions integration)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release

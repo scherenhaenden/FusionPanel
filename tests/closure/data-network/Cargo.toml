@@ -1,13 +1,10 @@
-[workspace]
-
 [package]
-name = "data-network-closure"
+name = "data-network-closure-tests"
 version = "0.1.0"
 edition = "2021"
-publish = false
 license = "AGPL-3.0-only"
+publish = false
+
+[workspace]
 
 [dependencies]
-reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json"] }
-serde = { version = "1.0.229", features = ["derive"] }
-tokio = { version = "1.54.1", features = ["rt", "macros"] }
