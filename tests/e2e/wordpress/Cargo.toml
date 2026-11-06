@@ -1,0 +1,15 @@
+[package]
+name = "wordpress_e2e"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+wordpress = { path = "../../../modules/wordpress" }
+
+[workspace]
+
+[[test]]
+name = "wp_lifecycle_tests"
+path = "wp_lifecycle_tests.rs"
