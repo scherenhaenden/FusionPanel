@@ -21,6 +21,10 @@ pub struct SecretRecord {
     pub scopes: Vec<String>,
     #[serde(with = "hex")]
     pub ciphertext: Vec<u8>,
+    #[serde(with = "hex")]
+    pub encrypted_dek_master: Vec<u8>,
+    #[serde(default, with = "hex_opt")]
+    pub encrypted_dek_backup: Option<Vec<u8>>,
 }
 
 mod hex {
@@ -42,9 +46,35 @@ mod hex {
     }
 }
 
+mod hex_opt {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(bytes: &Option<Vec<u8>>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match bytes {
+            Some(b) => serializer.serialize_some(&hex::encode(b)),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Vec<u8>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: Option<String> = Option::deserialize(deserializer)?;
+        match s {
+            Some(s) => hex::decode(&s).map(Some).map_err(serde::de::Error::custom),
+            None => Ok(None),
+        }
+    }
+}
+
 pub struct SecretStore {
     storage_dir: PathBuf,
     engine: CryptoEngine,
+    backup_engine: Option<CryptoEngine>,
     current_key_version: u32,
 }
 
@@ -88,6 +118,7 @@ impl SecretStore {
     pub fn new<P: AsRef<Path>>(
         storage_dir: P,
         master_key: &[u8],
+        backup_key: Option<&[u8]>,
     ) -> Result<Self, SecretError> {
         let storage_dir = storage_dir.as_ref().to_path_buf();
         if !storage_dir.exists() {
@@ -97,9 +128,13 @@ impl SecretStore {
         }
 
         let engine = CryptoEngine::new(master_key)?;
+        let backup_engine = match backup_key {
+            Some(bk) => Some(CryptoEngine::new(bk)?),
+            None => None,
+        };
         let current_key_version = Self::read_active_version(&storage_dir);
 
-        let store = Self { storage_dir, engine, current_key_version };
+        let store = Self { storage_dir, engine, backup_engine, current_key_version };
 
         // Cleanup stale files during startup (recovery phase)
         store.cleanup_stale_files()?;
@@ -157,10 +192,15 @@ impl SecretStore {
                 .map_err(|e| SecretError::DependencyUnavailable(e.to_string()))?;
 
             let aad = Self::construct_aad(&record.id, &record.scopes);
-            let plaintext = self.engine.decrypt(&record.ciphertext, &aad)?;
-            let new_ciphertext = new_engine.encrypt(&plaintext, &aad)?;
 
-            record.ciphertext = new_ciphertext;
+            // Decrypt DEK with old master key
+            let dek_material = self.engine.decrypt(&record.encrypted_dek_master, &aad)?;
+
+            // Re-encrypt DEK with new master key
+            let new_encrypted_dek_master = new_engine.encrypt(&dek_material, &aad)?;
+
+            record.encrypted_dek_master = new_encrypted_dek_master;
+            // record.ciphertext and record.encrypted_dek_backup remain untouched
 
             // Store target path for new version
             let new_file_name = file_name.replace(&suffix, &format!(".json.v{}", new_version));
@@ -200,14 +240,33 @@ impl SecretStore {
         let id = Uuid::new_v4().to_string();
         let scopes = vec![format!("{}:{}", tenant_id, scope)];
 
+        // Generate DEK
+        let dek_bytes = CryptoEngine::generate_key();
+        let dek_engine = CryptoEngine::new(&dek_bytes)?;
+        let dek_material = SecretMaterial::new(dek_bytes);
+
         let aad = Self::construct_aad(&id, &scopes);
-        let ciphertext = self.engine.encrypt(material, &aad)?;
+
+        // Encrypt secret material with DEK
+        let ciphertext = dek_engine.encrypt(material, &aad)?;
+
+        // Encrypt DEK with master key
+        let encrypted_dek_master = self.engine.encrypt(&dek_material, &aad)?;
+
+        // Encrypt DEK with backup key if available
+        let encrypted_dek_backup = if let Some(backup_engine) = &self.backup_engine {
+            Some(backup_engine.encrypt(&dek_material, &aad)?)
+        } else {
+            None
+        };
 
         let record = SecretRecord {
             id: id.clone(),
             version: 1,
             scopes,
             ciphertext,
+            encrypted_dek_master,
+            encrypted_dek_backup,
         };
 
         self.save_record(&record)?;
@@ -232,7 +291,47 @@ impl SecretStore {
         }
 
         let aad = Self::construct_aad(&record.id, &record.scopes);
-        self.engine.decrypt(&record.ciphertext, &aad)
+
+        // Decrypt DEK with master key
+        let dek_material = self.engine.decrypt(&record.encrypted_dek_master, &aad)?;
+        let dek_engine = CryptoEngine::new(dek_material.as_bytes())?;
+
+        // Decrypt secret with DEK
+        dek_engine.decrypt(&record.ciphertext, &aad)
+    }
+
+    pub fn recover_secret(
+        &self,
+        id: &str,
+        tenant_id: &str,
+        scope: &str,
+    ) -> Result<SecretMaterial, SecretError> {
+        let backup_engine = self.backup_engine.as_ref().ok_or_else(|| {
+            SecretError::DependencyUnavailable("Backup key not configured".to_string())
+        })?;
+
+        let record = self.load_record(id)?;
+
+        let required_scope = format!("{}:{}", tenant_id, scope);
+        if !record.scopes.contains(&required_scope) {
+            return Err(SecretError::Unauthorized(format!(
+                "Scope {} not authorized for secret {}",
+                required_scope, id
+            )));
+        }
+
+        let encrypted_dek_backup = record.encrypted_dek_backup.as_ref().ok_or_else(|| {
+            SecretError::NotFound("Backup encrypted DEK not found on record".to_string())
+        })?;
+
+        let aad = Self::construct_aad(&record.id, &record.scopes);
+
+        // Decrypt DEK with backup key
+        let dek_material = backup_engine.decrypt(encrypted_dek_backup, &aad)?;
+        let dek_engine = CryptoEngine::new(dek_material.as_bytes())?;
+
+        // Decrypt secret with DEK
+        dek_engine.decrypt(&record.ciphertext, &aad)
     }
 
     pub fn get_state(&self, id: &str) -> Result<ObservedState, SecretError> {
@@ -276,7 +375,7 @@ mod tests {
     fn test_create_and_read_secret() {
         let dir = tempdir().unwrap();
         let master_key = CryptoEngine::generate_key();
-        let store = SecretStore::new(dir.path(), &master_key).unwrap();
+        let store = SecretStore::new(dir.path(), &master_key, None).unwrap();
 
         let tenant = "tenant1";
         let scope = "db_password";
@@ -298,7 +397,7 @@ mod tests {
     fn test_access_denied() {
         let dir = tempdir().unwrap();
         let master_key = CryptoEngine::generate_key();
-        let store = SecretStore::new(dir.path(), &master_key).unwrap();
+        let store = SecretStore::new(dir.path(), &master_key, None).unwrap();
 
         let material = SecretMaterial::new(b"db_secret_123".to_vec());
         let secret_ref = store.create_secret("tenant1", "db_password", &material).unwrap();
@@ -316,7 +415,7 @@ mod tests {
     fn test_metadata_integrity_tampering() {
         let dir = tempdir().unwrap();
         let master_key = CryptoEngine::generate_key();
-        let store = SecretStore::new(dir.path(), &master_key).unwrap();
+        let store = SecretStore::new(dir.path(), &master_key, None).unwrap();
 
         let material = SecretMaterial::new(b"secret".to_vec());
         let secret_ref = store.create_secret("tenant1", "scope1", &material).unwrap();
@@ -332,5 +431,54 @@ mod tests {
         // Attempt to read with tampered scope should fail due to AAD mismatch
         let result = store.read_secret(&secret_ref.id, "tenant2", "scope1");
         assert!(matches!(result.unwrap_err(), SecretError::CryptoError(_)));
+    }
+
+    #[test]
+    fn test_recover_secret() {
+        let dir = tempdir().unwrap();
+        let master_key = CryptoEngine::generate_key();
+        let backup_key = CryptoEngine::generate_key();
+
+        let store = SecretStore::new(dir.path(), &master_key, Some(&backup_key)).unwrap();
+
+        let material = SecretMaterial::new(b"critical_data".to_vec());
+        let secret_ref = store.create_secret("tenant1", "scope1", &material).unwrap();
+
+        // Reading normally works
+        let read_material = store.read_secret(&secret_ref.id, "tenant1", "scope1").unwrap();
+        assert_eq!(read_material.as_bytes(), material.as_bytes());
+
+        // Recovering with backup key works
+        let recovered_material = store.recover_secret(&secret_ref.id, "tenant1", "scope1").unwrap();
+        assert_eq!(recovered_material.as_bytes(), material.as_bytes());
+
+        // Now imagine master key is lost, open store with NO master key but valid backup key
+        // Note: the current `new` requires a master key, so we simulate a lost master key by
+        // providing a new random one.
+        let random_master_key = CryptoEngine::generate_key();
+        let store_lost_master = SecretStore::new(dir.path(), &random_master_key, Some(&backup_key)).unwrap();
+
+        // Reading with new (wrong) master key fails
+        assert!(store_lost_master.read_secret(&secret_ref.id, "tenant1", "scope1").is_err());
+
+        // But recovery still works!
+        let recovered_material_2 = store_lost_master.recover_secret(&secret_ref.id, "tenant1", "scope1").unwrap();
+        assert_eq!(recovered_material_2.as_bytes(), material.as_bytes());
+    }
+
+    #[test]
+    fn test_recover_secret_no_backup_key() {
+        let dir = tempdir().unwrap();
+        let master_key = CryptoEngine::generate_key();
+
+        // No backup key provided
+        let store = SecretStore::new(dir.path(), &master_key, None).unwrap();
+
+        let material = SecretMaterial::new(b"critical_data".to_vec());
+        let secret_ref = store.create_secret("tenant1", "scope1", &material).unwrap();
+
+        // Attempting to recover fails because no backup key is configured in store
+        let result = store.recover_secret(&secret_ref.id, "tenant1", "scope1");
+        assert!(matches!(result.unwrap_err(), SecretError::DependencyUnavailable(_)));
     }
 }

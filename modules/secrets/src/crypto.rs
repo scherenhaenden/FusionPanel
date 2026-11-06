@@ -1,6 +1,6 @@
-use chacha20poly1305::{
+use aes_gcm::{
     aead::{Aead, KeyInit, Payload},
-    ChaCha20Poly1305, Key, Nonce,
+    Aes256Gcm, Key, Nonce,
 };
 use rand::RngCore;
 
@@ -12,7 +12,7 @@ const NONCE_SIZE: usize = 12;
 /// AEAD Encryption/Decryption utility
 #[derive(Debug)]
 pub struct CryptoEngine {
-    key: Key,
+    key: Key<Aes256Gcm>,
 }
 
 impl CryptoEngine {
@@ -23,7 +23,7 @@ impl CryptoEngine {
                 KEY_SIZE
             )));
         }
-        let key = Key::clone_from_slice(key_bytes);
+        let key = Key::<Aes256Gcm>::clone_from_slice(key_bytes);
         Ok(Self { key })
     }
 
@@ -34,7 +34,7 @@ impl CryptoEngine {
     }
 
     pub fn encrypt(&self, plaintext: &SecretMaterial, aad: &[u8]) -> Result<Vec<u8>, SecretError> {
-        let cipher = ChaCha20Poly1305::new(&self.key);
+        let cipher = Aes256Gcm::new(&self.key);
 
         let mut nonce_bytes = [0u8; NONCE_SIZE];
         rand::thread_rng().fill_bytes(&mut nonce_bytes);
@@ -62,7 +62,7 @@ impl CryptoEngine {
             return Err(SecretError::CryptoError("Ciphertext too short".into()));
         }
 
-        let cipher = ChaCha20Poly1305::new(&self.key);
+        let cipher = Aes256Gcm::new(&self.key);
         let nonce = Nonce::from_slice(&encrypted_data[..NONCE_SIZE]);
         let ciphertext = &encrypted_data[NONCE_SIZE..];
 
