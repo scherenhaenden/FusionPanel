@@ -128,7 +128,7 @@ fn test_chunk_calculation_ignores_small_requested_chunk_size() {
 }
 #[test]
 fn test_sigv4_signing() {
-    use backup_destinations::s3::sigv4::{SigV4Request, sign};
+    use backup_destinations::s3::sigv4::{sign, SigV4Request};
     use chrono::{TimeZone, Utc};
     use std::collections::BTreeMap;
 
@@ -149,7 +149,9 @@ fn test_sigv4_signing() {
 
     assert!(headers.contains_key("authorization"));
     let auth = headers.get("authorization").unwrap().to_str().unwrap();
-    assert!(auth.starts_with("AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20230524/us-east-1/s3/aws4_request,"));
+    assert!(auth.starts_with(
+        "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20230524/us-east-1/s3/aws4_request,"
+    ));
     assert!(auth.contains("SignedHeaders=host;x-amz-content-sha256;x-amz-date"));
     assert!(auth.contains("Signature="));
 }
