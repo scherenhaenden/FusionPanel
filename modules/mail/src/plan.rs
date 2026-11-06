@@ -1,3 +1,4 @@
+use crate::domain::MailAddress;
 use crate::error::MailError;
 use crate::models::{MailAlias, MailDomain, Mailbox, SmtpRelayConfig};
 use serde::{Deserialize, Serialize};
@@ -77,7 +78,7 @@ impl MailConfigPlan {
             let dsts = alias
                 .destinations
                 .iter()
-                .map(|d| d.full_address())
+                .map(|d: &MailAddress| d.full_address())
                 .collect::<Vec<_>>()
                 .join(",");
             if src.contains('\n')
