@@ -148,8 +148,12 @@ async fn test_mariadb_and_postgres_dumps() {
     let pg_adapter = Arc::new(PostgresAdapter::new(pg_config));
 
     // Ensure adapters can connect
-    mariadb_adapter.check_connection().await.unwrap();
-    pg_adapter.check_connection().await.unwrap();
+    if let Err(e) = mariadb_adapter.check_connection().await {
+        panic!("BLOCKED: MariaDB container connection failed: {:?}", e);
+    }
+    if let Err(e) = pg_adapter.check_connection().await {
+        panic!("BLOCKED: PostgreSQL container connection failed: {:?}", e);
+    }
 
     // Database Lifecycle testing
     // MariaDB: Plan and Apply create user, database, grant
