@@ -56,6 +56,73 @@ impl DatabaseAdapter for PostgresAdapter {
         &self.config
     }
 
+    async fn database_exists(&self, name: &DbName) -> Result<bool> {
+        let mut cmd = self.build_cmd("psql");
+        cmd.args(["-d", "postgres", "-t", "-A", "-c", &format!(
+            "SELECT 1 FROM pg_database WHERE datname = '{}';",
+            name.0
+        )]);
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute psql: {}", e))
+        })?;
+        if !output.status.success() {
+            return Err(DatabaseError::OperationFailed(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+            ));
+        }
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        Ok(out_str.trim() == "1")
+    }
+
+    async fn list_databases(&self) -> Result<Vec<ObservedDatabase>> {
+        let mut cmd = self.build_cmd("psql");
+        // Filter out template1, template0, etc. Postgres typical system schemas don't appear in pg_database but system templates do.
+        // We exclude databases starting with 'template' and 'postgres' itself.
+        cmd.args(["-d", "postgres", "-t", "-A", "-c",
+            "SELECT datname, pg_encoding_to_char(encoding), datcollate FROM pg_database \
+             WHERE datistemplate = false AND datname != 'postgres';"
+        ]);
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute psql: {}", e))
+        })?;
+        if !output.status.success() {
+            return Err(DatabaseError::OperationFailed(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+            ));
+        }
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        let mut dbs = Vec::new();
+        for line in out_str.lines() {
+            let parts: Vec<&str> = line.split('|').collect();
+            if parts.len() == 3 {
+                dbs.push(ObservedDatabase {
+                    name: DbName(parts[0].to_string()),
+                    charset: parts[1].to_string(),
+                    collation: parts[2].to_string(),
+                });
+            }
+        }
+        Ok(dbs)
+    }
+
+    async fn user_exists(&self, username: &DbUser) -> Result<bool> {
+        let mut cmd = self.build_cmd("psql");
+        cmd.args(["-d", "postgres", "-t", "-A", "-c", &format!(
+            "SELECT 1 FROM pg_roles WHERE rolname = '{}';",
+            username.0
+        )]);
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute psql: {}", e))
+        })?;
+        if !output.status.success() {
+            return Err(DatabaseError::OperationFailed(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+            ));
+        }
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        Ok(out_str.trim() == "1")
+    }
+
     async fn check_connection(&self) -> Result<()> {
         let mut cmd = self.build_cmd("psql");
         cmd.args(["-d", "postgres", "-c", "SELECT 1;"]);
@@ -84,6 +151,14 @@ impl DatabaseAdapter for PostgresAdapter {
     async fn apply_create_database(&self, plan: &CreateDbPlan) -> Result<()> {
         validate_identifier(&plan.db_name.0)?;
         validate_identifier(&plan.owner.0)?;
+
+        if self.database_exists(&plan.db_name).await? {
+            return Err(DatabaseError::Conflict(format!(
+                "Database '{}' already exists",
+                plan.db_name.0
+            )));
+        }
+
         let sql = format!(
             "CREATE DATABASE \"{}\" OWNER \"{}\" ENCODING 'UTF8';",
             plan.db_name.0, plan.owner.0
@@ -98,9 +173,6 @@ impl DatabaseAdapter for PostgresAdapter {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            if stderr.contains("already exists") {
-                return Ok(());
-            }
             return Err(DatabaseError::OperationFailed(stderr));
         }
         Ok(())
