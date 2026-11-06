@@ -51,6 +51,71 @@ impl DatabaseAdapter for MariaDbAdapter {
         &self.config
     }
 
+    async fn database_exists(&self, name: &DbName) -> Result<bool> {
+        let mut cmd = self.build_cmd("mysql");
+        cmd.arg("-N").arg("-B").arg("-e").arg(format!(
+            "SELECT 1 FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = '{}';",
+            name.0
+        ));
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute mysql: {}", e))
+        })?;
+        if !output.status.success() {
+            return Err(DatabaseError::OperationFailed(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+            ));
+        }
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        Ok(out_str.trim() == "1")
+    }
+
+    async fn list_databases(&self) -> Result<Vec<ObservedDatabase>> {
+        let mut cmd = self.build_cmd("mysql");
+        cmd.arg("-N").arg("-B").arg("-e").arg(
+            "SELECT SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA \
+             WHERE SCHEMA_NAME NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys');"
+        );
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute mysql: {}", e))
+        })?;
+        if !output.status.success() {
+            return Err(DatabaseError::OperationFailed(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+            ));
+        }
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        let mut dbs = Vec::new();
+        for line in out_str.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() == 3 {
+                dbs.push(ObservedDatabase {
+                    name: DbName(parts[0].to_string()),
+                    charset: parts[1].to_string(),
+                    collation: parts[2].to_string(),
+                });
+            }
+        }
+        Ok(dbs)
+    }
+
+    async fn user_exists(&self, username: &DbUser) -> Result<bool> {
+        let mut cmd = self.build_cmd("mysql");
+        cmd.arg("-N").arg("-B").arg("-e").arg(format!(
+            "SELECT 1 FROM mysql.user WHERE User = '{}';",
+            username.0
+        ));
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute mysql: {}", e))
+        })?;
+        if !output.status.success() {
+            return Err(DatabaseError::OperationFailed(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+            ));
+        }
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        Ok(out_str.trim() == "1")
+    }
+
     async fn check_connection(&self) -> Result<()> {
         let mut cmd = self.build_cmd("mysql");
         cmd.arg("-e").arg("SELECT 1;");
@@ -79,8 +144,16 @@ impl DatabaseAdapter for MariaDbAdapter {
     async fn apply_create_database(&self, plan: &CreateDbPlan) -> Result<()> {
         validate_identifier(&plan.db_name.0)?;
         validate_identifier(&plan.owner.0)?;
+
+        if self.database_exists(&plan.db_name).await? {
+            return Err(DatabaseError::Conflict(format!(
+                "Database '{}' already exists",
+                plan.db_name.0
+            )));
+        }
+
         let sql = format!(
-            "CREATE DATABASE IF NOT EXISTS `{}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;",
+            "CREATE DATABASE `{}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;",
             plan.db_name.0
         );
 

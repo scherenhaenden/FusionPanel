@@ -32,6 +32,13 @@ pub enum ConnectionStrategy {
     },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ObservedDatabase {
+    pub name: DbName,
+    pub charset: String,
+    pub collation: String,
+}
+
 #[derive(Clone, Deserialize)]
 pub struct SecretString(pub String);
 
@@ -117,6 +124,10 @@ pub trait DatabaseAdapter: Send + Sync {
     fn config(&self) -> &DatabaseConfig;
 
     async fn check_connection(&self) -> Result<()>;
+
+    async fn database_exists(&self, name: &DbName) -> Result<bool>;
+    async fn list_databases(&self) -> Result<Vec<ObservedDatabase>>;
+    async fn user_exists(&self, username: &DbUser) -> Result<bool>;
 
     async fn plan_create_database(&self, name: DbName, owner: DbUser) -> Result<CreateDbPlan>;
     async fn apply_create_database(&self, plan: &CreateDbPlan) -> Result<()>;
