@@ -1,0 +1,122 @@
+# Hosting Capability Closure (HOST, WP)
+
+This document tracks the automated qualification and capability closure.
+
+## HOST
+- HOST-01: PHP sites
+  - Status: BLOCKED (Missing core implementation for PHP sites)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-02: Static sites
+  - Status: BLOCKED (Missing core implementation for Static sites)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-03: Node.js and Python hosting
+  - Status: BLOCKED (Missing core implementation for Node.js and Python hosting)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-04: Nginx and virtual hosts
+  - Status: BLOCKED (Missing core implementation for Nginx and virtual hosts)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-05: Per-site PHP-FPM pools
+  - Status: BLOCKED (Missing core implementation for Per-site PHP-FPM pools)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-06: Let's Encrypt TLS
+  - Status: BLOCKED (Missing core implementation for Let's Encrypt TLS)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-07: Wildcard certificates
+  - Status: BLOCKED (Missing core implementation for Wildcard certificates)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-08: Redirects and HSTS
+  - Status: BLOCKED (Missing core implementation for Redirects and HSTS)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-09: FastCGI cache
+  - Status: BLOCKED (Missing core implementation for FastCGI cache)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-10: Redis cache
+  - Status: BLOCKED (Missing core implementation for Redis cache)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-11: File manager
+  - Status: BLOCKED (Missing core implementation for File manager)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-12: Cron jobs
+  - Status: BLOCKED (Missing core implementation for Cron jobs)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-13: Disk quotas
+  - Status: BLOCKED (Missing core implementation for Disk quotas)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-14: Bandwidth limits
+  - Status: BLOCKED (Missing core implementation for Bandwidth limits)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-15: Atomic provisioning with compensation
+  - Status: BLOCKED (Missing core implementation for Atomic provisioning with compensation)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-16: Image optimization
+  - Status: BLOCKED (Missing core implementation for Image optimization)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- HOST-17: CDN integration
+  - Status: BLOCKED (Missing core implementation for CDN integration)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+## WP
+- WP-01: Automatic installation
+  - Status: BLOCKED (Missing core implementation for Automatic installation)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- WP-02: Plugin management
+  - Status: BLOCKED (Missing core implementation for Plugin management)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- WP-03: Theme management
+  - Status: BLOCKED (Missing core implementation for Theme management)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- WP-04: Automatic updates
+  - Status: BLOCKED (Missing core implementation for Automatic updates)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- WP-05: WordPress staging and production push
+  - Status: BLOCKED (Missing core implementation for WordPress staging and production push)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- WP-06: Vulnerability scanning
+  - Status: BLOCKED (Missing core implementation for Vulnerability scanning)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- WP-07: Core repair
+  - Status: BLOCKED (Missing core implementation for Core repair)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- WP-08: Plugin failure diagnostics
+  - Status: BLOCKED (Missing core implementation for Plugin failure diagnostics)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- WP-09: Restore with URL rewrite
+  - Status: BLOCKED (Missing core implementation for Restore with URL rewrite)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- WP-10: Redis object cache
+  - Status: BLOCKED (Missing core implementation for Redis object cache)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- WP-11: WordPress hardening
+  - Status: BLOCKED (Missing core implementation for WordPress hardening)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- WP-12: Multiple installation management
+  - Status: BLOCKED (Missing core implementation for Multiple installation management)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release

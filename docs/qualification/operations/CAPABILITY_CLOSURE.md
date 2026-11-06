@@ -1,6 +1,6 @@
-# Operations/Administration Capability Closure (OBS, NODE, ADM, SEC, MIG)
+# Operations/Administration Capability Closure (SEC, OBS, NODE, ADM, MIG)
 
-This document tracks the closure of operations and administration capabilities for OBS, NODE, ADM, SEC, and MIG domains.
+This document tracks the automated qualification and capability closure.
 
 ## SEC
 - SEC-01: TOTP two-factor authentication
@@ -175,6 +175,10 @@ This document tracks the closure of operations and administration capabilities f
   - Retest Gate: Beta Release
 - NODE-11: Durable jobs
   - Status: BLOCKED (Missing core implementation for Durable jobs)
+  - Owner: Operations Team
+  - Retest Gate: Beta Release
+- NODE-12: Highly available control plane
+  - Status: BLOCKED (Missing core implementation for Highly available control plane)
   - Owner: Operations Team
   - Retest Gate: Beta Release
 - NODE-13: OpenAPI contract
