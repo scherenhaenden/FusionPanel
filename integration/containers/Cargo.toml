@@ -1,0 +1,26 @@
+[package]
+name = "integration-containers"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[workspace]
+
+[dependencies]
+axum = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+thiserror = "1.0"
+async-trait = "0.1"
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+containers = { path = "../../modules/containers" }
+identity = { path = "../../modules/identity" }
+integration-identity = { path = "../identity" }
+
+[dev-dependencies]
+http-body-util = "0.1"
+tower = { version = "0.5.3", features = ["util"] }
+tokio-test = "0.4"
