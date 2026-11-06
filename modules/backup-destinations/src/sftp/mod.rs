@@ -1,12 +1,12 @@
 #![forbid(unsafe_code)]
 
+use crate::traits::{FileStat, StorageBackend, StorageError};
+use async_ssh2_lite::{AsyncSession, AsyncSftp};
+use async_trait::async_trait;
+use futures_util::io::{AsyncReadExt, AsyncWriteExt};
 use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
-use async_trait::async_trait;
-use async_ssh2_lite::{AsyncSession, AsyncSftp};
 use tokio::net::TcpStream;
-use futures_util::io::{AsyncReadExt, AsyncWriteExt};
-use crate::traits::{FileStat, StorageBackend, StorageError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthMethod {
@@ -166,16 +166,11 @@ impl SftpStorageBackend {
         }
 
         let auth_res = match &self.auth_method {
-            AuthMethod::Password(pw) => {
-                session.userauth_password(&self.username, pw).await
-            }
+            AuthMethod::Password(pw) => session.userauth_password(&self.username, pw).await,
             AuthMethod::PrivateKey { key, passphrase } => {
-                session.userauth_pubkey_memory(
-                    &self.username,
-                    None,
-                    key,
-                    passphrase.as_deref(),
-                ).await
+                session
+                    .userauth_pubkey_memory(&self.username, None, key, passphrase.as_deref())
+                    .await
             }
         };
 
@@ -190,7 +185,9 @@ impl SftpStorageBackend {
         Ok(session)
     }
 
-    async fn get_sftp(&self) -> Result<(AsyncSession<TcpStream>, AsyncSftp<TcpStream>), StorageError> {
+    async fn get_sftp(
+        &self,
+    ) -> Result<(AsyncSession<TcpStream>, AsyncSftp<TcpStream>), StorageError> {
         let session = self.connect_and_auth().await?;
         let sftp = match session.sftp().await {
             Ok(s) => s,
@@ -202,7 +199,9 @@ impl SftpStorageBackend {
     async fn throttle(&self, bytes_transferred: usize, start_time: tokio::time::Instant) {
         if let Some(config) = &self.throttle_config {
             let elapsed = start_time.elapsed();
-            let expected_duration = Duration::from_secs_f64(bytes_transferred as f64 / config.max_bytes_per_second as f64);
+            let expected_duration = Duration::from_secs_f64(
+                bytes_transferred as f64 / config.max_bytes_per_second as f64,
+            );
             if expected_duration > elapsed {
                 tokio::time::sleep(expected_duration - elapsed).await;
             }
@@ -213,12 +212,15 @@ impl SftpStorageBackend {
 #[async_trait]
 impl StorageBackend for SftpStorageBackend {
     async fn upload(&self, path: &str, data: Vec<u8>) -> Result<(), StorageError> {
-        let normalized = self.normalize_and_validate_path(Path::new(path))
-            .map_err(|e| match e {
-                SftpError::InvalidPath | SftpError::PathEscapeDetected => StorageError::Other(e.to_string()),
-                _ => StorageError::Other("Invalid path".to_string()),
-            })?;
-            
+        let normalized =
+            self.normalize_and_validate_path(Path::new(path))
+                .map_err(|e| match e {
+                    SftpError::InvalidPath | SftpError::PathEscapeDetected => {
+                        StorageError::Other(e.to_string())
+                    }
+                    _ => StorageError::Other("Invalid path".to_string()),
+                })?;
+
         let (_session, sftp) = self.get_sftp().await?;
         let start_time = tokio::time::Instant::now();
 
@@ -236,19 +238,15 @@ impl StorageBackend for SftpStorageBackend {
 
         let write_fut = file.write_all(&data);
         match &self.timeout_config {
-            Some(tc) => {
-                match tokio::time::timeout(tc.write_timeout, write_fut).await {
-                    Ok(Ok(_)) => {},
-                    Ok(Err(e)) => return Err(StorageError::Other(e.to_string())),
-                    Err(_) => return Err(StorageError::NetworkTimeout),
-                }
+            Some(tc) => match tokio::time::timeout(tc.write_timeout, write_fut).await {
+                Ok(Ok(_)) => {}
+                Ok(Err(e)) => return Err(StorageError::Other(e.to_string())),
+                Err(_) => return Err(StorageError::NetworkTimeout),
             },
-            None => {
-                match write_fut.await {
-                    Ok(_) => {},
-                    Err(e) => return Err(StorageError::Other(e.to_string())),
-                }
-            }
+            None => match write_fut.await {
+                Ok(_) => {}
+                Err(e) => return Err(StorageError::Other(e.to_string())),
+            },
         }
 
         self.throttle(data.len(), start_time).await;
@@ -256,7 +254,8 @@ impl StorageBackend for SftpStorageBackend {
     }
 
     async fn download(&self, path: &str) -> Result<Vec<u8>, StorageError> {
-        let normalized = self.normalize_and_validate_path(Path::new(path))
+        let normalized = self
+            .normalize_and_validate_path(Path::new(path))
             .map_err(|e| StorageError::Other(e.to_string()))?;
 
         let (_session, sftp) = self.get_sftp().await?;
@@ -279,19 +278,15 @@ impl StorageBackend for SftpStorageBackend {
         let mut buf = Vec::new();
         let read_fut = file.read_to_end(&mut buf);
         match &self.timeout_config {
-            Some(tc) => {
-                match tokio::time::timeout(tc.read_timeout, read_fut).await {
-                    Ok(Ok(_)) => {},
-                    Ok(Err(e)) => return Err(StorageError::Other(e.to_string())),
-                    Err(_) => return Err(StorageError::NetworkTimeout),
-                }
+            Some(tc) => match tokio::time::timeout(tc.read_timeout, read_fut).await {
+                Ok(Ok(_)) => {}
+                Ok(Err(e)) => return Err(StorageError::Other(e.to_string())),
+                Err(_) => return Err(StorageError::NetworkTimeout),
             },
-            None => {
-                match read_fut.await {
-                    Ok(_) => {},
-                    Err(e) => return Err(StorageError::Other(e.to_string())),
-                }
-            }
+            None => match read_fut.await {
+                Ok(_) => {}
+                Err(e) => return Err(StorageError::Other(e.to_string())),
+            },
         }
 
         self.throttle(buf.len(), start_time).await;
@@ -299,7 +294,8 @@ impl StorageBackend for SftpStorageBackend {
     }
 
     async fn delete(&self, path: &str) -> Result<(), StorageError> {
-        let normalized = self.normalize_and_validate_path(Path::new(path))
+        let normalized = self
+            .normalize_and_validate_path(Path::new(path))
             .map_err(|e| StorageError::Other(e.to_string()))?;
 
         let (_session, sftp) = self.get_sftp().await?;
@@ -323,37 +319,41 @@ impl StorageBackend for SftpStorageBackend {
         // Find the deepest directory to list
         let prefix_path = Path::new(prefix);
         let prefix_str = prefix_path.to_string_lossy().to_string();
-        
+
         let dir_to_list = if prefix.is_empty() || prefix.ends_with('/') {
             prefix.to_string()
         } else {
-            prefix_path.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| "".to_string())
+            prefix_path
+                .parent()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default()
         };
 
-        let normalized_dir = self.normalize_and_validate_path(Path::new(&dir_to_list))
+        let normalized_dir = self
+            .normalize_and_validate_path(Path::new(&dir_to_list))
             .map_err(|e| StorageError::Other(e.to_string()))?;
 
         let (_session, sftp) = self.get_sftp().await?;
 
         let read_dir_fut = sftp.readdir(&normalized_dir);
         let read_dir_res = match &self.timeout_config {
-            Some(tc) => {
-                match tokio::time::timeout(tc.read_timeout, read_dir_fut).await {
-                    Ok(res) => res,
-                    Err(_) => return Err(StorageError::NetworkTimeout),
-                }
+            Some(tc) => match tokio::time::timeout(tc.read_timeout, read_dir_fut).await {
+                Ok(res) => res,
+                Err(_) => return Err(StorageError::NetworkTimeout),
             },
-            None => read_dir_fut.await
+            None => read_dir_fut.await,
         };
 
         let mut results = Vec::new();
         match read_dir_res {
             Ok(entries) => {
                 for (path, _stat) in entries {
-                    if path.file_name() == Some(std::ffi::OsStr::new(".")) || path.file_name() == Some(std::ffi::OsStr::new("..")) {
+                    if path.file_name() == Some(std::ffi::OsStr::new("."))
+                        || path.file_name() == Some(std::ffi::OsStr::new(".."))
+                    {
                         continue;
                     }
-                    
+
                     let filename = path.file_name().unwrap_or_default().to_string_lossy();
                     let relative_path = if dir_to_list.is_empty() {
                         filename.to_string()
@@ -362,7 +362,7 @@ impl StorageBackend for SftpStorageBackend {
                     } else {
                         format!("{}/{}", dir_to_list, filename)
                     };
-                    
+
                     if relative_path.starts_with(&prefix_str) {
                         results.push(relative_path);
                     }
@@ -380,34 +380,31 @@ impl StorageBackend for SftpStorageBackend {
                 }
             }
         }
-        
+
         results.sort();
         Ok(results)
     }
 
     async fn stat(&self, path: &str) -> Result<FileStat, StorageError> {
-        let normalized = self.normalize_and_validate_path(Path::new(path))
+        let normalized = self
+            .normalize_and_validate_path(Path::new(path))
             .map_err(|e| StorageError::Other(e.to_string()))?;
 
         let (_session, sftp) = self.get_sftp().await?;
 
         let stat_fut = sftp.stat(&normalized);
         let stat_res = match &self.timeout_config {
-            Some(tc) => {
-                match tokio::time::timeout(tc.read_timeout, stat_fut).await {
-                    Ok(res) => res,
-                    Err(_) => return Err(StorageError::NetworkTimeout),
-                }
+            Some(tc) => match tokio::time::timeout(tc.read_timeout, stat_fut).await {
+                Ok(res) => res,
+                Err(_) => return Err(StorageError::NetworkTimeout),
             },
-            None => stat_fut.await
+            None => stat_fut.await,
         };
 
         match stat_res {
-            Ok(stat) => {
-                Ok(FileStat {
-                    size: stat.size.unwrap_or(0),
-                })
-            }
+            Ok(stat) => Ok(FileStat {
+                size: stat.size.unwrap_or(0),
+            }),
             Err(e) => {
                 let msg = e.to_string();
                 if msg.contains("no such file") || msg.contains("No such file") {
