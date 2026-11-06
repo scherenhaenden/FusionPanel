@@ -72,7 +72,10 @@ fn test_successful_update() {
     assert_eq!(final_content, new_binary_data);
 
     let recovery_marker = target_file.path().with_extension("recovery-marker");
-    assert!(!recovery_marker.exists(), "Recovery marker should be removed on success");
+    assert!(
+        !recovery_marker.exists(),
+        "Recovery marker should be removed on success"
+    );
 
     bin_mock.assert();
     sig_mock.assert();
@@ -131,7 +134,10 @@ fn test_health_check_timeout_and_rollback() {
     assert_eq!(final_content, old_binary_data);
 
     let recovery_marker = target_file.path().with_extension("recovery-marker");
-    assert!(!recovery_marker.exists(), "Recovery marker should be removed on clean rollback");
+    assert!(
+        !recovery_marker.exists(),
+        "Recovery marker should be removed on clean rollback"
+    );
 
     bin_mock.assert();
     sig_mock.assert();

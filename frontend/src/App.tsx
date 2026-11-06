@@ -1,9 +1,11 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { DashboardLayout } from './components/layout/DashboardLayout';
+import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import WebsitesView from './views/Websites';
 import DatabasesView from './views/Databases';
 import BackupsView from './views/Backups';
 import SecurityRulesUI from './views/Security';
+import LoginView from './views/Login';
 
 function Dashboard() {
   return (
@@ -34,15 +36,19 @@ function Dashboard() {
 function App() {
   return (
     <BrowserRouter>
-      <DashboardLayout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/websites" element={<WebsitesView />} />
-          <Route path="/databases" element={<DatabasesView />} />
-          <Route path="/backups" element={<BackupsView />} />
-          <Route path="/security" element={<SecurityRulesUI />} />
-        </Routes>
-      </DashboardLayout>
+      <Routes>
+        <Route path="/login" element={<LoginView />} />
+
+        <Route element={<ProtectedRoute />}>
+          <Route path="/" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
+          <Route path="/websites" element={<DashboardLayout><WebsitesView /></DashboardLayout>} />
+          <Route path="/databases" element={<DashboardLayout><DatabasesView /></DashboardLayout>} />
+          <Route path="/backups" element={<DashboardLayout><BackupsView /></DashboardLayout>} />
+          <Route path="/security" element={<DashboardLayout><SecurityRulesUI /></DashboardLayout>} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </BrowserRouter>
   );
 }
