@@ -30,7 +30,7 @@ describe('API Client', () => {
       return [401, errorResponse];
     });
 
-    mockAdapter.onPost('/api/v1/auth/login').reply((config) => {
+    mockAdapter.onPost('/v1/auth/login').reply((config) => {
       try {
         const { username, password } = JSON.parse(config.data);
         if (username === 'admin' && password === 'admin') {
@@ -80,7 +80,7 @@ describe('API Client', () => {
     });
   });
 
-  describe('/api/v1/auth/login', () => {
+  describe('/v1/auth/login', () => {
     it('accepts valid credentials without returning a JavaScript-readable token', async () => {
       await expect(api.login({ username: 'admin', password: 'admin' })).resolves.toBeUndefined();
     });

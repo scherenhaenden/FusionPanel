@@ -7,17 +7,17 @@ export const api = {
     return response.data;
   },
 
-  getCapabilities: async (): Promise<CapabilitiesResponse> => {
-    const response = await apiClient.get<CapabilitiesResponse>('/v1/capabilities');
+  getCapabilities: async (): Promise<{ capabilities: string[]; unavailable?: string[] }> => {
+    const response = await apiClient.get<{ capabilities: string[]; unavailable?: string[] }>('/v1/capabilities');
     return response.data;
   },
 
   login: async (payload: { username: string, password: string }): Promise<void> => {
-    await apiClient.post('/api/v1/auth/login', payload);
+    await apiClient.post('/v1/auth/login', payload);
   },
 
   logout: async (): Promise<void> => {
-    await apiClient.post('/api/v1/auth/logout');
+    await apiClient.post('/v1/auth/logout');
   },
 
   // Websites
@@ -39,6 +39,16 @@ export const api = {
 
   createDatabase: async (data: any): Promise<any> => {
     const response = await apiClient.post<any>('/v1/databases', data);
+    return response.data;
+  },
+
+  createDatabaseUser: async (dbName: string, data?: { username?: string }): Promise<any> => {
+    const response = await apiClient.post<any>(`/v1/databases/${dbName}/users`, data || {});
+    return response.data;
+  },
+
+  deleteDatabase: async (dbName: string): Promise<any> => {
+    const response = await apiClient.delete<any>(`/v1/databases/${dbName}`);
     return response.data;
   },
 
