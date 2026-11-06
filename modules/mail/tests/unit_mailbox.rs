@@ -1,4 +1,4 @@
-use mail::models::{
+use mail::domain::{
     AccountState, EmailAddress, EmailAddressError, MailDomain, MailDomainError, MailQuota,
     MailQuotaError, MailboxAccount, PasswordHash, PasswordHashError,
 };

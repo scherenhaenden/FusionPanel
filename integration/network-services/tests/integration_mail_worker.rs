@@ -166,7 +166,7 @@ async fn test_real_disposable_mail_integration() {
         let new_path = format!("{}:{}", bin_dir.display(), old_path);
         std::env::set_var("PATH", &new_path);
 
-        let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
+        let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
         let pool = SqlitePoolOptions::new()
             .connect(&db_url)

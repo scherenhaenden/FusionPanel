@@ -1,4 +1,4 @@
-use crate::domain::{MailAddress, MailDomainName};
+pub use crate::domain::*;
 use crate::error::MailError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
