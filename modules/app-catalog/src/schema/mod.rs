@@ -79,18 +79,110 @@ impl AppTemplate {
             final_values.insert(var_name.clone(), value);
         }
 
-        // Check for any extra variables passed that are not in the schema (optional, depending on requirements, let's just ignore them)
-
-        // Simple string replacement for now.
-        // We will replace ${VAR_NAME} with the value.
-        let mut rendered = self.compose_template.clone();
-        for (k, v) in final_values {
-            let placeholder = format!("${{{}}}", k);
-            rendered = rendered.replace(&placeholder, &v);
+        if let Some(owner) = values.get("OWNER") {
+            final_values
+                .entry("OWNER".to_string())
+                .or_insert_with(|| owner.clone());
         }
 
-        Ok(rendered)
+        render_yaml_template(&self.compose_template, &final_values, false)
     }
+}
+
+pub(crate) fn render_yaml_template(
+    template: &str,
+    values: &HashMap<String, String>,
+    allow_unbraced: bool,
+) -> Result<String, TemplateError> {
+    let mut document: serde_yaml::Value = serde_yaml::from_str(template)
+        .map_err(|error| TemplateError::ParseError(error.to_string()))?;
+    render_yaml_value(&mut document, values, allow_unbraced)?;
+    serde_yaml::to_string(&document).map_err(|error| TemplateError::ParseError(error.to_string()))
+}
+
+fn render_yaml_value(
+    value: &mut serde_yaml::Value,
+    values: &HashMap<String, String>,
+    allow_unbraced: bool,
+) -> Result<(), TemplateError> {
+    match value {
+        serde_yaml::Value::String(scalar) => {
+            *scalar = replace_template_tokens(scalar, values, allow_unbraced);
+        }
+        serde_yaml::Value::Sequence(sequence) => {
+            for item in sequence {
+                render_yaml_value(item, values, allow_unbraced)?;
+            }
+        }
+        serde_yaml::Value::Mapping(mapping) => {
+            for (key, item) in mapping.iter_mut() {
+                if let Some(key) = key.as_str() {
+                    if values.keys().any(|name| {
+                        key.contains(&format!("${{{name}}}"))
+                            || (allow_unbraced && key.contains(&format!("${name}")))
+                    }) {
+                        return Err(TemplateError::ParseError(
+                            "Template variables in YAML mapping keys are not supported".to_string(),
+                        ));
+                    }
+                }
+                render_yaml_value(item, values, allow_unbraced)?;
+            }
+        }
+        serde_yaml::Value::Tagged(tagged) => {
+            render_yaml_value(&mut tagged.value, values, allow_unbraced)?;
+        }
+        serde_yaml::Value::Null | serde_yaml::Value::Bool(_) | serde_yaml::Value::Number(_) => {}
+    }
+    Ok(())
+}
+
+fn replace_template_tokens(
+    template: &str,
+    values: &HashMap<String, String>,
+    allow_unbraced: bool,
+) -> String {
+    let mut rendered = String::new();
+    let mut cursor = 0;
+
+    for (dollar, _) in template.match_indices('$') {
+        if dollar < cursor || (dollar > 0 && template.as_bytes()[dollar - 1] == b'$') {
+            continue;
+        }
+        let after_dollar = dollar + 1;
+        let (name, end) = if template[after_dollar..].starts_with('{') {
+            let name_start = after_dollar + 1;
+            let Some(relative_end) = template[name_start..].find('}') else {
+                continue;
+            };
+            let end = name_start + relative_end + 1;
+            (&template[name_start..end - 1], end)
+        } else if allow_unbraced {
+            let name_start = after_dollar;
+            let mut end = name_start;
+            for (offset, character) in template[name_start..].char_indices() {
+                if character.is_ascii_alphanumeric() || character == '_' {
+                    end = name_start + offset + character.len_utf8();
+                } else {
+                    break;
+                }
+            }
+            if end == name_start {
+                continue;
+            }
+            (&template[name_start..end], end)
+        } else {
+            continue;
+        };
+
+        if let Some(value) = values.get(name) {
+            rendered.push_str(&template[cursor..dollar]);
+            rendered.push_str(&value.replace('$', "$$"));
+            cursor = end;
+        }
+    }
+    rendered.push_str(&template[cursor..]);
+    rendered
 }
 
 #[cfg(test)]
@@ -178,11 +270,57 @@ compose_template: |
         values.insert("VAR1".to_string(), "val1".to_string());
 
         let result = template.render(&values).unwrap();
-        assert_eq!(result, "VAR1 is val1 and VAR2 is default_val");
+        assert_eq!(
+            serde_yaml::from_str::<String>(&result).unwrap(),
+            "VAR1 is val1 and VAR2 is default_val"
+        );
 
         values.insert("VAR2".to_string(), "override".to_string());
         let result2 = template.render(&values).unwrap();
-        assert_eq!(result2, "VAR1 is val1 and VAR2 is override");
+        assert_eq!(
+            serde_yaml::from_str::<String>(&result2).unwrap(),
+            "VAR1 is val1 and VAR2 is override"
+        );
+    }
+
+    #[test]
+    fn test_variable_values_cannot_change_compose_yaml_structure() {
+        let template = AppTemplate {
+            name: "Test".to_string(),
+            version: "1.0".to_string(),
+            category: "Test".to_string(),
+            install_modes: vec![],
+            unsupported_hardware: vec![],
+            variables: {
+                let mut variables = HashMap::new();
+                variables.insert(
+                    "VALUE".to_string(),
+                    Variable {
+                        description: None,
+                        required: true,
+                        default: None,
+                        regex_validation: None,
+                    },
+                );
+                variables
+            },
+            volumes: vec![],
+            compose_template: "services:\n  app:\n    labels:\n      value: \"${VALUE}\"\n"
+                .to_string(),
+        };
+        let values = HashMap::from([(
+            "VALUE".to_string(),
+            "safe\n  privileged: true ${LATE}".to_string(),
+        )]);
+
+        let rendered = template.render(&values).unwrap();
+        let document: serde_yaml::Value = serde_yaml::from_str(&rendered).unwrap();
+        let labels = &document["services"]["app"]["labels"];
+        assert_eq!(
+            labels["value"].as_str(),
+            Some("safe\n  privileged: true $${LATE}")
+        );
+        assert!(document.get("privileged").is_none());
     }
 
     #[test]
