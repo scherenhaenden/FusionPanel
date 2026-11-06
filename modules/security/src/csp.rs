@@ -44,37 +44,104 @@ impl CspPolicy {
             let mut has_nonce_or_hash = false;
 
             for value in &directive.values {
-                if value.contains('\n') || value.contains('\r') || value.contains(';') {
+                if value.contains('\n')
+                    || value.contains('\r')
+                    || value.contains(';')
+                    || value.contains(' ')
+                    || value.contains('\t')
+                {
+                    if value.contains("'unsafe-inline'") {
+                        return Err(CspError::UnsafeInline(
+                            "'unsafe-inline'".into(),
+                            directive.name.clone(),
+                        ));
+                    }
                     return Err(CspError::InvalidCharacters(
                         value.clone(),
                         directive.name.clone(),
                     ));
                 }
 
-                for token in value.split_whitespace() {
-                    if token == "'unsafe-inline'" {
-                        has_unsafe_inline = true;
-                    } else if let Some(rest) = token.strip_prefix("'nonce-") {
-                        if let Some(b64) = rest.strip_suffix('\'') {
-                            let is_valid_base64 = !b64.is_empty() && b64.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '-' || c == '_' || c == '=');
-                            if !is_valid_base64 {
-                                return Err(CspError::InvalidCharacters(value.clone(), directive.name.clone()));
-                            }
-                            has_nonce_or_hash = true;
-                        } else {
-                            return Err(CspError::InvalidCharacters(value.clone(), directive.name.clone()));
+                let token = value;
+                if token == "'unsafe-inline'" {
+                    has_unsafe_inline = true;
+                } else if token == "'unsafe-eval'"
+                    || token == "'strict-dynamic'"
+                    || token == "'unsafe-hashes'"
+                    || token == "'report-sample'"
+                    || token == "'unsafe-allow-redirects'"
+                    || token == "'wasm-unsafe-eval'"
+                    || token == "'self'"
+                    || token == "'none'"
+                    || token.starts_with("http://")
+                    || token.starts_with("https://")
+                    || token.starts_with("ws://")
+                    || token.starts_with("wss://")
+                    || token.starts_with("data:")
+                    || token.starts_with("blob:")
+                    || token.starts_with("mediastream:")
+                    || token.starts_with("filesystem:")
+                    || !token.starts_with('\'')
+                    || token == "*"
+                {
+                    // Do nothing, valid token
+                } else if let Some(rest) = token.strip_prefix("'nonce-") {
+                    if let Some(b64) = rest.strip_suffix('\'') {
+                        let is_valid_base64 = !b64.is_empty()
+                            && b64.chars().all(|c| {
+                                c.is_ascii_alphanumeric()
+                                    || c == '+'
+                                    || c == '/'
+                                    || c == '-'
+                                    || c == '_'
+                                    || c == '='
+                            });
+                        if !is_valid_base64 {
+                            return Err(CspError::InvalidCharacters(
+                                value.clone(),
+                                directive.name.clone(),
+                            ));
                         }
-                    } else if let Some(rest) = token.strip_prefix("'sha256-").or_else(|| token.strip_prefix("'sha384-")).or_else(|| token.strip_prefix("'sha512-")) {
-                        if let Some(b64) = rest.strip_suffix('\'') {
-                            let is_valid_base64 = !b64.is_empty() && b64.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '-' || c == '_' || c == '=');
-                            if !is_valid_base64 {
-                                return Err(CspError::InvalidCharacters(value.clone(), directive.name.clone()));
-                            }
-                            has_nonce_or_hash = true;
-                        } else {
-                            return Err(CspError::InvalidCharacters(value.clone(), directive.name.clone()));
-                        }
+                        has_nonce_or_hash = true;
+                    } else {
+                        return Err(CspError::InvalidCharacters(
+                            value.clone(),
+                            directive.name.clone(),
+                        ));
                     }
+                } else if let Some(rest) = token
+                    .strip_prefix("'sha256-")
+                    .or_else(|| token.strip_prefix("'sha384-"))
+                    .or_else(|| token.strip_prefix("'sha512-"))
+                {
+                    if let Some(b64) = rest.strip_suffix('\'') {
+                        let is_valid_base64 = !b64.is_empty()
+                            && b64.chars().all(|c| {
+                                c.is_ascii_alphanumeric()
+                                    || c == '+'
+                                    || c == '/'
+                                    || c == '-'
+                                    || c == '_'
+                                    || c == '='
+                            });
+                        if !is_valid_base64 {
+                            return Err(CspError::InvalidCharacters(
+                                value.clone(),
+                                directive.name.clone(),
+                            ));
+                        }
+                        has_nonce_or_hash = true;
+                    } else {
+                        return Err(CspError::InvalidCharacters(
+                            value.clone(),
+                            directive.name.clone(),
+                        ));
+                    }
+                } else {
+                    return Err(CspError::InvalidCharacters(
+                        value.clone(),
+                        directive.name.clone(),
+                    ));
                 }
             }
 
