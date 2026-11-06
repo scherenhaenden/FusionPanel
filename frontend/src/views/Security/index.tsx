@@ -1,15 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { api } from '../../api';
 
-const initialRules = [
-  { id: 1, port: '80', protocol: 'TCP', sourceCidr: '0.0.0.0/0', action: 'Allow', priority: 100 },
-  { id: 2, port: '443', protocol: 'TCP', sourceCidr: '0.0.0.0/0', action: 'Allow', priority: 110 },
-  { id: 3, port: '22', protocol: 'TCP', sourceCidr: '192.168.1.0/24', action: 'Allow', priority: 120 }
-];
+interface SecurityRule {
+  id?: number | string;
+  port: string;
+  protocol: string;
+  sourceCidr: string;
+  action: string;
+  priority: number;
+}
 
 export default function SecurityRulesUI() {
-  const [rules, setRules] = useState(initialRules);
+  const [rules, setRules] = useState<SecurityRule[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showSshWarning, setShowSshWarning] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const loadRules = async () => {
+    setIsLoading(true);
+    setApiError(null);
+    try {
+      const data = await api.getSecurityRules();
+      setRules(data || []);
+    } catch (e: any) {
+      setApiError(e?.response?.data?.error?.message || e.message || 'Failed to load security rules');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRules();
+  }, []);
 
   // Form State
   const [port, setPort] = useState('');
@@ -57,7 +80,7 @@ export default function SecurityRulesUI() {
     }
   };
 
-  const handleAddRule = (e: React.FormEvent) => {
+  const handleAddRule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validatePort(port)) {
       setError('Invalid port or port range. Must be 1-65535 or a valid range (e.g., 8000-8080).');
@@ -65,8 +88,8 @@ export default function SecurityRulesUI() {
     }
 
     setError('');
+    setApiError(null);
     const newRule = {
-      id: Date.now(),
       port,
       protocol,
       sourceCidr: sourceCidr || '0.0.0.0/0',
@@ -74,21 +97,28 @@ export default function SecurityRulesUI() {
       priority: parseInt(priority, 10) || 100
     };
 
-    setRules([...rules, newRule]);
-    setIsModalOpen(false);
+    try {
+      const createdRule = await api.addSecurityRule(newRule);
+      setRules([...rules, createdRule]);
+      setIsModalOpen(false);
 
-    // Reset form
-    setPort('');
-    setProtocol('TCP');
-    setSourceCidr('');
-    setAction('Allow');
-    setPriority('');
-    setShowSshWarning(false);
+      // Reset form
+      setPort('');
+      setProtocol('TCP');
+      setSourceCidr('');
+      setAction('Allow');
+      setPriority('');
+      setShowSshWarning(false);
+    } catch (e: any) {
+      setApiError(e?.response?.data?.error?.message || e.message || 'Failed to add security rule');
+    }
   };
 
   return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
       <h1>Security & Firewall Rules</h1>
+
+      {apiError && <div className="error-banner text-red-500 mb-4">{apiError} <button onClick={loadRules} className="underline ml-2">Retry</button></div>}
 
       {showSshWarning && (
         <div style={{ backgroundColor: '#ffcccc', color: '#cc0000', padding: '10px', marginBottom: '20px', borderRadius: '4px', border: '1px solid #cc0000' }}>
@@ -149,28 +179,37 @@ export default function SecurityRulesUI() {
         </div>
       )}
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-        <thead>
-          <tr style={{ borderBottom: '2px solid #ddd' }}>
-            <th style={{ padding: '10px' }}>Port</th>
-            <th>Protocol</th>
-            <th>Source CIDR</th>
-            <th>Action</th>
-            <th>Priority</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rules.map(rule => (
-            <tr key={rule.id} style={{ borderBottom: '1px solid #eee' }}>
-              <td style={{ padding: '10px' }}>{rule.port}</td>
-              <td>{rule.protocol}</td>
-              <td>{rule.sourceCidr}</td>
-              <td>{rule.action}</td>
-              <td>{rule.priority}</td>
+      {isLoading ? (
+        <div>Loading...</div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid #ddd' }}>
+              <th style={{ padding: '10px' }}>Port</th>
+              <th>Protocol</th>
+              <th>Source CIDR</th>
+              <th>Action</th>
+              <th>Priority</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rules.map(rule => (
+              <tr key={rule.id || Math.random()} style={{ borderBottom: '1px solid #eee' }}>
+                <td style={{ padding: '10px' }}>{rule.port}</td>
+                <td>{rule.protocol}</td>
+                <td>{rule.sourceCidr}</td>
+                <td>{rule.action}</td>
+                <td>{rule.priority}</td>
+              </tr>
+            ))}
+            {rules.length === 0 && (
+              <tr>
+                <td colSpan={5} style={{ padding: '10px', textAlign: 'center' }}>No security rules found.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

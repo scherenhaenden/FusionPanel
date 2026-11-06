@@ -173,6 +173,10 @@ impl FirewallPolicy {
                 }
             }
 
+            if ssh_allowed.is_some() {
+                continue;
+            }
+
             let port_matches = match rule.port_range {
                 Some(ref pr) => pr.start <= ssh_listen_port && pr.end >= ssh_listen_port,
                 None => true,
@@ -180,17 +184,18 @@ impl FirewallPolicy {
 
             let protocol_matches = rule.protocol == Protocol::Tcp;
 
-            if port_matches && protocol_matches
-                && ssh_allowed.is_none() {
-                    match rule.action {
-                        Action::Allow => ssh_allowed = Some(true),
-                        Action::Deny => {
-                            if rule.source_ip.is_none() {
-                                ssh_allowed = Some(false);
-                            }
+            if port_matches && protocol_matches {
+                match rule.action {
+                    Action::Allow => {
+                        ssh_allowed = Some(true);
+                    }
+                    Action::Deny => {
+                        if rule.source_ip.is_none() {
+                            ssh_allowed = Some(false);
                         }
                     }
                 }
+            }
         }
 
         let is_allowed = ssh_allowed.unwrap_or(self.default_action == Action::Allow);

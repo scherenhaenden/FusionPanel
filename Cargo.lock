@@ -506,6 +506,11 @@ dependencies = [
 [[package]]
 name = "fusionpanel-domain"
 version = "0.1.0-dev.1"
+dependencies = [
+ "serde",
+ "thiserror",
+ "uuid",
+]
 
 [[package]]
 name = "fusionpanel-jobs"

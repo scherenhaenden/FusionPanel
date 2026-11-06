@@ -213,6 +213,96 @@ fn test_webhook_delivery_failure() {
 }
 
 #[test]
+fn test_webhook_delivery_connection_refused() {
+    let url = "http://127.0.0.1:0/alert".to_string(); // Invalid port will result in connection failure
+    let alert = Alert {
+        id: "conn-refused".into(),
+        title: "Socket Fail".into(),
+        description: "Testing connection refused".into(),
+        severity: AlertSeverity::Warning,
+        source: "tests".into(),
+        timestamp: 11111,
+    };
+
+    let delivery = WebhookDelivery { url };
+    let res = delivery.deliver(&alert);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_webhook_delivery_succeeds_after_endpoint_recovers() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let url = format!("http://127.0.0.1:{}/alert", port);
+
+    let (tx1, rx1) = std::sync::mpsc::channel();
+    let (tx2, rx2) = std::sync::mpsc::channel();
+
+    thread::spawn(move || {
+        // First connection: Simulate failure
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0; 4096];
+            let n = stream.read(&mut buf).unwrap();
+            let request_str = String::from_utf8_lossy(&buf[..n]).to_string();
+            tx1.send(request_str).unwrap();
+
+            let response = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 5\r\n\r\nError";
+            let _ = stream.write_all(response.as_bytes());
+        }
+
+        // Second connection: Simulate recovery
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0; 4096];
+            let n = stream.read(&mut buf).unwrap();
+            let request_str = String::from_utf8_lossy(&buf[..n]).to_string();
+            tx2.send(request_str).unwrap();
+
+            let response = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+            let _ = stream.write_all(response.as_bytes());
+        }
+    });
+
+    thread::sleep(Duration::from_millis(50));
+
+    let alert = Alert {
+        id: "recovery-alert".into(),
+        title: "Webhook Recovery".into(),
+        description: "Testing delivery recovery".into(),
+        severity: AlertSeverity::Info,
+        source: "tests".into(),
+        timestamp: 12345,
+    };
+
+    let delivery = WebhookDelivery { url };
+
+    // First attempt fails
+    let res1 = delivery.deliver(&alert);
+    assert!(res1.is_err());
+
+    let req1 = rx1.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert!(req1.starts_with("POST /alert HTTP/1.1\r\n"));
+    assert!(req1
+        .to_lowercase()
+        .contains("content-type: application/json"));
+
+    // Second attempt succeeds
+    let res2 = delivery.deliver(&alert);
+    assert!(res2.is_ok());
+
+    let req2 = rx2.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert!(req2.starts_with("POST /alert HTTP/1.1\r\n"));
+    assert!(req2
+        .to_lowercase()
+        .contains("content-type: application/json"));
+
+    let body_start = req2.find("\r\n\r\n").unwrap() + 4;
+    let body = &req2[body_start..];
+    let parsed: Alert = serde_json::from_str(body).unwrap();
+    assert_eq!(parsed.id, "recovery-alert");
+    assert_eq!(parsed.title, "Webhook Recovery");
+}
+
+#[test]
 fn test_alert_thresholds() {
     let rule_gt = AlertRule {
         metric_name: "cpu".into(),

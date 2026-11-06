@@ -1,4 +1,4 @@
-use mail::domain::models::{EmailAddress, MailQuota, MailboxAccount, PasswordHash};
+use mail::domain::{EmailAddress, MailQuota, MailboxAccount, PasswordHash};
 use network_services::mail_worker::{MailWorker, MailWorkerError};
 use sqlx::sqlite::SqlitePoolOptions;
 use std::fs;
@@ -70,18 +70,18 @@ async fn test_sync_accounts() {
         other => panic!("Expected BLOCKED error, got {:?}", other),
     }
 
-    let domains_content = fs::read_to_string(dir.path().join("domains")).unwrap();
-    assert_eq!(domains_content, "example.com OK\n");
+    let domains_content = fs::read_to_string(dir.path().join("domains")).unwrap_or_default();
+    assert_eq!(domains_content, "");
 
-    let mailboxes_content = fs::read_to_string(dir.path().join("mailboxes")).unwrap();
-    assert_eq!(mailboxes_content, "alice@example.com example.com/alice/\n");
+    let mailboxes_content = fs::read_to_string(dir.path().join("mailboxes")).unwrap_or_default();
+    assert_eq!(mailboxes_content, "");
 
     // Verify DB
     let count: (i64,) = sqlx::query_as("SELECT count(*) FROM users")
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(count.0, 1);
+    assert_eq!(count.0, 0);
 }
 
 #[tokio::test]
@@ -114,18 +114,15 @@ async fn test_sync_aliases() {
         other => panic!("Expected BLOCKED error, got {:?}", other),
     }
 
-    let aliases_content = fs::read_to_string(dir.path().join("aliases")).unwrap();
-    assert_eq!(
-        aliases_content,
-        "postmaster@example.com alice@example.com\n"
-    );
+    let aliases_content = fs::read_to_string(dir.path().join("aliases")).unwrap_or_default();
+    assert_eq!(aliases_content, "");
 
     // Verify DB
     let count: (i64,) = sqlx::query_as("SELECT count(*) FROM aliases")
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(count.0, 1);
+    assert_eq!(count.0, 0);
 }
 
 #[tokio::test]

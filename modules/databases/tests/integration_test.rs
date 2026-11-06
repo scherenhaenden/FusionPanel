@@ -54,15 +54,37 @@ async fn test_mariadb_adapter() -> Result<()> {
         .await?;
     adapter.apply_create_database(&plan).await?;
 
+    let duplicate_plan = adapter
+        .plan_create_database(db_name.clone(), user_name.clone())
+        .await?;
+
+    let dup_res = adapter.apply_create_database(&duplicate_plan).await;
+    assert!(dup_res.is_err(), "Duplicate database creation should fail");
+    if let Err(DatabaseError::Conflict(_)) = dup_res {
+        // Ok
+    } else {
+        panic!("Expected Conflict error on duplicate database creation, got {:?}", dup_res);
+    }
+
+    let exists = adapter.database_exists(&db_name).await?;
+    assert!(exists, "Database should exist");
+
+    let dbs = adapter.list_databases().await?;
+    assert!(dbs.iter().any(|d| d.name == db_name), "Database should be in list");
+    assert!(!dbs.iter().any(|d| d.name.0 == "information_schema" || d.name.0 == "mysql" || d.name.0 == "performance_schema" || d.name.0 == "sys"), "System schemas should not be in list");
+
     let plan = adapter
         .plan_create_user(user_name.clone(), temp_pass.clone())
         .await?;
     adapter.apply_create_user(&plan).await?;
 
     let plan = adapter
-        .plan_grant(db_name.clone(), user_name.clone(), vec!["SELECT".into()])
+        .plan_grant(db_name.clone(), user_name.clone(), vec!["SELECT".into(), "INSERT".into()])
         .await?;
     adapter.apply_grant(&plan).await?;
+
+    let u_exists = adapter.user_exists(&user_name).await?;
+    assert!(u_exists, "User should exist");
 
     // Connect as the new user to create a table and insert a record
     let user_mysql = tokio::process::Command::new("mysql")
@@ -83,6 +105,21 @@ async fn test_mariadb_adapter() -> Result<()> {
             String::from_utf8_lossy(&user_mysql.stderr)
         )));
     }
+
+    let other_db_name = DbName("mysql".to_string());
+    let user_other_mysql = tokio::process::Command::new("mysql")
+        .arg(&other_db_name.0)
+        .arg(format!("--user={}", user_name.0))
+        .env("MYSQL_PWD", &temp_pass.0)
+        .arg(format!("--host={}", host))
+        .arg(format!("--port={}", port))
+        .arg("-e")
+        .arg("SELECT 1;")
+        .output()
+        .await
+        .map_err(|e| DatabaseError::OperationFailed(format!("Failed to connect as user to other db: {}", e)))?;
+
+    assert!(!user_other_mysql.status.success(), "User should not be able to access another database");
 
     let dump_path = format!("/tmp/{}.sql", db_name.0);
     let plan = adapter
@@ -187,10 +224,32 @@ async fn test_postgres_adapter() -> Result<()> {
         .await?;
     adapter.apply_create_database(&plan).await?;
 
+    let duplicate_plan = adapter
+        .plan_create_database(db_name.clone(), user_name.clone())
+        .await?;
+
+    let dup_res = adapter.apply_create_database(&duplicate_plan).await;
+    assert!(dup_res.is_err(), "Duplicate database creation should fail");
+    if let Err(DatabaseError::Conflict(_)) = dup_res {
+        // Ok
+    } else {
+        panic!("Expected Conflict error on duplicate database creation, got {:?}", dup_res);
+    }
+
+    let exists = adapter.database_exists(&db_name).await?;
+    assert!(exists, "Database should exist");
+
+    let dbs = adapter.list_databases().await?;
+    assert!(dbs.iter().any(|d| d.name == db_name), "Database should be in list");
+    assert!(!dbs.iter().any(|d| d.name.0 == "postgres" || d.name.0.starts_with("template")), "System schemas should not be in list");
+
     let plan = adapter
-        .plan_grant(db_name.clone(), user_name.clone(), vec!["SELECT".into()])
+        .plan_grant(db_name.clone(), user_name.clone(), vec!["SELECT".into(), "INSERT".into()])
         .await?;
     adapter.apply_grant(&plan).await?;
+
+    let u_exists = adapter.user_exists(&user_name).await?;
+    assert!(u_exists, "User should exist");
 
     // Connect as the new user to create a table and insert a record
     let user_psql = tokio::process::Command::new("psql")
@@ -215,6 +274,25 @@ async fn test_postgres_adapter() -> Result<()> {
             String::from_utf8_lossy(&user_psql.stderr)
         )));
     }
+
+    let other_db_name = DbName("postgres".to_string());
+    let user_other_psql = tokio::process::Command::new("psql")
+        .arg("-d")
+        .arg(&other_db_name.0)
+        .arg("-U")
+        .arg(&user_name.0)
+        .arg("-h")
+        .arg(&host)
+        .arg("-p")
+        .arg(&port.to_string())
+        .arg("-c")
+        .arg("SELECT 1;")
+        .env("PGPASSWORD", &temp_pass.0)
+        .output()
+        .await
+        .map_err(|e| DatabaseError::OperationFailed(format!("Failed to connect as user to other db: {}", e)))?;
+
+    assert!(!user_other_psql.status.success(), "User should not be able to access another database");
 
     let dump_path = format!("/tmp/{}.sql", db_name.0);
     let plan = adapter

@@ -1,8 +1,5 @@
 #![forbid(unsafe_code)]
 
-
-
-
 use backup_destinations::sftp::{AuthMethod, SftpError, SftpStorageBackend};
 use std::path::{Path, PathBuf};
 
@@ -151,15 +148,17 @@ async fn test_sftp_integration_blocked() {
             sshd_available = true;
         }
     }
-    
+
     if !sshd_available {
         println!("BLOCKED: sshd is not available. To run this test, install openssh-server.");
         return;
     }
-    
+
     // In an unprivileged container, setting up sshd requires specific configuration,
     // port mapping, and root access to create host keys, which is typically BLOCKED.
-    println!("BLOCKED: Running a real local SFTP service inside this unprivileged container is blocked.");
+    println!(
+        "BLOCKED: Running a real local SFTP service inside this unprivileged container is blocked."
+    );
     println!("To reproduce the SFTP tests locally, ensure you have an sshd running and configure credentials appropriately.");
     println!("Command to run a local test sshd (requires root/sudo):");
     println!("  sudo /usr/sbin/sshd -p 2222 -f /etc/ssh/sshd_config");
@@ -178,21 +177,22 @@ async fn test_sftp_integration_coverage() {
     if sshd_available {
         let base_dir = std::env::temp_dir().join("sftp_test_base");
         std::fs::create_dir_all(&base_dir).unwrap();
-        
+
         let backend = SftpStorageBackend::new(
             "127.0.0.1".to_string(),
             2222,
             "testuser".to_string(),
             AuthMethod::Password("testpass".to_string()),
             base_dir.clone(),
-        ).unwrap();
+        )
+        .unwrap();
 
         let upload_res = backend.upload("integration_test.txt", vec![1, 2, 3]).await;
         if let Err(e) = upload_res {
             assert!(
-                e == backup_destinations::traits::StorageError::NetworkTimeout ||
-                e == backup_destinations::traits::StorageError::AuthenticationFailed ||
-                matches!(e, backup_destinations::traits::StorageError::Other(_))
+                e == backup_destinations::traits::StorageError::NetworkTimeout
+                    || e == backup_destinations::traits::StorageError::AuthenticationFailed
+                    || matches!(e, backup_destinations::traits::StorageError::Other(_))
             );
         }
     } else {
@@ -214,9 +214,13 @@ async fn test_sftp_integration_round_trip() {
             "127.0.0.1".to_string(),
             2222,
             "testuser".to_string(),
-            AuthMethod::PrivateKey { key: "private_key".to_string(), passphrase: None },
+            AuthMethod::PrivateKey {
+                key: "private_key".to_string(),
+                passphrase: None,
+            },
             PathBuf::from("/tmp/sftp_test"),
-        ).unwrap();
+        )
+        .unwrap();
     }
 }
 
@@ -228,7 +232,8 @@ async fn test_sftp_integration_symlink_escape() {
         "testuser".to_string(),
         AuthMethod::Password("testpass".to_string()),
         PathBuf::from("/tmp/sftp_test"),
-    ).unwrap();
+    )
+    .unwrap();
 
     let res = backend.upload("../escape.txt", vec![]).await;
     assert!(res.is_err());
@@ -240,19 +245,24 @@ async fn test_sftp_integration_timeout() {
     use std::time::Duration;
 
     let backend = SftpStorageBackend::new(
-        "10.255.255.1".to_string(), 
+        "10.255.255.1".to_string(),
         2222,
         "testuser".to_string(),
         AuthMethod::Password("testpass".to_string()),
         PathBuf::from("/tmp/sftp_test"),
-    ).unwrap().with_timeouts(TimeoutConfig {
+    )
+    .unwrap()
+    .with_timeouts(TimeoutConfig {
         connect_timeout: Duration::from_millis(100),
         read_timeout: Duration::from_millis(100),
         write_timeout: Duration::from_millis(100),
     });
 
     let res = backend.upload("test.txt", vec![]).await;
-    assert_eq!(res.unwrap_err(), backup_destinations::traits::StorageError::NetworkTimeout);
+    assert_eq!(
+        res.unwrap_err(),
+        backup_destinations::traits::StorageError::NetworkTimeout
+    );
 }
 
 #[tokio::test]
@@ -263,7 +273,8 @@ async fn test_sftp_integration_listing_stat() {
         "testuser".to_string(),
         AuthMethod::Password("testpass".to_string()),
         PathBuf::from("/tmp/sftp_test"),
-    ).unwrap();
+    )
+    .unwrap();
 
     let _ = backend.list("").await;
 }

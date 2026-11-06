@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 #[path = "common/blocked_driver.rs"]
 mod blocked_driver;
 

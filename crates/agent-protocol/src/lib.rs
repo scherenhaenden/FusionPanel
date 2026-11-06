@@ -1,14 +1,10 @@
 #![forbid(unsafe_code)]
 
-//! Versioned node operation envelopes and lexical input validation.
-//!
-//! Runtime agents must still enforce filesystem ownership and symlink-safe access.
-//! Lexical document-root validation does not establish filesystem containment.
-
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
     pub version: u32,
@@ -17,8 +13,8 @@ pub struct Request {
     pub operation: Operation,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "operation", content = "payload")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "operation", content = "payload", deny_unknown_fields)]
 pub enum Operation {
     #[serde(rename = "system.info")]
     SystemInfo(SystemInfoPayload),
@@ -26,18 +22,18 @@ pub enum Operation {
     SiteValidate(SiteValidatePayload),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct SystemInfoPayload {}
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct SiteValidatePayload {
     pub domain: String,
     pub document_root: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Response {
     pub version: u32,
@@ -46,45 +42,32 @@ pub struct Response {
     pub result: ResponseResult,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum ResponseResult {
-    Result(serde_json::Value),
-    Error(ErrorObject),
+    Result(Value),
+    Error(ResponseError),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub struct ErrorObject {
+pub struct ResponseError {
     pub code: String,
     pub message: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ValidationError {
     UnsupportedVersion,
     InvalidDomain,
     InvalidDocumentRoot,
 }
 
-impl std::fmt::Display for ValidationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnsupportedVersion => write!(f, "unsupported version"),
-            Self::InvalidDomain => write!(f, "invalid domain"),
-            Self::InvalidDocumentRoot => write!(f, "invalid document root"),
-        }
-    }
-}
-
-impl std::error::Error for ValidationError {}
-
 impl Request {
     pub fn validate(&self) -> Result<(), ValidationError> {
         if self.version != 1 {
             return Err(ValidationError::UnsupportedVersion);
         }
-
         match &self.operation {
             Operation::SystemInfo(_) => Ok(()),
             Operation::SiteValidate(payload) => payload.validate(),

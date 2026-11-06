@@ -1,0 +1,13 @@
+[workspace]
+
+[package]
+name = "e2e-migration"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+publish = false
+
+[dependencies]
+migration = { path = "../../../modules/migration" }
+rusqlite = { version = "0.31", features = ["bundled"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
