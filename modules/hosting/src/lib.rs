@@ -54,6 +54,7 @@ pub mod acme;
 pub mod vhost;
 pub mod upstream;
 pub mod compression;
+pub mod php_tuning;
 
 #[cfg(test)]
 mod user_tests {
