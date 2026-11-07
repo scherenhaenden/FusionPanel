@@ -39,6 +39,15 @@ impl DatabaseAdapter for MockAdapter {
     async fn check_connection(&self) -> DbResult<()> {
         Ok(())
     }
+    async fn database_exists(&self, _name: &DbName) -> DbResult<bool> {
+        Ok(true)
+    }
+    async fn list_databases(&self) -> DbResult<Vec<databases::adapter::ObservedDatabase>> {
+        Ok(vec![])
+    }
+    async fn user_exists(&self, _username: &DbUser) -> DbResult<bool> {
+        Ok(true)
+    }
     async fn plan_create_database(&self, name: DbName, owner: DbUser) -> DbResult<CreateDbPlan> {
         Ok(CreateDbPlan {
             db_name: name,

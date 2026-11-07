@@ -1,5 +1,7 @@
 # Delivery Plan: 1–11 November 2026
 
+Schedule new work using the [product delivery priorities](PRODUCT_DELIVERY_PLAN.md). The active sequence is core, installation and administration, module management, then websites. This document retains the package ownership, dependencies, and original November targets.
+
 ## Objective and deadline
 
 Use Jules through 11 November 2026 to implement and qualify FusionPanel's combined capability scope. All dates use Europe/Berlin. The provider's exact access cutoff is unknown: target the final complete candidate and recoverable artifacts for **10 November, 18:00**, and reserve 11 November for correction and handoff. No claim is made that 162 broad capabilities can be proven production-ready within this window merely by launching more sessions.
