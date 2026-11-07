@@ -25,10 +25,26 @@ async fn setup_app() -> (axum::Router, Arc<QuotaEngine>) {
     let inv_file = NamedTempFile::new().unwrap();
     let invitations = Arc::new(Mutex::new(DurableInvitations::new(inv_file.path().to_path_buf())));
 
+    let operators = Arc::new(Mutex::new(vec![
+        integration_administration::routes::Operator {
+            id: Uuid::new_v4(),
+            username: "admin".to_string(),
+            role: "system_admin".to_string(),
+            token: "op-system-admin-token".to_string(),
+        },
+        integration_administration::routes::Operator {
+            id: Uuid::new_v4(),
+            username: "viewer".to_string(),
+            role: "viewer".to_string(),
+            token: "op-viewer-token".to_string(),
+        }
+    ]));
+
     let state = AppState {
         quotas: quotas.clone(),
         audit,
         invitations,
+        operators,
         admin_token: Arc::new("secret-admin-token".to_string()),
     };
     (router(state), quotas)
@@ -244,4 +260,75 @@ async fn test_invitation_revocation_durable_survives_reload() {
         assert!(reloaded_store.get_mut(&inv_id).is_none());
         assert!(reloaded_store.remove(&inv_id).unwrap().is_none());
     }
+}
+
+#[tokio::test]
+async fn test_rbac_system_admin_only() {
+    let (app, _) = setup_app().await;
+
+    // Viewer should be forbidden
+    let res = app.clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/v1/admin/users")
+                .header(AUTHORIZATION, "Bearer op-viewer-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+    // System admin should be allowed
+    let res = app.clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/v1/admin/users")
+                .header(AUTHORIZATION, "Bearer op-system-admin-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_audit_query_and_invitations() {
+    let (app, _) = setup_app().await;
+
+    // test GET /api/v1/admin/audit
+    let res = app.clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/v1/admin/audit")
+                .header(AUTHORIZATION, "Bearer op-system-admin-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // test POST /api/v1/admin/invitations
+    let res = app.clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/admin/invitations")
+                .header(AUTHORIZATION, "Bearer op-system-admin-token")
+                .header("Content-Type", "application/json")
+                .body(Body::from(json!({
+                    "tenant_id": Uuid::new_v4(),
+                    "role": "Admin",
+                    "ttl_seconds": 3600
+                }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
 }
