@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use mail::dmarc::*;
 use mail::dmarc::{evaluate_dmarc, check_alignment, is_subdomain_or_exact};
 use serde_json;
