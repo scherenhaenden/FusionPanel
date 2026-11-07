@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use dns::dnssec_mgr::{KeyType, DnssecKeySpec, validate_rollover, format_ds_record};
 use dns::domain::DomainName;
 
