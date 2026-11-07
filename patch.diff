@@ -1,21 +1,28 @@
 <<<<<<< SEARCH
-if [ -e "$BIN_DIR/fusionpanel-api" ]; then
-    cp -P "$BIN_DIR/fusionpanel-api" "$BACKUP_DIR/bin/fusionpanel-api"
-fi
-if [ -e "$BIN_DIR/fusionpanel-agent" ]; then
-    cp -P "$BIN_DIR/fusionpanel-agent" "$BACKUP_DIR/bin/fusionpanel-agent"
-fi
-if [ -d "$CONFIG_DIR" ]; then
-    cp -a "$CONFIG_DIR/"* "$BACKUP_DIR/config/" 2>/dev/null || true
-fi
+pub fn is_subdomain_or_exact(child: &str, parent: &str) -> bool {
+    if child.eq_ignore_ascii_case(parent) {
+        return true;
+    }
+    if child.len() > parent.len() && child.ends_with(parent) {
+        let prefix_len = child.len() - parent.len();
+        if child.as_bytes()[prefix_len - 1] == b'.' {
+            return true;
+        }
+    }
+    false
+}
 =======
-if [ -e "$BIN_DIR/fusionpanel-api" ]; then
-    cp -L "$BIN_DIR/fusionpanel-api" "$BACKUP_DIR/bin/fusionpanel-api"
-fi
-if [ -e "$BIN_DIR/fusionpanel-agent" ]; then
-    cp -L "$BIN_DIR/fusionpanel-agent" "$BACKUP_DIR/bin/fusionpanel-agent"
-fi
-if [ -d "$CONFIG_DIR" ]; then
-    cp -a "$CONFIG_DIR/." "$BACKUP_DIR/config/" 2>/dev/null || true
-fi
+pub fn is_subdomain_or_exact(child: &str, parent: &str) -> bool {
+    if child.eq_ignore_ascii_case(parent) {
+        return true;
+    }
+    if child.len() > parent.len() {
+        let prefix_len = child.len() - parent.len();
+        if child.as_bytes()[prefix_len - 1] == b'.'
+            && child[prefix_len..].eq_ignore_ascii_case(parent) {
+            return true;
+        }
+    }
+    false
+}
 >>>>>>> REPLACE
