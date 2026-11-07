@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use databases::pool_telemetry::{PoolStats, PoolTelemetry};
 use std::time::Duration;
 
