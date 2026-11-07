@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use axum::{
     extract::{Path, Request, State},
     http::{HeaderMap, StatusCode},

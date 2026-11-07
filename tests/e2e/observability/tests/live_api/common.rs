@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+#![forbid(unsafe_code)]
+
 use std::time::Duration;
 
 use reqwest::{Client, Method, Url};
