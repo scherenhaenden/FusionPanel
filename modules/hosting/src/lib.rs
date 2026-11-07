@@ -50,6 +50,7 @@ mod tests {
     }
 }
 pub mod config;
+pub mod acme;
 pub mod vhost;
 pub mod upstream;
 
