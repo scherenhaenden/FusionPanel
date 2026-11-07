@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use mail::spf_flatten::{DnsResolver, SpfFlattener};
 
 struct MockDnsResolver;
