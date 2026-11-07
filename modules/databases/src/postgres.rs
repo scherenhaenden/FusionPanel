@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::adapter::*;
 use async_trait::async_trait;
 use std::process::Stdio;
@@ -403,6 +405,52 @@ impl DatabaseAdapter for PostgresAdapter {
             return Err(DatabaseError::OperationFailed(
                 String::from_utf8_lossy(&output.stderr).to_string(),
             ));
+        }
+        Ok(())
+    }
+
+    async fn drop_database(&self, name: &DbName) -> Result<()> {
+        validate_identifier(&name.0)?;
+
+        if !self.database_exists(name).await? {
+            return Ok(());
+        }
+
+        let sql = format!("DROP DATABASE \"{}\";", name.0);
+
+        let mut cmd = self.build_cmd("psql");
+        cmd.args(["-d", "postgres", "-c", &sql]);
+
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute psql for drop db: {}", e))
+        })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            return Err(DatabaseError::OperationFailed(stderr));
+        }
+        Ok(())
+    }
+
+    async fn drop_user(&self, username: &DbUser) -> Result<()> {
+        validate_identifier(&username.0)?;
+
+        if !self.user_exists(username).await? {
+            return Ok(());
+        }
+
+        let sql = format!("DROP USER \"{}\";", username.0);
+
+        let mut cmd = self.build_cmd("psql");
+        cmd.args(["-d", "postgres", "-c", &sql]);
+
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute psql for drop user: {}", e))
+        })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            return Err(DatabaseError::OperationFailed(stderr));
         }
         Ok(())
     }
