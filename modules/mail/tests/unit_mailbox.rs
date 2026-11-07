@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use mail::domain::{
     AccountState, EmailAddress, EmailAddressError, MailDomain, MailDomainError, MailQuota,
     MailQuotaError, MailboxAccount, PasswordHash, PasswordHashError,
