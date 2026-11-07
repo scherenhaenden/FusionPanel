@@ -1,12 +1,12 @@
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use crate::middleware::IdentityStore;
 use chrono::Utc;
 use identity::error::IdentityError;
-use identity::session::Session;
-use identity::types::{SessionId, UserId};
 use identity::rbac::RoleBinding;
+use identity::session::Session;
 use identity::storage::SqliteIdentityStore;
-use crate::middleware::IdentityStore;
+use identity::types::{SessionId, UserId};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub struct SqliteIdentityAdapter {
     store: Arc<Mutex<SqliteIdentityStore>>,
@@ -36,7 +36,10 @@ impl IdentityStore for SqliteIdentityAdapter {
         store.update_session_touch(id, now)
     }
 
-    async fn get_user_role_bindings(&self, user_id: UserId) -> Result<Vec<RoleBinding>, IdentityError> {
+    async fn get_user_role_bindings(
+        &self,
+        user_id: UserId,
+    ) -> Result<Vec<RoleBinding>, IdentityError> {
         let store = self.store.lock().await;
         store.get_user_role_bindings(user_id)
     }
