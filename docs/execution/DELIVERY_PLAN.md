@@ -1,6 +1,6 @@
 # Delivery Plan: 1–11 November 2026
 
-Use the [product delivery plan](PRODUCT_DELIVERY_PLAN.md) to schedule the next user journeys. This document retains the package ownership, dependencies, and original November targets.
+Schedule new work using the [product delivery priorities](PRODUCT_DELIVERY_PLAN.md). The active sequence is core, installation and administration, module management, then websites. This document retains the package ownership, dependencies, and original November targets.
 
 ## Objective and deadline
 
