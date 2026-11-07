@@ -154,3 +154,42 @@ async fn test_session_invalidation() {
     let response_refresh2 = app.clone().oneshot(request_refresh2).await.unwrap();
     assert_eq!(response_refresh2.status(), StatusCode::UNAUTHORIZED);
 }
+
+
+#[tokio::test]
+async fn test_frontend_contract_routes() {
+    let store = setup_store();
+    let app = setup_app(store.clone());
+
+    let body = serde_json::json!({
+        "username": "testuser",
+        "password": "password123"
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/auth/login")
+        .header("Content-Type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let set_cookie = response
+        .headers()
+        .get("set-cookie")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let cookie_val = set_cookie.split(";").next().unwrap();
+
+    let request_logout = Request::builder()
+        .method("POST")
+        .uri("/v1/auth/logout")
+        .header("Cookie", cookie_val)
+        .body(Body::empty())
+        .unwrap();
+    let response_logout = app.clone().oneshot(request_logout).await.unwrap();
+    assert_eq!(response_logout.status(), StatusCode::OK);
+}

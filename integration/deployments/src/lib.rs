@@ -84,7 +84,7 @@ async fn webhook_handler(
     }
 
     let (_parts, body) = req.into_parts();
-    
+
     let body_bytes = match body.collect().await {
         Ok(collected) => collected.to_bytes(),
         Err(_) => return error_response("bad_request", "invalid body", StatusCode::BAD_REQUEST),
@@ -128,7 +128,7 @@ pub async fn create_deployment(
 ) -> Response {
     let dep_id = DeploymentId::new();
     let mut record = DeploymentRecord::new(dep_id.clone());
-    
+
     if let Err(e) = record.transition_to(DeploymentState::PendingApproval, "api", "deployment created") {
          return error_response("conflict", &e.to_string(), StatusCode::CONFLICT);
     }
@@ -165,7 +165,7 @@ pub async fn approve_deployment(
         Ok(d) => d,
         Err(_) => return error_response("bad_request", "invalid deployment id", StatusCode::BAD_REQUEST),
     };
-    
+
     let mut approvals = state.approvals.lock().await;
     let approval = match approvals.get_mut(&dep_id.0) {
         Some(a) => a,
@@ -188,7 +188,7 @@ pub async fn approve_deployment(
          Ok(r) => r,
          Err(_) => return error_response("bad_request", "invalid release id", StatusCode::BAD_REQUEST),
     };
-    
+
     match release_manager.activate_directory_switch(&dep_id, &release_id) {
         Ok(applied) => {
             let _ = record.transition_to(DeploymentState::Active, "api", "deployment active");
@@ -214,7 +214,7 @@ pub async fn rollback_deployment(
     };
 
     let release_manager = state.release_manager.lock().await;
-    
+
     let mut deployments = state.deployments.lock().await;
     let record = match deployments.get_mut(&dep_id.0) {
         Some(d) => d,
@@ -255,13 +255,13 @@ pub async fn health_failure_deployment(
     };
 
     let release_manager = state.release_manager.lock().await;
-    
+
     let mut deployments = state.deployments.lock().await;
     let record = match deployments.get_mut(&dep_id.0) {
         Some(d) => d,
         None => return error_response("not_found", "deployment not found", StatusCode::NOT_FOUND),
     };
-    
+
     let prior = match release_manager.current_active_release() {
         Ok(Some(_)) => true,
         _ => false,

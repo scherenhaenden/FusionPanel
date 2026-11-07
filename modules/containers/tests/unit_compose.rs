@@ -1,4 +1,6 @@
-use containers::compose::{parse_and_validate, validator::ValidationError, ComposeError};
+use containers::compose::models::PortMapping;
+use containers::compose::{parse_and_validate, parse_and_validate_with_env, validator::ValidationError, ComposeError};
+use std::collections::HashMap;
 
 #[test]
 fn test_valid_compose() {
@@ -194,4 +196,54 @@ services:
         }
         _ => panic!("Expected OverlappingPorts error for ipv6 overlap"),
     }
+}
+
+#[test]
+fn test_env_substitution() {
+    let yaml = r#"
+version: '3'
+services:
+  web:
+    image: ${IMAGE_NAME:-nginx:latest}
+    ports:
+      - "$PORT:80"
+  db:
+    image: postgres:${DB_VERSION}
+    volumes:
+      - "./data:/var/lib/postgresql/data"
+"#;
+    
+    let mut env = HashMap::new();
+    env.insert("PORT".to_string(), "8080".to_string());
+    env.insert("DB_VERSION".to_string(), "13".to_string());
+
+    let _result = parse_and_validate_with_env(yaml, &env).expect("Should parse and validate");
+    
+    let web_service = result.services.get("web").unwrap();
+    assert_eq!(web_service.image.as_deref(), Some("nginx:latest"));
+    match &web_service.ports[0] {
+        PortMapping::String(mapping) => assert_eq!(mapping, "8080:80"),
+        _ => panic!("Expected String port mapping"),
+    }
+
+    let db_service = result.services.get("db").unwrap();
+    assert_eq!(db_service.image.as_deref(), Some("postgres:13"));
+}
+
+#[test]
+fn test_env_substitution_escaped() {
+    let yaml = r#"
+version: '3'
+services:
+  web:
+    image: nginx:latest
+    environment:
+      - VAR=$$ESCAPED
+"#;
+    
+    let env = HashMap::new();
+    let _result = parse_and_validate_with_env(yaml, &env).expect("Should parse and validate");
+    
+    // We don't have environment modeled in Service, but we just verify it doesn't fail parsing.
+    // However, the test itself ensures no panic or error during parsing due to substitution logic
 }
