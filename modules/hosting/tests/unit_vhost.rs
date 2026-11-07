@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use hosting::domain::{SiteConfig, SiteId, TenantId, DomainName, HostingSpec, PhpConfig, StaticConfig};
 
 use hosting::domain::identity::ResourceOwner;
