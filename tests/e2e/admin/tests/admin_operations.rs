@@ -11,7 +11,7 @@ fn require_disposable_env() {
 
 fn require_systemd_and_root() {
     let has_systemd = std::path::Path::new("/run/systemd/system").exists();
-    
+
     // Instead of unsafe code, let's use `id -u` command.
     let id_output = Command::new("id").arg("-u").output().expect("Failed to execute id");
     let is_root = String::from_utf8_lossy(&id_output.stdout).trim() == "0";
@@ -30,7 +30,7 @@ async fn run_admin_operations_sequentially() {
         .expect("BLOCKED: missing required FUSIONPANEL_ADMIN_URL for real admin API operations");
 
     let client = reqwest::Client::new();
-    
+
     // 1. Administrator credential rotation and MFA enrollment
     let enroll_response = client
         .post(format!("{}/admin/mfa/enroll", admin_url))
@@ -80,7 +80,7 @@ async fn run_admin_operations_sequentially() {
         .expect("Failed to reach frontend");
 
     assert_eq!(frontend_response.status(), reqwest::StatusCode::SERVICE_UNAVAILABLE, "Expected 503 Service Unavailable");
-    
+
     let body = frontend_response.text().await.expect("Failed to read response body");
     assert!(body.contains("System under maintenance"), "Expected custom banner in maintenance response");
 
@@ -98,7 +98,7 @@ async fn run_admin_operations_sequentially() {
         .send()
         .await
         .expect("Failed to reach frontend after maintenance");
-    
+
     assert!(frontend_response_after.status().is_success(), "Expected 200 OK after maintenance mode disabled");
 
     // 3. Backup of panel internal database prior to update
@@ -109,7 +109,7 @@ async fn run_admin_operations_sequentially() {
         .expect("Failed to create backup");
 
     assert!(backup_response.status().is_success(), "Failed to create internal database backup");
-    
+
     let backup_body: serde_json::Value = backup_response.json().await.expect("Failed to parse response JSON");
     assert_eq!(backup_body["status"], "completed", "Expected backup status to be completed");
 
@@ -121,7 +121,7 @@ async fn run_admin_operations_sequentially() {
         .expect("Failed to trigger update check");
 
     assert!(check_response.status().is_success(), "Failed to check for updates");
-    
+
     let check_body: serde_json::Value = check_response.json().await.expect("Failed to parse response JSON");
     assert_eq!(check_body["signature_verified"], true, "Expected signature verification to be true");
 
@@ -152,6 +152,6 @@ async fn run_admin_operations_sequentially() {
             }
         }
     }
-    
+
     assert!(restarted, "Service failed to accept connections after update trigger");
 }
