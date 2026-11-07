@@ -7,7 +7,7 @@ Documentation=https://github.com/scherenhaenden/FusionPanel
 Type=simple
 User=fusionpanel
 Group=fusionpanel
-ExecStart=/opt/fusionpanel/bin/fusionpanel-api
+ExecStart=/usr/local/bin/fusionpanel-api
 EnvironmentFile=-/etc/fusionpanel/fusionpanel.env
 
 # Restart backoff configuration
@@ -23,6 +23,8 @@ PrivateTmp=true
 NoNewPrivileges=true
 CapabilityBoundingSet=
 MemoryDenyWriteExecute=true
+
+ReadWritePaths=/var/lib/fusionpanel/ /var/log/fusionpanel/ /etc/fusionpanel/
 
 [Install]
 WantedBy=multi-user.target

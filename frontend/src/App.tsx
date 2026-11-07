@@ -6,6 +6,7 @@ import WebsitesView from './views/Websites';
 import DatabasesView from './views/Databases';
 import BackupsView from './views/Backups';
 import SecurityRulesUI from './views/Security';
+import AdministrationView from './views/Administration';
 import LoginView from './views/Login';
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
           <Route path="/databases" element={<DashboardLayout><DatabasesView /></DashboardLayout>} />
           <Route path="/backups" element={<DashboardLayout><BackupsView /></DashboardLayout>} />
           <Route path="/security" element={<DashboardLayout><SecurityRulesUI /></DashboardLayout>} />
+          <Route path="/administration" element={<DashboardLayout><AdministrationView /></DashboardLayout>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
