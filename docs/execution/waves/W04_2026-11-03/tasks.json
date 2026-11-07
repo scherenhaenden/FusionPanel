@@ -245,12 +245,14 @@
         "ADM-09"
       ],
       "status": "DISPATCHED",
-      "base_sha": null,
-      "session_id": "6973137846571046627",
-      "session_url": null,
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "13023594718041110465",
+      "session_url": "https://jules.google.com/session/13023594718041110465",
       "pr_url": null,
       "prompt_file": "prompts/W04-07.md",
-      "prompt_sha256": "7f4d8d724a0a58570b19d90c30b0b7016a822780a0e5d9b90bb6ef4318fadbb5"
+      "prompt_sha256": "7f4d8d724a0a58570b19d90c30b0b7016a822780a0e5d9b90bb6ef4318fadbb5",
+      "dispatch_started_at": "2026-11-05T08:52:18.783878+00:00",
+      "review_notes": "Dispatched in Jules session 13023594718041110465 against master 0560ab8"
     },
     {
       "id": "W04-08",
@@ -306,13 +308,14 @@
         "HOST-08"
       ],
       "status": "DISPATCHED",
-      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
-      "session_id": "2868511753205531299",
-      "session_url": "https://jules.google.com/session/2868511753205531299",
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "12017005956011106891",
+      "session_url": "https://jules.google.com/session/12017005956011106891",
       "pr_url": null,
       "prompt_file": "prompts/W04-09.md",
       "prompt_sha256": "abde1c7e2247fc98258f9769cc388a8fe874c93f562f41011f7a77e7ce43df93",
-      "review_notes": "Dispatched in Jules session 2868511753205531299 against master cbc1c2a"
+      "review_notes": "Dispatched in Jules session 12017005956011106891 against master 0560ab8",
+      "dispatch_started_at": "2026-11-05T06:59:20.178049+00:00"
     },
     {
       "id": "W04-10",
@@ -463,13 +466,14 @@
         "CTR-11"
       ],
       "status": "DISPATCHED",
-      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
-      "session_id": "16624685868498480158",
-      "session_url": "https://jules.google.com/session/16624685868498480158",
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "10645594178685599564",
+      "session_url": "https://jules.google.com/session/10645594178685599564",
       "pr_url": null,
       "prompt_file": "prompts/W04-14.md",
       "prompt_sha256": "b58b8c7b68612ae155f20be8fbc5ee64aee56ee69210fd0b3b7d1db2c385d936",
-      "review_notes": "Dispatched in Jules session 16624685868498480158 against master cbc1c2a"
+      "review_notes": "Dispatched in Jules session 10645594178685599564 against master 0560ab8",
+      "dispatch_started_at": "2026-11-05T06:59:20.178049+00:00"
     },
     {
       "id": "W04-15",
@@ -521,14 +525,15 @@
         "NET-02",
         "NET-03"
       ],
-      "status": "CHANGES_REQUESTED",
-      "base_sha": "44ded764b99d9864e8e8638123469252aeaa9ec4",
-      "session_id": "10193962684488937249",
-      "session_url": "https://jules.google.com/session/10193962684488937249",
+      "status": "DISPATCHED",
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "2487035853477020371",
+      "session_url": "https://jules.google.com/session/2487035853477020371",
       "pr_url": "https://github.com/scherenhaenden/FusionPanel/pull/225",
       "prompt_file": "prompts/W04-16.md",
       "prompt_sha256": "3c9e5d1745f205165c8bcaeabcefc71ddc4a1cf8c3ef0d010a19d3a7783a6777",
-      "review_notes": "Authoritative backend is in-memory HashMap mock, DNSSEC is boolean flag without cryptographic signatures"
+      "review_notes": "Dispatched in Jules session 2487035853477020371 against master 0560ab8",
+      "dispatch_started_at": "2026-11-05T08:52:18.783878+00:00"
     },
     {
       "id": "W04-17",
@@ -558,13 +563,14 @@
         "NET-10"
       ],
       "status": "DISPATCHED",
-      "base_sha": "cbc1c2a5ec25d3a542b2f6ef3f2b6e1596700cfa",
-      "session_id": "16185362412843173964",
-      "session_url": "https://jules.google.com/session/16185362412843173964",
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "7850440330809603734",
+      "session_url": "https://jules.google.com/session/7850440330809603734",
       "pr_url": null,
       "prompt_file": "prompts/W04-17.md",
       "prompt_sha256": "1e9b3ec34caf04d422ce02fbfce28a58804e4eb86c6693ae83950a47c156de22",
-      "review_notes": "Dispatched in Jules session 16185362412843173964 against master cbc1c2a"
+      "review_notes": "Dispatched in Jules session 7850440330809603734 against master 0560ab8",
+      "dispatch_started_at": "2026-11-05T06:59:20.178049+00:00"
     },
     {
       "id": "W04-18",
@@ -641,12 +647,14 @@
         "NODE-11"
       ],
       "status": "DISPATCHED",
-      "base_sha": null,
-      "session_id": "4327339146249077894",
-      "session_url": null,
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "13321805968943877801",
+      "session_url": "https://jules.google.com/session/13321805968943877801",
       "pr_url": null,
       "prompt_file": "prompts/W04-19.md",
-      "prompt_sha256": "040d9014364f81ec642270447f794d1b1695e95eb8a3e27be5fa3ed3665e43de"
+      "prompt_sha256": "040d9014364f81ec642270447f794d1b1695e95eb8a3e27be5fa3ed3665e43de",
+      "dispatch_started_at": "2026-11-05T08:52:18.783878+00:00",
+      "review_notes": "Dispatched in Jules session 13321805968943877801 against master 0560ab8"
     },
     {
       "id": "W04-20",
@@ -1001,12 +1009,14 @@
         "MIG-12"
       ],
       "status": "DISPATCHED",
-      "base_sha": null,
-      "session_id": "14531130155884508187",
-      "session_url": null,
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "10145487327817115581",
+      "session_url": "https://jules.google.com/session/10145487327817115581",
       "pr_url": null,
       "prompt_file": "prompts/W04-29.md",
-      "prompt_sha256": "55848974c547d12f258ed26f1b139b693176856724c38859b532b21a80b2138c"
+      "prompt_sha256": "55848974c547d12f258ed26f1b139b693176856724c38859b532b21a80b2138c",
+      "dispatch_started_at": "2026-11-05T06:59:20.178049+00:00",
+      "review_notes": "Dispatched in Jules session 10145487327817115581 against master 0560ab8"
     },
     {
       "id": "W04-30",
@@ -1103,12 +1113,14 @@
         "BAK-14"
       ],
       "status": "DISPATCHED",
-      "base_sha": null,
-      "session_id": "12420533450004983470",
-      "session_url": null,
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "8012417353431910343",
+      "session_url": "https://jules.google.com/session/8012417353431910343",
       "pr_url": null,
       "prompt_file": "prompts/W04-32.md",
-      "prompt_sha256": "ab99014c4e8cb784e7c6a4a2e4576df6ade77f71c14bbe54c9db1032f6a10120"
+      "prompt_sha256": "ab99014c4e8cb784e7c6a4a2e4576df6ade77f71c14bbe54c9db1032f6a10120",
+      "dispatch_started_at": "2026-11-05T06:59:20.178049+00:00",
+      "review_notes": "Dispatched in Jules session 8012417353431910343 against master 0560ab8"
     },
     {
       "id": "W04-33",
@@ -1205,12 +1217,14 @@
         "BAK-15"
       ],
       "status": "DISPATCHED",
-      "base_sha": null,
-      "session_id": "8778825701459002683",
-      "session_url": null,
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "250026848278380096",
+      "session_url": "https://jules.google.com/session/250026848278380096",
       "pr_url": null,
       "prompt_file": "prompts/W04-35.md",
-      "prompt_sha256": "13b6d1bb63715aa9331d638a1d0682b2813fad1ba67fcd718f80a53652f1a002"
+      "prompt_sha256": "13b6d1bb63715aa9331d638a1d0682b2813fad1ba67fcd718f80a53652f1a002",
+      "dispatch_started_at": "2026-11-05T06:59:20.178049+00:00",
+      "review_notes": "Dispatched in Jules session 250026848278380096 against master 0560ab8"
     },
     {
       "id": "W04-36",
@@ -1355,12 +1369,14 @@
         "CTR-11"
       ],
       "status": "DISPATCHED",
-      "base_sha": null,
-      "session_id": "11565575847004381546",
-      "session_url": null,
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "18233006707121904735",
+      "session_url": "https://jules.google.com/session/18233006707121904735",
       "pr_url": null,
       "prompt_file": "prompts/W04-39.md",
-      "prompt_sha256": "f0ecc22578d40cfe66d8d2c7fc5e79b00cc9de1f41f6c551cdb703f5472dac27"
+      "prompt_sha256": "f0ecc22578d40cfe66d8d2c7fc5e79b00cc9de1f41f6c551cdb703f5472dac27",
+      "dispatch_started_at": "2026-11-05T08:52:18.783878+00:00",
+      "review_notes": "Dispatched in Jules session 18233006707121904735 against master 0560ab8"
     },
     {
       "id": "W04-40",
@@ -1425,12 +1441,14 @@
         "WP-11"
       ],
       "status": "DISPATCHED",
-      "base_sha": null,
-      "session_id": "14446151530398582254",
-      "session_url": null,
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "5833558671605022054",
+      "session_url": "https://jules.google.com/session/5833558671605022054",
       "pr_url": null,
       "prompt_file": "prompts/W04-41.md",
-      "prompt_sha256": "43a833aba819159d1ef75ccd73e1b9eb29e55d0b86d559ed1c7e46e4c42abc4b"
+      "prompt_sha256": "43a833aba819159d1ef75ccd73e1b9eb29e55d0b86d559ed1c7e46e4c42abc4b",
+      "dispatch_started_at": "2026-11-05T06:59:20.178049+00:00",
+      "review_notes": "Dispatched in Jules session 5833558671605022054 against master 0560ab8"
     },
     {
       "id": "W04-42",
@@ -1462,12 +1480,14 @@
         "NET-10"
       ],
       "status": "DISPATCHED",
-      "base_sha": null,
-      "session_id": "15977998685686397758",
-      "session_url": null,
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "5606442315387234786",
+      "session_url": "https://jules.google.com/session/5606442315387234786",
       "pr_url": null,
       "prompt_file": "prompts/W04-42.md",
-      "prompt_sha256": "755daef0fca05dab82c343ebb5d982a73f1c209c2280483cd8d6ce1ac542f986"
+      "prompt_sha256": "755daef0fca05dab82c343ebb5d982a73f1c209c2280483cd8d6ce1ac542f986",
+      "dispatch_started_at": "2026-11-05T08:52:18.783878+00:00",
+      "review_notes": "Dispatched in Jules session 5606442315387234786 against master 0560ab8"
     },
     {
       "id": "W04-43",
@@ -1499,12 +1519,14 @@
         "OBS-15"
       ],
       "status": "DISPATCHED",
-      "base_sha": null,
-      "session_id": "8010080136840129552",
-      "session_url": null,
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "8803886945239008044",
+      "session_url": "https://jules.google.com/session/8803886945239008044",
       "pr_url": null,
       "prompt_file": "prompts/W04-43.md",
-      "prompt_sha256": "0614df89a86ae6fb0f79fcdef3164ac141d4065342f58e261d69244d7f8bb125"
+      "prompt_sha256": "0614df89a86ae6fb0f79fcdef3164ac141d4065342f58e261d69244d7f8bb125",
+      "dispatch_started_at": "2026-11-05T06:59:20.178049+00:00",
+      "review_notes": "Dispatched in Jules session 8803886945239008044 against master 0560ab8"
     },
     {
       "id": "W04-44",
@@ -1536,12 +1558,14 @@
         "NODE-14"
       ],
       "status": "DISPATCHED",
-      "base_sha": null,
-      "session_id": "5419751675793750152",
-      "session_url": null,
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "1711989038483213988",
+      "session_url": "https://jules.google.com/session/1711989038483213988",
       "pr_url": null,
       "prompt_file": "prompts/W04-44.md",
-      "prompt_sha256": "2714678ef33440612f1ca2cf05ee5f7cf4880831a6cb14b10290941cc9b192db"
+      "prompt_sha256": "2714678ef33440612f1ca2cf05ee5f7cf4880831a6cb14b10290941cc9b192db",
+      "dispatch_started_at": "2026-11-05T06:59:20.178049+00:00",
+      "review_notes": "Dispatched in Jules session 1711989038483213988 against master 0560ab8"
     },
     {
       "id": "W04-45",
@@ -1689,12 +1713,14 @@
         "ALL-162"
       ],
       "status": "DISPATCHED",
-      "base_sha": null,
-      "session_id": "704309594938208489",
-      "session_url": null,
+      "base_sha": "0560ab845b410f9eecdb3673f3286ff4d84f8ee2",
+      "session_id": "13176314593675669674",
+      "session_url": "https://jules.google.com/session/13176314593675669674",
       "pr_url": null,
       "prompt_file": "prompts/W04-48.md",
-      "prompt_sha256": "554734a6ae2c3148c63da65dfdbe290d0144486450592af4b5916c6f400fa778"
+      "prompt_sha256": "554734a6ae2c3148c63da65dfdbe290d0144486450592af4b5916c6f400fa778",
+      "dispatch_started_at": "2026-11-05T08:52:18.783878+00:00",
+      "review_notes": "Dispatched in Jules session 13176314593675669674 against master 0560ab8"
     },
     {
       "id": "W04-49",

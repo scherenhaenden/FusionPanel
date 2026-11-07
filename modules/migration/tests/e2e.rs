@@ -7,14 +7,11 @@ use std::path::Path;
 /// are not available yet.
 
 #[test]
-#[ignore = "BLOCKED: Missing prerequisite sanitized_server.sqlite. Cannot run full E2E discovery against real server dump."]
 fn e2e_migration_plan_generation_blocked() {
     // We would use an actual sanitized server database here
     let server_db = Path::new("tests/fixtures/sanitized_server.sqlite");
 
     if !server_db.exists() {
-        // A blocked unrun case is not a pass in acceptance, but we mark it as ignored/blocked.
-        // The test runner shouldn't execute this because of #[ignore] if the fixture is missing.
         panic!("BLOCKED: Missing prerequisite sanitized_server.sqlite");
     }
 

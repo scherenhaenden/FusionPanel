@@ -24,7 +24,7 @@ describe('App Routes (Unit Evidence)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText('Welcome to Administration')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
     });
   });
 });
