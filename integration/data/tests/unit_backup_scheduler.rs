@@ -106,6 +106,12 @@ impl DatabaseAdapter for MockAdapter {
     async fn apply_restore(&self, _plan: &RestorePlan) -> DbResult<()> {
         Ok(())
     }
+    async fn drop_database(&self, _name: &DbName) -> DbResult<()> {
+        Ok(())
+    }
+    async fn drop_user(&self, _username: &DbUser) -> DbResult<()> {
+        Ok(())
+    }
 }
 
 struct MockStorageBackend;
