@@ -8,6 +8,7 @@ pub mod domain;
 pub mod error;
 pub mod models;
 pub mod plan;
+pub mod quota;
 
 #[cfg(test)]
 mod tests;
