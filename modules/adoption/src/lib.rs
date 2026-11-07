@@ -105,7 +105,7 @@ pub fn attempt_decommission(attestation: &DecommissionAttestation) -> Result<(),
 }
 
 // ADOPT-07 requires trust and SNI modes remain explicit.
-// By importing TrustMode here, it proves that it is integrated into the module API surface 
+// By importing TrustMode here, it proves that it is integrated into the module API surface
 // although adopt07 is tested separately. But since we need "trust/SNI modes remain explicit"
 // inside our domain model we will explicitly create the required structs or re-export them.
 // We will define it directly in this module to have them explicit.

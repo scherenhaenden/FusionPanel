@@ -118,7 +118,7 @@ async fn test_deployment_lifecycle_and_webhook() {
 
     let response = router.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::CREATED);
-    
+
     let body_bytes = http_body_util::BodyExt::collect(response.into_body()).await.unwrap().to_bytes();
     let dep_id: DeploymentId = serde_json::from_slice(&body_bytes).unwrap();
 
@@ -126,7 +126,7 @@ async fn test_deployment_lifecycle_and_webhook() {
     {
         let rm = release_manager.lock().await;
         let rel1_dir = rm.prepare_release_dir(&release1).unwrap();
-        
+
         let plan1 = DeploymentPlan {
             plan_id: "plan-1".to_string(),
             site_id: SiteId("site-integration".to_string()),
@@ -164,7 +164,7 @@ async fn test_deployment_lifecycle_and_webhook() {
             })).unwrap()
         ))
         .unwrap();
-        
+
     let response = router.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -180,7 +180,7 @@ async fn test_deployment_lifecycle_and_webhook() {
     let body_bytes = http_body_util::BodyExt::collect(response.into_body()).await.unwrap().to_bytes();
     let record: deployments::workflow::DeploymentRecord = serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(record.current_state, DeploymentState::Active);
-    
+
     // Check observed content continuity
     {
         let rm = release_manager.lock().await;
