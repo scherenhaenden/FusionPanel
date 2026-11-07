@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+pub mod provision;
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
