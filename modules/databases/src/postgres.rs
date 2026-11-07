@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::adapter::*;
 use async_trait::async_trait;
 use std::process::Stdio;
