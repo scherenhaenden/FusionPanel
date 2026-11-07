@@ -12,6 +12,7 @@ pub mod error;
 pub mod models;
 pub mod plan;
 pub mod quota;
+pub mod spf_flatten;
 
 #[cfg(test)]
 mod tests;
