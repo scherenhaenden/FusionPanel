@@ -218,13 +218,13 @@ mod tests {
         let mut adapter = MockAdapter::new();
         let mut executor = MigrationExecutor::new(&mut adapter);
         let plan = create_plan();
-
+        
         let result = executor.execute(&plan);
         assert!(result.success);
         assert!(result.decommission_attested);
         assert_eq!(result.records.len(), 3);
         assert!(result.records.iter().all(|r| r.status == ExecutionStatus::Success));
-
+        
         assert_eq!(adapter.calls, vec![
             "create_user:admin",
             "create_database:db1",
@@ -238,16 +238,16 @@ mod tests {
         adapter.site_fail = true;
         let mut executor = MigrationExecutor::new(&mut adapter);
         let plan = create_plan();
-
+        
         let result = executor.execute(&plan);
         assert!(!result.success);
         assert!(!result.decommission_attested);
-
+        
         assert_eq!(result.records.len(), 3);
         assert_eq!(result.records[0].status, ExecutionStatus::RolledBack);
         assert_eq!(result.records[1].status, ExecutionStatus::RolledBack);
         assert_eq!(result.records[2].status, ExecutionStatus::Failed);
-
+        
         assert_eq!(adapter.calls, vec![
             "create_user:admin",
             "create_database:db1",
@@ -262,17 +262,17 @@ mod tests {
         let mut adapter = MockAdapter::new();
         adapter.db_fail = true;
         adapter.rollback_user_fail = true;
-
+        
         let mut executor = MigrationExecutor::new(&mut adapter);
         let plan = create_plan();
-
+        
         let result = executor.execute(&plan);
         assert!(!result.success);
-
+        
         assert_eq!(result.records.len(), 2);
-        assert_eq!(result.records[0].status, ExecutionStatus::RollbackFailed);
+        assert_eq!(result.records[0].status, ExecutionStatus::RollbackFailed); 
         assert_eq!(result.records[1].status, ExecutionStatus::Failed);
-
+        
         assert_eq!(adapter.calls, vec![
             "create_user:admin",
             "create_database:db1",
@@ -286,7 +286,7 @@ mod tests {
         let mut executor = MigrationExecutor::new(&mut adapter);
         let mut plan = create_plan();
         plan.is_dry_run = true;
-
+        
         let result = executor.execute(&plan);
         assert!(result.success);
         assert!(result.records.is_empty());

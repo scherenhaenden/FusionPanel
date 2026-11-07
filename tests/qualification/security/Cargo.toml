@@ -1,0 +1,16 @@
+[package]
+name = "security-qualification"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[workspace]
+
+[dependencies]
+# We'll use ring or aes-gcm. Let's use aes-gcm 0.10.3 and rand 0.8
+aes-gcm = { version = "0.10", optional = true }
+rand = { version = "0.8", optional = true }
+
+[features]
+default = ["crypto"]
+crypto = ["dep:aes-gcm", "dep:rand"]

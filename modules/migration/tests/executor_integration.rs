@@ -110,14 +110,14 @@ fn integration_successful_execution() {
     let temp_dir = TempDir::new().unwrap();
     let mut adapter = IntegrationAdapter::new(temp_dir.path().to_path_buf());
     let mut executor = MigrationExecutor::new(&mut adapter);
-
+    
     let plan = generate_plan();
     let result = executor.execute(&plan);
-
+    
     assert!(result.success);
     assert_eq!(result.records.len(), 3);
     assert!(result.records.iter().all(|r| r.status == ExecutionStatus::Success));
-
+    
     // Verify files created on disk
     assert!(adapter.user_path("admin").exists());
     assert!(adapter.db_path("test_db").exists());
@@ -128,26 +128,26 @@ fn integration_successful_execution() {
 fn integration_failed_execution_with_rollback() {
     let temp_dir = TempDir::new().unwrap();
     let mut adapter = IntegrationAdapter::new(temp_dir.path().to_path_buf());
-
+    
     // Cause failure on the database creation step
     adapter.fail_on_database = Some("test_db".to_string());
-
+    
     let mut executor = MigrationExecutor::new(&mut adapter);
-
+    
     let plan = generate_plan();
     let result = executor.execute(&plan);
-
+    
     assert!(!result.success);
     assert_eq!(result.records.len(), 2); // user and db attempted
-
+    
     // The user should have been successfully created initially, then rolled back
     assert_eq!(result.records[0].item_name, "admin");
     assert_eq!(result.records[0].status, ExecutionStatus::RolledBack);
-
+    
     // The database creation failed
     assert_eq!(result.records[1].item_name, "test_db");
     assert_eq!(result.records[1].status, ExecutionStatus::Failed);
-
+    
     // Verify files removed from disk via rollback
     assert!(!adapter.user_path("admin").exists());
     assert!(!adapter.db_path("test_db").exists());
