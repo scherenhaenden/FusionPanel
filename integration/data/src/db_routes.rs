@@ -201,9 +201,31 @@ pub async fn create_database(
     }
 }
 
+pub async fn get_databases(
+    State(state): State<AppState>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    let tenant_id = user.user_id.to_string();
+    let expected_prefix = format!("{}_", tenant_id.replace('-', "_"));
+
+    let databases = state.adapter.list_databases().await.map_err(map_db_error)?;
+
+    let mut filtered_dbs = Vec::new();
+    for db in databases {
+        if db.name.0.starts_with(&expected_prefix) {
+            filtered_dbs.push(DatabaseResponse {
+                name: db.name.0,
+                charset: db.charset,
+            });
+        }
+    }
+
+    Ok((StatusCode::OK, Json(filtered_dbs)).into_response())
+}
+
 pub async fn get_database(
-    State(_state): State<AppState>,
-    Extension(_user): Extension<AuthenticatedUser>,
+    State(state): State<AppState>,
+    Extension(user): Extension<AuthenticatedUser>,
     Path(db_name): Path<String>,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
     if !is_valid_identifier(&db_name) {
@@ -211,6 +233,38 @@ pub async fn get_database(
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: "Invalid database name".to_string(),
+            }),
+        ));
+    }
+
+    let tenant_id = user.user_id.to_string();
+    let expected_prefix = format!("{}_", tenant_id.replace('-', "_"));
+    if !db_name.starts_with(&expected_prefix) {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "Database not found".to_string(),
+            }),
+        ));
+    }
+
+    let databases = state.adapter.list_databases().await.map_err(map_db_error)?;
+
+    let mut found = false;
+    let mut charset = "utf8mb4".to_string();
+    for db in databases {
+        if db.name.0 == db_name {
+            found = true;
+            charset = db.charset.clone();
+            break;
+        }
+    }
+
+    if !found {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "Database not found".to_string(),
             }),
         ));
     }
@@ -219,15 +273,15 @@ pub async fn get_database(
         StatusCode::OK,
         Json(DatabaseResponse {
             name: db_name,
-            charset: "utf8mb4".to_string(),
+            charset,
         }),
     )
         .into_response())
 }
 
 pub async fn delete_database(
-    State(_state): State<AppState>,
-    Extension(_user): Extension<AuthenticatedUser>,
+    State(state): State<AppState>,
+    Extension(user): Extension<AuthenticatedUser>,
     Path(db_name): Path<String>,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
     if !is_valid_identifier(&db_name) {
@@ -239,12 +293,24 @@ pub async fn delete_database(
         ));
     }
 
-    Err((
-        StatusCode::NOT_IMPLEMENTED,
-        Json(ErrorResponse {
-            error: "Database deletion is not supported".into(),
-        }),
-    ))
+    let tenant_id = user.user_id.to_string();
+    let expected_prefix = format!("{}_", tenant_id.replace('-', "_"));
+    if !db_name.starts_with(&expected_prefix) {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "Database not found".to_string(),
+            }),
+        ));
+    }
+
+    state
+        .adapter
+        .drop_database(&DbName(db_name))
+        .await
+        .map_err(map_db_error)?;
+
+    Ok(StatusCode::NO_CONTENT.into_response())
 }
 
 pub async fn create_user(
@@ -336,7 +402,7 @@ pub async fn create_user(
 
 pub async fn get_user(
     State(_state): State<AppState>,
-    Extension(_user): Extension<AuthenticatedUser>,
+    Extension(user): Extension<AuthenticatedUser>,
     Path((db_name, username)): Path<(String, String)>,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
     if !is_valid_identifier(&db_name) {
@@ -352,6 +418,17 @@ pub async fn get_user(
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: "Invalid username".to_string(),
+            }),
+        ));
+    }
+
+    let tenant_id = user.user_id.to_string();
+    let expected_prefix = format!("{}_", tenant_id.replace('-', "_"));
+    if !db_name.starts_with(&expected_prefix) {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "Database not found".to_string(),
             }),
         ));
     }

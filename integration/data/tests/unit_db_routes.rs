@@ -9,9 +9,9 @@ use axum::{
 mod db_routes;
 
 use db_routes::{
-    create_database, create_user, delete_database, delete_user, get_database, get_user,
-    is_valid_charset, is_valid_identifier, update_user_privileges, AppState, CreateDatabaseRequest,
-    CreateDatabaseUserRequest, Privilege, UpdateUserPrivilegesRequest,
+    create_database, create_user, delete_database, delete_user, get_database, get_databases,
+    get_user, is_valid_charset, is_valid_identifier, update_user_privileges, AppState,
+    CreateDatabaseRequest, CreateDatabaseUserRequest, Privilege, UpdateUserPrivilegesRequest,
 };
 
 use async_trait::async_trait;
@@ -101,6 +101,12 @@ impl DatabaseAdapter for MockAdapter {
         })
     }
     async fn apply_restore(&self, _plan: &RestorePlan) -> DbResult<()> {
+        Ok(())
+    }
+    async fn drop_database(&self, _name: &DbName) -> DbResult<()> {
+        Ok(())
+    }
+    async fn drop_user(&self, _username: &DbUser) -> DbResult<()> {
         Ok(())
     }
 }
@@ -228,18 +234,18 @@ async fn test_delete_database_invalid_identifier() {
 }
 
 #[tokio::test]
-async fn test_delete_database_unsupported() {
+async fn test_delete_database_success() {
     let state = create_mock_state();
+    let auth_user = mock_auth_user();
     let res = delete_database(
         State(state),
-        Extension(mock_auth_user()),
-        Path("valid_db".to_string()),
+        Extension(auth_user.clone()),
+        Path(format!(
+            "{}_valid_db",
+            auth_user.user_id.to_string().replace('-', "_")
+        )),
     )
     .await;
-    match res {
-        Err((status, _)) => assert_eq!(status, axum::http::StatusCode::NOT_IMPLEMENTED),
-        _ => panic!("Expected error"),
-    }
 }
 
 #[tokio::test]
@@ -341,4 +347,12 @@ async fn test_delete_user_unsupported() {
         Err((status, _)) => assert_eq!(status, axum::http::StatusCode::NOT_IMPLEMENTED),
         _ => panic!("Expected error"),
     }
+}
+
+#[tokio::test]
+async fn test_get_databases_success() {
+    let state = create_mock_state();
+    let auth_user = mock_auth_user();
+    let res = get_databases(State(state), Extension(auth_user.clone())).await;
+    assert!(res.is_ok());
 }

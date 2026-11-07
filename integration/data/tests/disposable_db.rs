@@ -6,7 +6,7 @@ use databases::adapter::{
     SecretString,
 };
 use databases::mariadb::MariaDbAdapter;
-use databases::postgresql::PostgresAdapter;
+use databases::postgres::PostgresAdapter;
 use integration_data::backup_scheduler::{
     BackupReceipt, Compression, DumpScheduler, StorageBackend,
 };
@@ -301,7 +301,8 @@ async fn test_disposable_db_lifecycle_mariadb() {
     let adapter = Arc::new(MariaDbAdapter::new(config));
 
     // Check if we can connect to a real instance, otherwise BLOCK
-    if adapter.check_connection().await.is_err() {
+    let res_conn = adapter.check_connection().await;
+    if res_conn.is_err() {
         println!("BLOCKED: Could not connect to MariaDB on 127.0.0.1:3306");
         return;
     }
@@ -330,7 +331,8 @@ async fn test_disposable_db_lifecycle_postgresql() {
     let adapter = Arc::new(PostgresAdapter::new(config));
 
     // Check connection
-    if adapter.check_connection().await.is_err() {
+    let res_conn = adapter.check_connection().await;
+    if res_conn.is_err() {
         println!("BLOCKED: Could not connect to PostgreSQL on 127.0.0.1:5432");
         return;
     }
