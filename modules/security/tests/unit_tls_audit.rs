@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use security::tls_audit::{TlsConfig, TlsProtocol};
 
 #[test]
