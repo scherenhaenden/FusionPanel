@@ -217,7 +217,7 @@ services:
     env.insert("PORT".to_string(), "8080".to_string());
     env.insert("DB_VERSION".to_string(), "13".to_string());
 
-    let _result = parse_and_validate_with_env(yaml, &env).expect("Should parse and validate");
+    let result = parse_and_validate_with_env(yaml, &env).expect("Should parse and validate");
     
     let web_service = result.services.get("web").unwrap();
     assert_eq!(web_service.image.as_deref(), Some("nginx:latest"));
@@ -242,7 +242,7 @@ services:
 "#;
     
     let env = HashMap::new();
-    let _result = parse_and_validate_with_env(yaml, &env).expect("Should parse and validate");
+    let result = parse_and_validate_with_env(yaml, &env).expect("Should parse and validate");
     
     // We don't have environment modeled in Service, but we just verify it doesn't fail parsing.
     // However, the test itself ensures no panic or error during parsing due to substitution logic

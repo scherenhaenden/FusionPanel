@@ -8,3 +8,4 @@ pub mod logs;
 pub mod resources;
 pub mod storage;
 pub mod docker;
+pub mod log_rotator;
