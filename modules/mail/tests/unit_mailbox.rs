@@ -109,3 +109,50 @@ fn test_mailbox_account_creation() {
     assert_eq!(account.quota.bytes(), 1024 * 1024);
     assert_eq!(account.state, AccountState::Active);
 }
+
+#[path = "../src/mailbox.rs"]
+pub mod mailbox;
+
+use mailbox::{MailboxPasswordHash, VirtualMailboxAccount, VirtualMailboxManager};
+
+#[test]
+fn test_extended_password_hash() {
+    let valid_argon = "$argon2id$v=19$m=65536,t=3,p=4$somehash";
+    let hash = MailboxPasswordHash::new(valid_argon).unwrap();
+    assert_eq!(hash.as_str(), valid_argon);
+
+    let valid_sha512 = "$6$rounds=5000$usesomesillystri$D4IrlXatmP7rx3P3InaxBeoomnAihFOm10TE8IYm0OQQc3eG0L4fW59Hk9Zq9e/tH0yZpT31.C6R2r2C.oU9P.";
+    let hash2 = MailboxPasswordHash::new(valid_sha512).unwrap();
+    assert_eq!(hash2.as_str(), valid_sha512);
+
+    assert!(MailboxPasswordHash::new("invalid_hash").is_err());
+    assert!(MailboxPasswordHash::new("$bcrypt$v=19...").is_err());
+}
+
+#[test]
+fn test_virtual_mailbox_manager() {
+    let mut manager = VirtualMailboxManager::new();
+
+    let domain1 = MailDomain::new("example.com").unwrap();
+    manager.add_domain(domain1);
+
+    let email1 = EmailAddress::new("user@example.com").unwrap();
+    let hash1 = MailboxPasswordHash::new("$argon2id$somehash").unwrap();
+    let quota1 = MailQuota::new(1024).unwrap();
+
+    let account1 = VirtualMailboxAccount::new(email1, hash1, quota1);
+
+    // Should succeed because example.com is in manager
+    assert!(manager.add_mailbox(account1).is_ok());
+
+    let email2 = EmailAddress::new("user@otherdomain.com").unwrap();
+    let hash2 = MailboxPasswordHash::new("$6$somehash").unwrap();
+    let quota2 = MailQuota::new(1024).unwrap();
+
+    let account2 = VirtualMailboxAccount::new(email2, hash2, quota2);
+
+    // Should fail because otherdomain.com is NOT in manager
+    assert!(manager.add_mailbox(account2).is_err());
+
+    assert_eq!(manager.mailboxes().len(), 1);
+}
