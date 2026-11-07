@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 pub mod adapter;
 pub mod extractors;
 pub mod middleware;

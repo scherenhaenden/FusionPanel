@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use crate::middleware::IdentityStore;
 use chrono::Utc;
 use identity::error::IdentityError;
