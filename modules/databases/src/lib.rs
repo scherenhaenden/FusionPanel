@@ -2,4 +2,4 @@
 
 pub mod adapter;
 pub mod mariadb;
-pub mod postgresql;
+pub mod postgres;
