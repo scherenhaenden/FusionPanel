@@ -50,6 +50,7 @@ mod tests {
     }
 }
 pub mod config;
+pub mod vhost;
 
 #[cfg(test)]
 mod user_tests {
