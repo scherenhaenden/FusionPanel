@@ -24,6 +24,9 @@ struct MockAdapter {
 
 #[async_trait]
 impl DatabaseAdapter for MockAdapter {
+async fn database_exists(&self, _name: &DbName) -> databases::adapter::Result<bool> { Ok(true) }
+    async fn list_databases(&self) -> databases::adapter::Result<Vec<databases::adapter::ObservedDatabase>> { Ok(vec![]) }
+    async fn user_exists(&self, _username: &DbUser) -> databases::adapter::Result<bool> { Ok(true) }
     fn engine(&self) -> DatabaseEngine {
         self.config.engine.clone()
     }
