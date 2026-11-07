@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 // Test DKIM Rotation logic
 use mail::dkim_rotation::DkimSelectorLifecycle;
 use mail::dns_records::{DkimKeyPair, DkimKeyType, DnsRecord, DnsRecordType};
