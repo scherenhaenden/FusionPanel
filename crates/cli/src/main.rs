@@ -24,6 +24,36 @@ struct Cli {
 enum Commands {
     Health,
     Capabilities,
+    Bootstrap(BootstrapArgs),
+}
+
+#[derive(Parser, Debug)]
+struct BootstrapArgs {
+    #[command(subcommand)]
+    command: BootstrapCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum BootstrapCommand {
+    Operator(OperatorArgs),
+}
+
+#[derive(Parser, Debug)]
+struct OperatorArgs {
+    #[arg(long)]
+    database: String,
+
+    #[arg(long)]
+    username: String,
+
+    #[arg(long)]
+    email: String,
+
+    #[arg(long)]
+    password: Option<String>,
+
+    #[arg(long)]
+    generate_password: bool,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
@@ -59,6 +89,8 @@ enum CliError {
     ReqwestError(#[from] reqwest::Error),
     #[error("API error ({0}): {1}")]
     ApiError(StatusCode, String),
+    #[error("Identity error: {0}")]
+    IdentityError(String),
 }
 
 async fn run_cli(
@@ -128,6 +160,89 @@ async fn run_cli(
                 }
             }
         }
+        Commands::Bootstrap(args) => match args.command {
+            BootstrapCommand::Operator(op_args) => {
+                let password = if op_args.generate_password {
+                    let mut rng = rand::thread_rng();
+                    let random_bytes: [u8; 16] = rand::Rng::gen(&mut rng);
+                    let mut s = String::with_capacity(32);
+                    for b in random_bytes {
+                        use std::fmt::Write;
+                        write!(&mut s, "{:02x}", b).unwrap();
+                    }
+                    s
+                } else {
+                    op_args.password.ok_or_else(|| {
+                        CliError::InvalidArguments(
+                            "Must provide --password or --generate-password".to_string(),
+                        )
+                    })?
+                };
+
+                let store = identity::storage::SqliteIdentityStore::open(&op_args.database)
+                    .map_err(|e| CliError::IdentityError(e.to_string()))?;
+
+                let password_hash = identity::password::PasswordManager::hash_password(&password)
+                    .map_err(|e| CliError::IdentityError(e.to_string()))?;
+
+                let user = identity::types::User::new(
+                    op_args.username.clone(),
+                    op_args.email.clone(),
+                    password_hash,
+                )
+                .map_err(|e| CliError::IdentityError(e.to_string()))?;
+
+                store
+                    .create_user(&user)
+                    .map_err(|e| CliError::IdentityError(e.to_string()))?;
+
+                let tenant_id = identity::types::TenantId::new_v4();
+
+                let binding = identity::rbac::RoleBinding {
+                    user_id: user.id(),
+                    role: identity::rbac::Role::super_admin(),
+                    scope: identity::rbac::Scope::Tenant { tenant_id },
+                };
+
+                store
+                    .save_role_binding(&binding)
+                    .map_err(|e| CliError::IdentityError(e.to_string()))?;
+
+                #[derive(Serialize)]
+                struct BootstrapResponse {
+                    user_id: String,
+                    tenant_id: String,
+                    username: String,
+                    email: String,
+                    password: Option<String>,
+                }
+
+                let response = BootstrapResponse {
+                    user_id: user.id().to_string(),
+                    tenant_id: tenant_id.to_string(),
+                    username: op_args.username,
+                    email: op_args.email,
+                    password: if op_args.generate_password {
+                        Some(password)
+                    } else {
+                        None
+                    },
+                };
+
+                if cli.json {
+                    writeln!(output, "{}", serde_json::to_string(&response).unwrap()).unwrap();
+                } else {
+                    writeln!(output, "Operator created successfully.").unwrap();
+                    writeln!(output, "User ID: {}", response.user_id).unwrap();
+                    writeln!(output, "Tenant ID: {}", response.tenant_id).unwrap();
+                    writeln!(output, "Username: {}", response.username).unwrap();
+                    writeln!(output, "Email: {}", response.email).unwrap();
+                    if let Some(pw) = response.password {
+                        writeln!(output, "Generated Password: {}", pw).unwrap();
+                    }
+                }
+            }
+        },
     }
 
     Ok(())
