@@ -77,7 +77,7 @@ impl GeneratedDbCredentials {
             let b64_str = base64::engine::general_purpose::STANDARD.encode(key);
             b64_str.chars().filter(|c| c.is_ascii_alphanumeric()).take(length).collect()
         };
-
+        
         let generate_password = |rng: &mut rand::rngs::ThreadRng, length: usize| -> String {
              let mut key = [0u8; 64];
              rng.fill_bytes(&mut key);
@@ -93,7 +93,7 @@ impl GeneratedDbCredentials {
             db_prefix: format!("wp_{}_", generate_string(&mut rng, 4).to_lowercase()),
         }
     }
-
+    
     pub fn as_ref(&self) -> DbCredentials<'_> {
         DbCredentials {
             db_name: &self.db_name,
@@ -358,7 +358,7 @@ require_once ABSPATH . 'wp-settings.php';
 
     pub async fn atomic_install(&self, version: &str, locale: &str, wp_cli: &crate::wp_cli::commands::WpCli, admin_email: &str, title: &str, url: &str, db_creds: &GeneratedDbCredentials) -> Result<(), InstallError> {
         let site_path = &self.target_dir;
-
+        
         let target_exists = self.target_dir.exists();
         if target_exists {
             let is_empty = fs::read_dir(&self.target_dir)?.next().is_none();
@@ -366,26 +366,26 @@ require_once ABSPATH . 'wp-settings.php';
                 return Err(InstallError::IoError(std::io::Error::new(std::io::ErrorKind::DirectoryNotEmpty, "Target directory not empty")));
             }
         }
-
+        
         // 1. Download
         if let Err(e) = self.download_and_verify(version, locale).await {
             self.cleanup_files();
             return Err(e);
         }
-
+        
         // 2. Generate wp-config.php
         if let Err(e) = self.generate_wp_config(&db_creds.as_ref()) {
             self.cleanup_files();
             return Err(e);
         }
-
+        
         // We cannot create databases here safely without root db creds, so assume the db is provisioned
         // If not, validation fails before install
         if let Err(e) = self.validate_database_connection(&db_creds.as_ref()).await {
              self.cleanup_files();
              return Err(e);
         }
-
+        
         // 3. Core install
         let admin_user = "admin";
         let mut rng = rand::thread_rng();
@@ -397,7 +397,7 @@ require_once ABSPATH . 'wp-settings.php';
         };
         let admin_password = generate_admin_pass(&mut rng, 24);
         // url is passed as argument
-
+        
         if let Err(e) = wp_cli.core_install(site_path, url, title, admin_user, &admin_password, admin_email).await {
             self.cleanup_database(db_creds).await;
             self.cleanup_files();
@@ -406,12 +406,12 @@ require_once ABSPATH . 'wp-settings.php';
 
         Ok(())
     }
-
+    
     async fn cleanup_database(&self, creds: &GeneratedDbCredentials) {
         let user = urlencoding::encode(&creds.db_user);
         let pass = urlencoding::encode(&creds.db_password);
         let url = format!("mysql://{}:{}@{}/{}", user, pass, creds.db_host, creds.db_name);
-
+        
         if let Ok(opts) = mysql_async::Opts::from_url(&url) {
             let pool = mysql_async::Pool::new(opts);
             if let Ok(mut conn) = pool.get_conn().await {
@@ -437,7 +437,7 @@ require_once ABSPATH . 'wp-settings.php';
             }
         }
     }
-
+    
     fn cleanup_files(&self) {
         let _ = fs::remove_dir_all(&self.target_dir);
     }

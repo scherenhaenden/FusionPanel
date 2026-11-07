@@ -21,14 +21,14 @@ impl WpCli {
 
     pub fn sanitize_arg(arg: &str) -> Result<&str, WpCliError> {
         // Since we are using std::process::Command and NOT invoking a shell (like sh -c),
-        // we don't need to block all shell metacharacters like &, ;, |.
+        // we don't need to block all shell metacharacters like &, ;, |. 
         // We do want to prevent someone injecting flags like --allow-root when we just expect a value.
         if arg.starts_with("--") {
             return Err(WpCliError::InvalidArgument(format!("Invalid argument (starts with --): {}", arg)));
         }
         Ok(arg)
     }
-
+    
     pub fn sanitize_url(url: &str) -> Result<&str, WpCliError> {
         if !url.starts_with("http://") && !url.starts_with("https://") {
             return Err(WpCliError::InvalidArgument(format!("Invalid URL: {}", url)));
@@ -46,21 +46,21 @@ impl WpCli {
     /// Run `wp core download`
     pub async fn core_download(&self, site_path: &Path, locale: Option<&str>, version: Option<&str>) -> Result<(), WpCliError> {
         let mut args = vec!["core", "download"];
-
+        
         let locale_arg;
         if let Some(l) = locale {
             Self::sanitize_arg(l)?;
             locale_arg = format!("--locale={}", l);
             args.push(&locale_arg);
         }
-
+        
         let version_arg;
         if let Some(v) = version {
             Self::sanitize_arg(v)?;
             version_arg = format!("--version={}", v);
             args.push(&version_arg);
         }
-
+        
         self.executor.run_command(&args, Some(site_path)).await?;
         Ok(())
     }
@@ -75,13 +75,13 @@ impl WpCli {
         }
         Self::sanitize_arg(dbhost)?;
         Self::sanitize_arg(dbprefix)?;
-
+        
         let dbname_arg = format!("--dbname={}", dbname);
         let dbuser_arg = format!("--dbuser={}", dbuser);
         let dbpass_arg = format!("--dbpass={}", dbpass);
         let dbhost_arg = format!("--dbhost={}", dbhost);
         let dbprefix_arg = format!("--dbprefix={}", dbprefix);
-
+        
         let args = vec![
             "core", "config",
             &dbname_arg,
@@ -90,7 +90,7 @@ impl WpCli {
             &dbhost_arg,
             &dbprefix_arg,
         ];
-
+        
         self.executor.run_command(&args, Some(site_path)).await?;
         Ok(())
     }
@@ -104,13 +104,13 @@ impl WpCli {
              return Err(WpCliError::InvalidArgument("Password contains invalid characters".to_string()));
         }
         Self::sanitize_email(admin_email)?;
-
+        
         let url_arg = format!("--url={}", url);
         let title_arg = format!("--title={}", title);
         let admin_user_arg = format!("--admin_user={}", admin_user);
         let admin_password_arg = format!("--admin_password={}", admin_password);
         let admin_email_arg = format!("--admin_email={}", admin_email);
-
+        
         let args = vec![
             "core", "install",
             &url_arg,
@@ -119,7 +119,7 @@ impl WpCli {
             &admin_password_arg,
             &admin_email_arg,
         ];
-
+        
         self.executor.run_command(&args, Some(site_path)).await?;
         Ok(())
     }

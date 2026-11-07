@@ -285,7 +285,7 @@ async fn test_atomic_install_fails_on_existing_dir() {
     let orchestrator = Orchestrator::new(&target_dir);
     let wp_cli = WpCli::new(WpCliExecutor::new("echo"));
     let creds = GeneratedDbCredentials::generate();
-
+    
     let res = orchestrator.atomic_install("6.4.1", "en_US", &wp_cli, "test@example.com", "Test Site", "http://localhost", &creds).await;
     assert!(res.is_err());
     let err_str = res.unwrap_err().to_string();
