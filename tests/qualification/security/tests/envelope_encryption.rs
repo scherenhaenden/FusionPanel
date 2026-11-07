@@ -95,7 +95,7 @@ mod crypto_tests {
 
         // 1. Decrypt DEK using Old KEK
         let decrypted_dek_bytes = decrypt_with_key(&old_kek, &dek_nonce_old, &encrypted_dek_old).unwrap();
-        
+
         // 2. Re-encrypt DEK using New KEK
         let (encrypted_dek_new, dek_nonce_new) = encrypt_with_key(&new_kek, &decrypted_dek_bytes);
 
