@@ -5,6 +5,7 @@ pub mod config;
 pub mod delivery;
 pub mod dkim;
 pub mod dkim_rotation;
+pub mod dmarc;
 pub mod dns_records;
 pub mod domain;
 pub mod error;
