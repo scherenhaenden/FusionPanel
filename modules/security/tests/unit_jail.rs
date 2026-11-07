@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use security::jail::{JailConfig, JailError, JailManager};
 use std::time::{Duration, SystemTime};
 
