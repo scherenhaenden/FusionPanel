@@ -3,5 +3,6 @@
 pub mod adapter;
 pub mod health;
 pub mod mariadb;
+pub mod pool_telemetry;
 pub mod postgres;
 pub mod quota;
