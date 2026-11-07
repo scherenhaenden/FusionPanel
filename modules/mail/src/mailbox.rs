@@ -40,11 +40,7 @@ pub struct VirtualMailboxAccount {
 }
 
 impl VirtualMailboxAccount {
-    pub fn new(
-        email: EmailAddress,
-        password_hash: MailboxPasswordHash,
-        quota: MailQuota,
-    ) -> Self {
+    pub fn new(email: EmailAddress, password_hash: MailboxPasswordHash, quota: MailQuota) -> Self {
         Self {
             email,
             password_hash,

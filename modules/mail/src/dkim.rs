@@ -26,7 +26,8 @@ impl std::error::Error for DkimError {}
 pub struct DkimKeyPair {
     pub private_key: String,
     pub public_key: String,
-    #[allow(dead_code)] pub txt_record: String,
+    #[allow(dead_code)]
+    pub txt_record: String,
 }
 
 pub fn generate_dkim_keypair(private_key_path: &Path) -> Result<DkimKeyPair, DkimError> {

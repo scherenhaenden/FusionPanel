@@ -100,7 +100,9 @@ impl QuotaTracker {
             return QuotaWarning::Exceeded;
         }
 
-        let max_percent = status.bytes_usage_percent.max(status.messages_usage_percent);
+        let max_percent = status
+            .bytes_usage_percent
+            .max(status.messages_usage_percent);
 
         if max_percent >= self.thresholds.critical {
             QuotaWarning::Critical(max_percent)

@@ -27,7 +27,10 @@ fn test_rotate_keys_blocked() {
         }
         Err(e) => {
             let error_str: String = e;
-            assert!(error_str.contains("BLOCKED"), "Expected BLOCKED error if opendkim fails");
+            assert!(
+                error_str.contains("BLOCKED"),
+                "Expected BLOCKED error if opendkim fails"
+            );
         }
     }
 }
@@ -48,7 +51,7 @@ fn test_get_all_txt_records() {
             record_type: DnsRecordType::TXT,
             value: "\"v=DKIM1; k=rsa; p=...2\"".to_string(),
             priority: None,
-        }
+        },
     };
 
     let old_kps = vec![
@@ -60,7 +63,7 @@ fn test_get_all_txt_records() {
                 record_type: DnsRecordType::TXT,
                 value: "\"v=DKIM1; k=rsa; p=...1\"".to_string(),
                 priority: None,
-            }
+            },
         },
         DkimKeyPair {
             selector: "202212".to_string(),
@@ -70,13 +73,19 @@ fn test_get_all_txt_records() {
                 record_type: DnsRecordType::TXT,
                 value: "\"v=DKIM1; k=rsa; p=...0\"".to_string(),
                 priority: None,
-            }
-        }
+            },
+        },
     ];
 
     let records = lifecycle.get_all_txt_records(&current_kp, &old_kps);
     assert_eq!(records.len(), 2);
-    assert!(records.iter().any(|r| r.name == "202302._domainkey.example.com"));
-    assert!(records.iter().any(|r| r.name == "202301._domainkey.example.com"));
-    assert!(!records.iter().any(|r| r.name == "202212._domainkey.example.com"));
+    assert!(records
+        .iter()
+        .any(|r| r.name == "202302._domainkey.example.com"));
+    assert!(records
+        .iter()
+        .any(|r| r.name == "202301._domainkey.example.com"));
+    assert!(!records
+        .iter()
+        .any(|r| r.name == "202212._domainkey.example.com"));
 }

@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use mail::dmarc::*;
-use mail::dmarc::{evaluate_dmarc, check_alignment, is_subdomain_or_exact};
+use mail::dmarc::{check_alignment, evaluate_dmarc, is_subdomain_or_exact};
 use serde_json;
 
 #[test]
@@ -16,24 +16,62 @@ fn test_is_subdomain_or_exact() {
 
 #[test]
 fn test_check_alignment_strict() {
-    assert!(check_alignment("example.com", "example.com", &Alignment::Strict));
-    assert!(!check_alignment("sub.example.com", "example.com", &Alignment::Strict));
-    assert!(!check_alignment("example.com", "sub.example.com", &Alignment::Strict));
-    assert!(!check_alignment("other.com", "example.com", &Alignment::Strict));
+    assert!(check_alignment(
+        "example.com",
+        "example.com",
+        &Alignment::Strict
+    ));
+    assert!(!check_alignment(
+        "sub.example.com",
+        "example.com",
+        &Alignment::Strict
+    ));
+    assert!(!check_alignment(
+        "example.com",
+        "sub.example.com",
+        &Alignment::Strict
+    ));
+    assert!(!check_alignment(
+        "other.com",
+        "example.com",
+        &Alignment::Strict
+    ));
 }
 
 #[test]
 fn test_check_alignment_relaxed() {
-    assert!(check_alignment("example.com", "example.com", &Alignment::Relaxed));
-    assert!(check_alignment("sub.example.com", "example.com", &Alignment::Relaxed));
-    assert!(!check_alignment("example.com", "sub.example.com", &Alignment::Relaxed));
-    assert!(!check_alignment("notexample.com", "example.com", &Alignment::Relaxed));
+    assert!(check_alignment(
+        "example.com",
+        "example.com",
+        &Alignment::Relaxed
+    ));
+    assert!(check_alignment(
+        "sub.example.com",
+        "example.com",
+        &Alignment::Relaxed
+    ));
+    assert!(!check_alignment(
+        "example.com",
+        "sub.example.com",
+        &Alignment::Relaxed
+    ));
+    assert!(!check_alignment(
+        "notexample.com",
+        "example.com",
+        &Alignment::Relaxed
+    ));
 }
 
 #[test]
 fn test_evaluate_dmarc_pass_spf() {
-    let spf = SpfStatus { result: AuthResult::Pass, domain: "example.com".to_string() };
-    let dkim = DkimStatus { result: AuthResult::Fail, domain: "example.com".to_string() };
+    let spf = SpfStatus {
+        result: AuthResult::Pass,
+        domain: "example.com".to_string(),
+    };
+    let dkim = DkimStatus {
+        result: AuthResult::Fail,
+        domain: "example.com".to_string(),
+    };
     let config = DmarcConfig {
         policy: DmarcPolicy::Reject,
         spf_alignment: Alignment::Relaxed,
@@ -49,8 +87,14 @@ fn test_evaluate_dmarc_pass_spf() {
 
 #[test]
 fn test_evaluate_dmarc_pass_dkim() {
-    let spf = SpfStatus { result: AuthResult::SoftFail, domain: "example.com".to_string() };
-    let dkim = DkimStatus { result: AuthResult::Pass, domain: "example.com".to_string() };
+    let spf = SpfStatus {
+        result: AuthResult::SoftFail,
+        domain: "example.com".to_string(),
+    };
+    let dkim = DkimStatus {
+        result: AuthResult::Pass,
+        domain: "example.com".to_string(),
+    };
     let config = DmarcConfig {
         policy: DmarcPolicy::Quarantine,
         spf_alignment: Alignment::Relaxed,
@@ -66,8 +110,14 @@ fn test_evaluate_dmarc_pass_dkim() {
 
 #[test]
 fn test_evaluate_dmarc_fail_both() {
-    let spf = SpfStatus { result: AuthResult::Fail, domain: "example.com".to_string() };
-    let dkim = DkimStatus { result: AuthResult::Fail, domain: "example.com".to_string() };
+    let spf = SpfStatus {
+        result: AuthResult::Fail,
+        domain: "example.com".to_string(),
+    };
+    let dkim = DkimStatus {
+        result: AuthResult::Fail,
+        domain: "example.com".to_string(),
+    };
     let config = DmarcConfig {
         policy: DmarcPolicy::Reject,
         spf_alignment: Alignment::Relaxed,
@@ -83,8 +133,14 @@ fn test_evaluate_dmarc_fail_both() {
 
 #[test]
 fn test_evaluate_dmarc_pass_but_unaligned() {
-    let spf = SpfStatus { result: AuthResult::Pass, domain: "other.com".to_string() };
-    let dkim = DkimStatus { result: AuthResult::Pass, domain: "other.com".to_string() };
+    let spf = SpfStatus {
+        result: AuthResult::Pass,
+        domain: "other.com".to_string(),
+    };
+    let dkim = DkimStatus {
+        result: AuthResult::Pass,
+        domain: "other.com".to_string(),
+    };
     let config = DmarcConfig {
         policy: DmarcPolicy::Quarantine,
         spf_alignment: Alignment::Relaxed,
@@ -100,8 +156,14 @@ fn test_evaluate_dmarc_pass_but_unaligned() {
 
 #[test]
 fn test_evaluate_dmarc_strict_alignment() {
-    let spf = SpfStatus { result: AuthResult::Pass, domain: "sub.example.com".to_string() };
-    let dkim = DkimStatus { result: AuthResult::Pass, domain: "sub.example.com".to_string() };
+    let spf = SpfStatus {
+        result: AuthResult::Pass,
+        domain: "sub.example.com".to_string(),
+    };
+    let dkim = DkimStatus {
+        result: AuthResult::Pass,
+        domain: "sub.example.com".to_string(),
+    };
     let config_strict = DmarcConfig {
         policy: DmarcPolicy::Reject,
         spf_alignment: Alignment::Strict,

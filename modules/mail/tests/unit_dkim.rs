@@ -4,8 +4,8 @@
 mod dkim;
 
 use dkim::{format_dns_txt_record, generate_dkim_keypair};
-use std::os::unix::fs::PermissionsExt;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use tempfile::tempdir;
 
 #[test]
@@ -23,19 +23,29 @@ fn test_dkim_keypair_generation() {
     assert!(result.public_key.contains("BEGIN PUBLIC KEY"));
     assert!(result.public_key.contains("END PUBLIC KEY"));
 
-
     // Check key length (2048-bit)
-    assert!(result.private_key.len() > 1600 && result.private_key.len() < 1800, "RSA 2048-bit private key length should be around 1670-1704 characters");
-    assert!(result.public_key.len() > 400 && result.public_key.len() < 500, "RSA 2048-bit public key length should be around 450 characters");
+    assert!(
+        result.private_key.len() > 1600 && result.private_key.len() < 1800,
+        "RSA 2048-bit private key length should be around 1670-1704 characters"
+    );
+    assert!(
+        result.public_key.len() > 400 && result.public_key.len() < 500,
+        "RSA 2048-bit public key length should be around 450 characters"
+    );
 
     // Check base64 encoding (alphanumeric + +/ + =)
-    let stripped = result.public_key
+    let stripped = result
+        .public_key
         .replace("-----BEGIN PUBLIC KEY-----", "")
         .replace("-----END PUBLIC KEY-----", "")
         .replace("\n", "")
         .replace("\r", "");
     for c in stripped.chars() {
-        assert!(c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=', "Invalid character in base64 string: {}", c);
+        assert!(
+            c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=',
+            "Invalid character in base64 string: {}",
+            c
+        );
     }
 
     // Check file exists
@@ -92,8 +102,12 @@ fn test_format_dns_txt_record() {
         }
 
         let mut len = chunk.len();
-        if is_first { len -= 1; }
-        if is_last { len -= 1; }
+        if is_first {
+            len -= 1;
+        }
+        if is_last {
+            len -= 1;
+        }
         assert!(len <= 255);
     }
 
