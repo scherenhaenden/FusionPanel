@@ -2,16 +2,17 @@
 set -e
 
 # Default values
+PREFIX="/opt/fusionpanel"
 PORT="8080"
 VERSION="latest"
 OS=""
 ARCH=""
 DRY_RUN=0
-export DEBIAN_FRONTEND=noninteractive
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
     echo "Options:"
+    echo "  --prefix <path>   Installation prefix (default: /opt/fusionpanel)"
     echo "  --port <port>     Port for FusionPanel (default: 8080)"
     echo "  --version <ver>   Version to install (default: latest)"
     echo "  --dry-run         Perform a trial run with no changes made"
@@ -21,6 +22,10 @@ usage() {
 # Parse arguments
 while [ $# -gt 0 ]; do
     case "$1" in
+        --prefix)
+            PREFIX="$2"
+            shift 2
+            ;;
         --port)
             PORT="$2"
             shift 2
@@ -36,10 +41,6 @@ while [ $# -gt 0 ]; do
         --help)
             usage
             exit 0
-            ;;
-        --prefix)
-            # Ignore prefix argument for compatibility
-            shift 2
             ;;
         *)
             echo "Unknown option: $1" >&2
@@ -72,11 +73,6 @@ detect_arch() {
 }
 
 check_dependencies() {
-    if [ "$OS" = "debian" ] && [ "$DRY_RUN" -eq 0 ]; then
-        apt-get update -qq || true
-        apt-get install -yqq curl tar openssl || true
-    fi
-
     for cmd in curl systemctl tar useradd groupadd id mktemp openssl; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             echo "Missing required dependency: $cmd" >&2
@@ -95,30 +91,30 @@ setup_users() {
         fi
         echo "Creating fusionpanel system user..."
         if [ "$DRY_RUN" -eq 0 ]; then
-            useradd --system -g fusionpanel -s /sbin/nologin -d "/var/lib/fusionpanel" -c "FusionPanel Service User" fusionpanel
+            useradd --system -g fusionpanel -s /sbin/nologin -d "$PREFIX" -c "FusionPanel Service User" fusionpanel
         else
-            echo "[Dry-run] Would run: useradd --system -g fusionpanel -s /sbin/nologin -d \"/var/lib/fusionpanel\" -c \"FusionPanel Service User\" fusionpanel"
+            echo "[Dry-run] Would run: useradd --system -g fusionpanel -s /sbin/nologin -d \"$PREFIX\" -c \"FusionPanel Service User\" fusionpanel"
         fi
     fi
 }
 
 install() {
-    echo "Installing FusionPanel $VERSION (Port: $PORT) on $OS ($ARCH)"
+    echo "Installing FusionPanel $VERSION to $PREFIX (Port: $PORT) on $OS ($ARCH)"
 
     if [ "$DRY_RUN" -eq 1 ]; then
-        echo "[Dry-run] Would download and install FusionPanel $VERSION"
+        echo "[Dry-run] Would download and install FusionPanel $VERSION to $PREFIX"
         echo "[Dry-run] Would create symlinks and systemd units"
         echo "[Dry-run] Installation skipped."
         return 0
     fi
 
-    local version_file="/var/lib/fusionpanel/.version"
+    local version_file="$PREFIX/.version"
 
-    if [ -f "/usr/local/bin/fusionpanel-api" ]; then
+    if [ -d "$PREFIX" ] && [ -f "$PREFIX/bin/fusionpanel-api" ]; then
         if [ -f "$version_file" ]; then
             INSTALLED_VERSION=$(cat "$version_file")
             if [ "$INSTALLED_VERSION" = "$VERSION" ]; then
-                echo "FusionPanel is already installed with version $VERSION."
+                echo "FusionPanel is already installed at $PREFIX with version $VERSION."
                 echo "Idempotency guard triggered: skipping installation."
                 return 0
             fi
@@ -136,6 +132,7 @@ install() {
 
     # Download real versioned artifacts
     if [ "$VERSION" = "latest" ]; then
+        # For simplicity, if latest is specified, we construct a generic URL pattern. In a real system, you'd query GitHub API.
         DOWNLOAD_URL="https://github.com/scherenhaenden/FusionPanel/releases/latest/download/fusionpanel-${OS}-${ARCH}.tar.gz"
     else
         DOWNLOAD_URL="https://github.com/scherenhaenden/FusionPanel/releases/download/${VERSION}/fusionpanel-${VERSION}-${OS}-${ARCH}.tar.gz"
@@ -172,8 +169,6 @@ install() {
         sysconfdir="$FUSIONPANEL_SYSCONFDIR"
     fi
 
-    mkdir -p "$sysconfdir"
-
     local admin_token=""
     if [ -f "$sysconfdir/fusionpanel.env" ]; then
          admin_token=$(grep '^FUSIONPANEL_ADMIN_TOKEN=' "$sysconfdir/fusionpanel.env" | cut -d= -f2- || true)
@@ -183,46 +178,45 @@ install() {
          admin_token=$(openssl rand -hex 32)
     fi
 
-    if [ ! -f "$sysconfdir/initial-credentials.txt" ]; then
-         echo "ADMIN_TOKEN=$admin_token" > "$sysconfdir/initial-credentials.txt"
-         chmod 0600 "$sysconfdir/initial-credentials.txt"
-    fi
-
     echo "FUSIONPANEL_LISTEN=127.0.0.1:$PORT" > "$TMP_DIR/config/fusionpanel.env"
     echo "FUSIONPANEL_ADMIN_TOKEN=$admin_token" >> "$TMP_DIR/config/fusionpanel.env"
 
     echo "FUSIONPANEL_AGENT_ENDPOINT=http://127.0.0.1:$PORT" > "$TMP_DIR/config/fusionpanel-agent.env"
 
     # Atomic move logic: copy to temporary path in final destination, then rename to ensure no incomplete installs.
-    local versions_dir="/usr/local/lib/fusionpanel/versions"
-    local install_dir="${versions_dir}/${VERSION}"
-    mkdir -p "$versions_dir"
+    mkdir -p "$PREFIX"
 
+    # To support update/recovery, we will install to a versioned directory and symlink
+    local install_dir="${PREFIX}/versions/${VERSION}"
+    mkdir -p "${PREFIX}/versions"
+
+    # If the version directory already exists and was partial, we remove it
     if [ -d "$install_dir" ]; then
         rm -rf "$install_dir"
     fi
 
+    # Copy from TMP_DIR to final version dir
     chmod 755 "$TMP_DIR"
     cp -a "$TMP_DIR" "${install_dir}.tmp"
     mv "${install_dir}.tmp" "$install_dir"
 
-    # Now set up symlinks for binaries
-    mkdir -p /usr/local/bin
-    ln -sfn "$install_dir/bin/fusionpanel-api" "/usr/local/bin/fusionpanel-api"
-    ln -sfn "$install_dir/bin/fusionpanel-agent" "/usr/local/bin/fusionpanel-agent"
+    # Now set up symlinks and permissions
+    ln -sfn "$install_dir/bin" "$PREFIX/bin"
 
+    mkdir -p "$sysconfdir"
     cp "$install_dir/config/fusionpanel.env" "$sysconfdir/"
     cp "$install_dir/config/fusionpanel-agent.env" "$sysconfdir/"
 
-    # Setup data and log directory
-    mkdir -p /var/lib/fusionpanel
-    mkdir -p /var/log/fusionpanel
+    # Setup data directory
+    if [ ! -d "$PREFIX/data" ]; then
+        cp -a "$install_dir/data" "$PREFIX/data"
+    fi
 
-    cp "$install_dir/.version" "/var/lib/fusionpanel/.version"
+    cp "$install_dir/.version" "$PREFIX/.version"
 
     # Set permissions
-    chown -R fusionpanel:fusionpanel /var/lib/fusionpanel /var/log/fusionpanel || echo "Warning: chown failed, running as non-root?"
-    chmod 700 /var/lib/fusionpanel /var/log/fusionpanel
+    chown -R fusionpanel:fusionpanel "$PREFIX/data" || echo "Warning: chown failed, running as non-root?"
+    chmod 700 "$PREFIX/data"
 
     chown root:fusionpanel "$sysconfdir/fusionpanel.env" "$sysconfdir/fusionpanel-agent.env" || true
     chmod 640 "$sysconfdir/fusionpanel.env" "$sysconfdir/fusionpanel-agent.env"
@@ -237,11 +231,11 @@ install() {
     mkdir -p "$systemd_dir"
 
     if [ -f "$source_dir/systemd/fusionpanel.service" ]; then
-        sed -e "s|/usr/local/bin/fusionpanel-api|/usr/local/bin/fusionpanel-api|g" \
+        sed -e "s|/opt/fusionpanel/bin/fusionpanel-api|$PREFIX/bin/fusionpanel-api|g" \
             -e "s|/etc/fusionpanel/fusionpanel.env|$sysconfdir/fusionpanel.env|g" \
             "$source_dir/systemd/fusionpanel.service" > "$systemd_dir/fusionpanel.service"
 
-        sed -e "s|/usr/local/bin/fusionpanel-agent|/usr/local/bin/fusionpanel-agent|g" \
+        sed -e "s|/opt/fusionpanel/bin/fusionpanel-agent|$PREFIX/bin/fusionpanel-agent|g" \
             -e "s|/etc/fusionpanel/fusionpanel-agent.env|$sysconfdir/fusionpanel-agent.env|g" \
             "$source_dir/systemd/fusionpanel-agent.service" > "$systemd_dir/fusionpanel-agent.service"
 

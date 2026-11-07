@@ -40,45 +40,9 @@ impl Planner {
     pub fn create_plan(inventory: &MigrationInventory, dry_run: bool) -> MigrationPlan {
         let mut actions = Vec::new();
 
-        let mut site_names = std::collections::HashSet::new();
-        let mut db_names = std::collections::HashSet::new();
-
-        // Find collisions
-        let mut site_collisions = std::collections::HashSet::new();
-        let mut db_collisions = std::collections::HashSet::new();
-
         for item in &inventory.items {
-            match item.item_type {
-                InventoryItemType::Site => {
-                    if !site_names.insert(&item.name) {
-                        site_collisions.insert(&item.name);
-                    }
-                }
-                InventoryItemType::Database => {
-                    if !db_names.insert(&item.name) {
-                        db_collisions.insert(&item.name);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        for item in &inventory.items {
-            let (mut action_type, mut reason) =
+            let (action_type, reason) =
                 Self::evaluate_item(item, dry_run, &inventory.source_version);
-
-            match item.item_type {
-                InventoryItemType::Site if site_collisions.contains(&item.name) => {
-                    action_type = PlanActionType::Conflict;
-                    reason = Some(format!("Domain name collision: {}", item.name));
-                }
-                InventoryItemType::Database if db_collisions.contains(&item.name) => {
-                    action_type = PlanActionType::Conflict;
-                    reason = Some(format!("Database name collision: {}", item.name));
-                }
-                _ => {}
-            }
-
             actions.push(PlanAction {
                 action: action_type,
                 item_id: item.id.clone(),
@@ -422,59 +386,5 @@ mod tests {
         ));
         let plan = Planner::create_review_plan(&inventory, false, Some(&get_full_evidence()));
         assert!(!plan.decommission_allowed);
-    }
-
-    #[test]
-    fn test_planner_detects_domain_collisions() {
-        let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-        inventory.items.push(create_test_item(
-            "site_1",
-            InventoryItemType::Site,
-            "example.com",
-            Some("8.1".to_string()),
-        ));
-        inventory.items.push(create_test_item(
-            "site_2",
-            InventoryItemType::Site,
-            "example.com",
-            Some("8.1".to_string()),
-        ));
-
-        let plan = Planner::create_plan(&inventory, true);
-        assert_eq!(plan.actions.len(), 2);
-
-        let conflicts = plan
-            .actions
-            .iter()
-            .filter(|a| a.action == PlanActionType::Conflict)
-            .count();
-        assert_eq!(conflicts, 2);
-    }
-
-    #[test]
-    fn test_planner_detects_db_collisions() {
-        let mut inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-        inventory.items.push(create_test_item(
-            "db_1",
-            InventoryItemType::Database,
-            "my_db",
-            None,
-        ));
-        inventory.items.push(create_test_item(
-            "db_2",
-            InventoryItemType::Database,
-            "my_db",
-            None,
-        ));
-
-        let plan = Planner::create_plan(&inventory, true);
-        assert_eq!(plan.actions.len(), 2);
-
-        let conflicts = plan
-            .actions
-            .iter()
-            .filter(|a| a.action == PlanActionType::Conflict)
-            .count();
-        assert_eq!(conflicts, 2);
     }
 }

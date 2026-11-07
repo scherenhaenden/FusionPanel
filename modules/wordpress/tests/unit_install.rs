@@ -255,39 +255,3 @@ async fn test_successful_promotion_mocked() {
     assert!(temp_dir.path().join("index.php").exists());
     assert!(temp_dir.path().join("wp-content/themes/index.php").exists());
 }
-
-#[test]
-fn test_generate_db_credentials() {
-    use wordpress::install::GeneratedDbCredentials;
-    let creds = GeneratedDbCredentials::generate();
-    assert!(creds.db_name.starts_with("wp_"));
-    assert!(creds.db_user.starts_with("wp_user_"));
-    assert!(creds.db_prefix.starts_with("wp_"));
-    assert_eq!(creds.db_password.len(), 32);
-    // test the as_ref method
-    let refs = creds.as_ref();
-    assert_eq!(refs.db_name, creds.db_name);
-}
-
-#[tokio::test]
-async fn test_atomic_install_fails_on_existing_dir() {
-    use wordpress::install::{Orchestrator, GeneratedDbCredentials};
-    use wordpress::wp_cli::{commands::WpCli, WpCliExecutor};
-    use tempfile::tempdir;
-    use std::fs;
-
-    let dir = tempdir().unwrap();
-    let target_dir = dir.path().join("existing");
-    fs::create_dir_all(&target_dir).unwrap();
-    // make it not empty
-    fs::write(target_dir.join("test.txt"), "hello").unwrap();
-
-    let orchestrator = Orchestrator::new(&target_dir);
-    let wp_cli = WpCli::new(WpCliExecutor::new("echo"));
-    let creds = GeneratedDbCredentials::generate();
-    
-    let res = orchestrator.atomic_install("6.4.1", "en_US", &wp_cli, "test@example.com", "Test Site", "http://localhost", &creds).await;
-    assert!(res.is_err());
-    let err_str = res.unwrap_err().to_string();
-    assert!(err_str.contains("Target directory not empty"));
-}

@@ -30,8 +30,6 @@ pub enum InstallError {
     UnsafePath(String),
     #[error("File size exceeded limit: {0}")]
     FileSizeLimitExceeded(String),
-    #[error("WP-CLI error: {0}")]
-    WpCliError(#[from] crate::wp_cli::WpCliError),
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,65 +44,6 @@ pub struct DbCredentials<'a> {
     pub db_host: &'a str,
     pub db_prefix: &'a str,
 }
-
-impl<'a> DbCredentials<'a> {
-    pub fn new(db_name: &'a str, db_user: &'a str, db_password: &'a str, db_host: &'a str, db_prefix: &'a str) -> Self {
-        Self {
-            db_name,
-            db_user,
-            db_password,
-            db_host,
-            db_prefix,
-        }
-    }
-}
-
-pub struct GeneratedDbCredentials {
-    pub db_name: String,
-    pub db_user: String,
-    pub db_password: String,
-    pub db_host: String,
-    pub db_prefix: String,
-}
-
-impl GeneratedDbCredentials {
-    pub fn generate() -> Self {
-        let mut rng = rand::thread_rng();
-
-        let generate_string = |rng: &mut rand::rngs::ThreadRng, length: usize| -> String {
-            let mut key = [0u8; 64];
-            rng.fill_bytes(&mut key);
-            let b64_str = base64::engine::general_purpose::STANDARD.encode(key);
-            b64_str.chars().filter(|c| c.is_ascii_alphanumeric()).take(length).collect()
-        };
-        
-        let generate_password = |rng: &mut rand::rngs::ThreadRng, length: usize| -> String {
-             let mut key = [0u8; 64];
-             rng.fill_bytes(&mut key);
-             let b64_str = base64::engine::general_purpose::STANDARD.encode(key);
-             b64_str.chars().filter(|c| c.is_ascii_alphanumeric() || "!@#$%^&*()-_=[]{}|;:,.<>?".contains(*c) && *c != '\'' && *c != '\\').take(length).collect()
-        };
-
-        Self {
-            db_name: format!("wp_{}", generate_string(&mut rng, 8).to_lowercase()),
-            db_user: format!("wp_user_{}", generate_string(&mut rng, 8).to_lowercase()),
-            db_password: generate_password(&mut rng, 32),
-            db_host: "127.0.0.1".to_string(), // Default, can be overridden
-            db_prefix: format!("wp_{}_", generate_string(&mut rng, 4).to_lowercase()),
-        }
-    }
-    
-    pub fn as_ref(&self) -> DbCredentials<'_> {
-        DbCredentials {
-            db_name: &self.db_name,
-            db_user: &self.db_user,
-            db_password: &self.db_password,
-            db_host: &self.db_host,
-            db_prefix: &self.db_prefix,
-        }
-    }
-}
-
 
 struct TempDirGuard {
     path: PathBuf,
@@ -353,93 +292,6 @@ require_once ABSPATH . 'wp-settings.php';
         fs::rename(tmp_config_path, config_path)?;
 
         Ok(())
-    }
-
-
-    pub async fn atomic_install(&self, version: &str, locale: &str, wp_cli: &crate::wp_cli::commands::WpCli, admin_email: &str, title: &str, url: &str, db_creds: &GeneratedDbCredentials) -> Result<(), InstallError> {
-        let site_path = &self.target_dir;
-        
-        let target_exists = self.target_dir.exists();
-        if target_exists {
-            let is_empty = fs::read_dir(&self.target_dir)?.next().is_none();
-            if !is_empty {
-                return Err(InstallError::IoError(std::io::Error::new(std::io::ErrorKind::DirectoryNotEmpty, "Target directory not empty")));
-            }
-        }
-        
-        // 1. Download
-        if let Err(e) = self.download_and_verify(version, locale).await {
-            self.cleanup_files();
-            return Err(e);
-        }
-        
-        // 2. Generate wp-config.php
-        if let Err(e) = self.generate_wp_config(&db_creds.as_ref()) {
-            self.cleanup_files();
-            return Err(e);
-        }
-        
-        // We cannot create databases here safely without root db creds, so assume the db is provisioned
-        // If not, validation fails before install
-        if let Err(e) = self.validate_database_connection(&db_creds.as_ref()).await {
-             self.cleanup_files();
-             return Err(e);
-        }
-        
-        // 3. Core install
-        let admin_user = "admin";
-        let mut rng = rand::thread_rng();
-        let generate_admin_pass = |rng: &mut rand::rngs::ThreadRng, length: usize| -> String {
-             let mut key = [0u8; 64];
-             rng.fill_bytes(&mut key);
-             let b64_str = base64::engine::general_purpose::STANDARD.encode(key);
-             b64_str.chars().filter(|c| c.is_ascii_alphanumeric() || "!@#$%^&*()-_=[]{}|;:,.<>?".contains(*c) && *c != '\'' && *c != '\\').take(length).collect()
-        };
-        let admin_password = generate_admin_pass(&mut rng, 24);
-        // url is passed as argument
-        
-        if let Err(e) = wp_cli.core_install(site_path, url, title, admin_user, &admin_password, admin_email).await {
-            self.cleanup_database(db_creds).await;
-            self.cleanup_files();
-            return Err(InstallError::WpCliError(e));
-        }
-
-        Ok(())
-    }
-    
-    async fn cleanup_database(&self, creds: &GeneratedDbCredentials) {
-        let user = urlencoding::encode(&creds.db_user);
-        let pass = urlencoding::encode(&creds.db_password);
-        let url = format!("mysql://{}:{}@{}/{}", user, pass, creds.db_host, creds.db_name);
-        
-        if let Ok(opts) = mysql_async::Opts::from_url(&url) {
-            let pool = mysql_async::Pool::new(opts);
-            if let Ok(mut conn) = pool.get_conn().await {
-                 let _ = mysql_async::prelude::Queryable::query_drop(&mut conn, "SHOW TABLES").await;
-                 // As a fallback to wp db reset, we can just drop all tables with the prefix
-                 // A real implementation might run `wp db reset` if wp-cli is available,
-                 // but since wp core install failed, it might be safer to drop all tables in this db.
-                 let drop_query = format!("
-                    SET FOREIGN_KEY_CHECKS = 0;
-                    SET GROUP_CONCAT_MAX_LEN=32768;
-                    SET @tables = NULL;
-                    SELECT GROUP_CONCAT('`', table_name, '`') INTO @tables
-                      FROM information_schema.tables
-                      WHERE table_schema = (SELECT DATABASE());
-                    SELECT IFNULL(@tables,'dummy') INTO @tables;
-                    SET @tables = CONCAT('DROP TABLE IF EXISTS ', @tables);
-                    PREPARE stmt FROM @tables;
-                    EXECUTE stmt;
-                    DEALLOCATE PREPARE stmt;
-                    SET FOREIGN_KEY_CHECKS = 1;
-                 ");
-                 let _ = mysql_async::prelude::Queryable::query_drop(&mut conn, drop_query).await;
-            }
-        }
-    }
-    
-    fn cleanup_files(&self) {
-        let _ = fs::remove_dir_all(&self.target_dir);
     }
 
     pub async fn validate_database_connection(&self, creds: &DbCredentials<'_>) -> Result<(), InstallError> {

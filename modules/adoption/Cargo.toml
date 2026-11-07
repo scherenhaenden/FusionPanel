@@ -8,13 +8,3 @@ description = "Adoption and decommission attestation across real resources"
 [workspace]
 
 [dependencies]
-adopt01 = { path = "../../tests/qualification/adoption/adopt01" }
-adopt02 = { path = "../../tests/qualification/adoption/adopt02" }
-adopt03_qual = { path = "../../tests/qualification/adoption/adopt03", package = "adopt03-qualification" }
-adopt04 = { path = "../../tests/qualification/adoption/adopt04" }
-adopt05 = { path = "../../tests/qualification/adoption/adopt05" }
-adopt06 = { path = "../../tests/qualification/adoption/adopt06" }
-adopt07_tls = { path = "../../tests/qualification/adoption/adopt07", package = "adopt07-tls-sni-verification" }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "1.0"

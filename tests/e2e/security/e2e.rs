@@ -236,7 +236,7 @@ fn test_e2e_secret_store_encryption_and_key_rotation() {
     let scope = "service-api-key";
 
     let secret_ref = {
-        let mut store = SecretStore::new(temporary.path(), &old_key, None).unwrap();
+        let mut store = SecretStore::new(temporary.path(), &old_key).unwrap();
         let secret_ref = store
             .create_secret(
                 tenant,
@@ -269,7 +269,7 @@ fn test_e2e_secret_store_encryption_and_key_rotation() {
         secret_ref
     };
 
-    let reopened = SecretStore::new(temporary.path(), &new_key, None).unwrap();
+    let reopened = SecretStore::new(temporary.path(), &new_key).unwrap();
     assert_eq!(
         reopened
             .read_secret(&secret_ref.id, tenant, scope)
@@ -277,7 +277,7 @@ fn test_e2e_secret_store_encryption_and_key_rotation() {
             .as_bytes(),
         synthetic_secret
     );
-    let old_key_store = SecretStore::new(temporary.path(), &old_key, None).unwrap();
+    let old_key_store = SecretStore::new(temporary.path(), &old_key).unwrap();
     assert!(matches!(
         old_key_store.read_secret(&secret_ref.id, tenant, scope),
         Err(SecretError::CryptoError(_))

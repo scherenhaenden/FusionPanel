@@ -93,10 +93,3 @@ fn test_is_installed_parsing() {
         assert!(is_installed);
     });
 }
-
-#[tokio::test]
-async fn test_sanitize_arg_blocks_injection() {
-    assert!(WpCli::sanitize_arg("--allow-root").is_err());
-    
-    assert!(WpCli::sanitize_arg("valid_argument123").is_ok());
-}

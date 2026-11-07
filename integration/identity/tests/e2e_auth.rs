@@ -48,12 +48,7 @@ fn setup_db() -> (SqliteIdentityAdapter, UserId, TenantId, Session) {
     };
     store.save_role_binding(&binding).unwrap();
 
-    (
-        SqliteIdentityAdapter::new(store),
-        user_id,
-        tenant_id,
-        session,
-    )
+    (SqliteIdentityAdapter::new(store), user_id, tenant_id, session)
 }
 
 fn create_app(store: SqliteIdentityAdapter, role: RoleType, scope: Scope) -> Router {
@@ -83,8 +78,7 @@ async fn test_e2e_login_success() {
     let res = app.oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 
-    let body =
-        String::from_utf8(res.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap();
+    let body = String::from_utf8(res.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap();
     assert_eq!(body, format!("user_id: {}", user_id));
 }
 
@@ -129,9 +123,7 @@ async fn test_e2e_revoked_session() {
     let mut session = Session::new(user.id(), tenant_id, 3600, 3600).unwrap();
     store_raw.save_session(&session).unwrap();
 
-    store_raw
-        .revoke_session(session.id(), "Compromised")
-        .unwrap();
+    store_raw.revoke_session(session.id(), "Compromised").unwrap();
     session.revoke("Compromised"); // Update memory instance so it matches
 
     let adapter = SqliteIdentityAdapter::new(store_raw);
@@ -154,10 +146,7 @@ async fn test_e2e_forged_principal() {
 
     let req = Request::builder()
         .uri("/protected")
-        .header(
-            header::AUTHORIZATION,
-            "Bearer 00000000-0000-0000-0000-000000000000",
-        )
+        .header(header::AUTHORIZATION, "Bearer 00000000-0000-0000-0000-000000000000")
         .body(Body::empty())
         .unwrap();
 

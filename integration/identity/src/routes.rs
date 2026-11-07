@@ -37,9 +37,6 @@ impl IntoResponse for ErrorResponse {
 
 pub fn auth_routes(state: AuthState) -> Router {
     Router::new()
-        .route("/v1/auth/login", post(login_handler))
-        .route("/v1/auth/refresh", post(refresh_handler))
-        .route("/v1/auth/logout", post(logout_handler))
         .route("/api/v1/auth/login", post(login_handler))
         .route("/api/v1/auth/refresh", post(refresh_handler))
         .route("/api/v1/auth/logout", post(logout_handler))
@@ -79,15 +76,7 @@ async fn login_handler(
         });
     }
 
-    let role_bindings = store.get_user_role_bindings(user.id()).unwrap_or_default();
-    let tenant_id = role_bindings
-        .iter()
-        .find_map(|b| match &b.scope {
-            identity::rbac::Scope::Tenant { tenant_id } => Some(*tenant_id),
-            identity::rbac::Scope::Site { tenant_id, .. } => Some(*tenant_id),
-            _ => None,
-        })
-        .unwrap_or_else(TenantId::new_v4);
+    let tenant_id = TenantId::new_v4(); // Placeholder
     let session = Session::new(user.id(), tenant_id, 86400, 3600).map_err(|_| ErrorResponse {
         error: "Internal error creating session".into(),
     })?;

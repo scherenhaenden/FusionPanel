@@ -22,19 +22,8 @@ use std::path::PathBuf;
 use std::os::unix::fs::OpenOptionsExt;
 use subtle::ConstantTimeEq;
 
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Operator {
-    pub id: Uuid,
-    pub username: String,
-    pub role: String,
-    #[serde(skip_serializing)]
-    pub token: String,
-}
-
 #[derive(Clone)]
 pub struct AppState {
-    pub operators: Arc<Mutex<Vec<Operator>>>,
     pub quotas: Arc<QuotaEngine>,
     pub audit: Arc<Mutex<AuditLog>>,
     pub invitations: Arc<Mutex<DurableInvitations>>,
@@ -116,7 +105,7 @@ impl DurableInvitations {
     }
 }
 
-async fn require_system_admin(
+async fn require_auth(
     State(state): State<AppState>,
     req: Request,
     next: Next,
@@ -124,29 +113,6 @@ async fn require_system_admin(
     let auth_header = req.headers().get(AUTHORIZATION);
     if let Some(auth) = auth_header.and_then(|h| h.to_str().ok()) {
         if let Some(token) = auth.strip_prefix("Bearer ") {
-            // First check if it matches an operator with system_admin role
-            let is_system_admin = {
-                let ops = state.operators.lock().await;
-                if let Some(op) = ops.iter().find(|o| o.token == token) {
-                    if op.role == "system_admin" {
-                        Some(true)
-                    } else {
-                        Some(false)
-                    }
-                } else {
-                    None
-                }
-            };
-
-            if let Some(true) = is_system_admin {
-                return Ok(next.run(req).await);
-            } else if let Some(false) = is_system_admin {
-                return Err(StatusCode::FORBIDDEN);
-            }
-
-            // Fallback for tests: check if it's the legacy admin_token and treat it as system_admin
-            // Wait, the prompt says "Require authentication and system_admin role on all endpoints".
-            // So we can still accept admin_token if we assume it belongs to a system_admin.
             let expected_bytes = state.admin_token.as_bytes();
             let given_bytes = token.as_bytes();
             if expected_bytes.ct_eq(given_bytes).into() {
@@ -181,15 +147,10 @@ pub fn router(state: AppState) -> Router {
         .route("/quotas/release", post(release_quota))
         .route("/audit/append", post(append_audit))
         .route("/audit/verify", get(verify_audit))
-        // New admin routes
-        .route("/api/v1/admin/users", get(list_operators))
-        .route("/api/v1/admin/invitations", post(create_invitation))
-        .route("/api/v1/admin/audit", get(query_audit))
-        // Legacy/other invitation routes
         .route("/invitations", post(create_invitation))
         .route("/invitations/{id}/accept", post(accept_invitation))
         .route("/invitations/{id}/revoke", post(revoke_invitation))
-        .route_layer(middleware::from_fn_with_state(state.clone(), require_system_admin))
+        .route_layer(middleware::from_fn_with_state(state.clone(), require_auth))
         // Public health
         .route("/health", get(|| async { "OK" }))
         .with_state(state)
@@ -332,19 +293,4 @@ async fn revoke_invitation(
         Ok(None) => StatusCode::NOT_FOUND,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
-}
-
-
-async fn list_operators(
-    State(state): State<AppState>,
-) -> Json<Vec<Operator>> {
-    let ops = state.operators.lock().await;
-    Json(ops.clone())
-}
-
-async fn query_audit(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<AuditRecord>>, StatusCode> {
-    let audit = state.audit.lock().await;
-    Ok(Json(audit.records().to_vec()))
 }

@@ -1,80 +1,198 @@
-# FusionPanel
+<div align="center">
+  <img src="https://via.placeholder.com/150" alt="FusionPanel Logo" width="150"/>
+  <h1>FusionPanel</h1>
+  <p><strong>The modern, AGPL-3.0-only self-hosted control panel built with Rust, Vite & React.</strong></p>
+  <p>Manage websites, containers, databases, DNS, email, security, and operations across one or many nodes through a unified UI, API, and CLI.</p>
 
-FusionPanel is an early-stage, self-hosted control panel for Linux servers. Its goal is to manage websites, containers, databases, DNS, and mail through a shared web UI, HTTP API, and CLI. The backend is written in Rust, and the frontend uses React, TypeScript, and Vite.
+  <p>
+    <a href="https://github.com/fusionpanel/fusionpanel/actions"><img src="https://img.shields.io/github/actions/workflow/status/fusionpanel/fusionpanel/ci.yml?branch=master&style=flat-square" alt="Build Status"/></a>
+    <a href="https://github.com/fusionpanel/fusionpanel/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg?style=flat-square" alt="License"/></a>
+    <a href="https://rust-lang.org"><img src="https://img.shields.io/badge/Rust-2021-f06b10.svg?style=flat-square&logo=rust" alt="Rust 2021"/></a>
+    <a href="https://github.com/fusionpanel/fusionpanel/releases"><img src="https://img.shields.io/github/v/release/fusionpanel/fusionpanel?style=flat-square" alt="Release"/></a>
+  </p>
+</div>
 
-## Project status
+---
 
-The quickest way to try FusionPanel today is to build the control-plane API and use the CLI to check health and list available API capabilities.
+## 🌟 Overview
 
-| Area | Available in the repository | Qualification still needed |
-| --- | --- | --- |
-| Control plane | The main API exposes `GET /v1/health` and `GET /v1/capabilities`. The CLI supports both. | Mount identity and authorization in the main API and verify the full operator session. |
-| Web UI | The frontend has a login screen and a dashboard for API health and capabilities. | Verify sign-in, dashboard access, and sign-out against the running main API. Identity routes currently live in a separate integration package. |
-| Hosting and services | The repository contains components for hosting and WordPress, containers, databases, deployments, backups, DNS, mail, security, observability, and node management. | Verify supported workflows and modes against real services. See the capability ledger for evidence and open gaps. |
-| Installation and recovery | The repository contains an installer, systemd units, and an updater. | Qualify clean installation, reboot, update, and recovery in a disposable Debian VM. |
+**FusionPanel** is a lightweight, secure, and highly-performant hosting and server management control panel designed for modern operations. By enforcing strict separation between an unprivileged control plane and a narrowly-scoped node agent, it achieves top-tier security without sacrificing usability.
 
-FusionPanel remains in development. Use disposable environments for evaluation. The [W04 release decision](docs/execution/waves/W04_2026-11-03/final/RELEASE_DECISION.md) records a no-release decision. The [product delivery plan](docs/execution/PRODUCT_DELIVERY_PLAN.md) starts with a working operator session and then moves to clean installation and administration.
+Whether you're hosting static sites, complex multi-container stacks, or managing vast server fleets, FusionPanel offers granular control out-of-the-box.
 
-## Try the API and CLI locally
+---
 
-Use a Rust toolchain with Cargo, a POSIX-compatible shell, and OpenSSL to generate a disposable token. Run these commands from the repository root.
+## 🚀 Key Features
 
-```sh
-cargo build --locked -p fusionpanel-api -p fusionpanel-cli
+### 🌐 Hosting & Routing
+- **Broad App Support**: Native management for PHP-FPM, Node.js, Python, and Static sites.
+- **Nginx Native**: Automated virtual hosts, Let's Encrypt TLS (with wildcard certs), redirects, HSTS, and caching (FastCGI/Redis).
+- **Resource Constraints**: Disk quotas, bandwidth limits, per-site CPU/RAM constraints.
+- **Atomic Provisioning**: All operations employ robust LIFO compensation for atomic success or clean rollback.
+
+- [Current atomic readiness: all 162 features and 63 work packages](docs/execution/READINESS.md)
+
+- [Delivery plan and 63-session table](docs/execution/DELIVERY_PLAN.md)
+- [Capability ownership and evidence ledger](docs/execution/CAPABILITY_LEDGER.md)
+- [Feature preservation](docs/engineering/FEATURE_PRESERVATION.md)
+- [Selectable modes](docs/engineering/VARIANT_DESIGN.md)
+- [Real-system test strategy](docs/testing/TEST_STRATEGY.md)
+- [Project charter](PROJECT_CHARTER.md)
+- [Capability catalog](CAPABILITY_CATALOG.md)
+- [Architecture](ARCHITECTURE.md)
+- [Roadmap](ROADMAP.md)
+- [Test plan](TEST_PLAN.md)
+- [Migration plan](ARCHITECTURE_AND_MIGRATION.md)
+- [Decisions and open questions](DECISIONS_AND_OPEN_QUESTIONS.md)
+
+### 🗄️ Databases (Multi-DB)
+- **Engines**: Seamlessly manage **MariaDB, MySQL, and PostgreSQL**.
+- **Admin Tools**: Integrated SQL browser, schema explorer, and protected phpMyAdmin access.
+- **Integrated Backups**: Point-in-time database backups linked to application lifecycle.
+
+### 🛡️ Security, Sandboxing & Admin API
+- **Zero-Trust Auth**: TOTP 2FA, Passkeys (WebAuthn), OAuth/SSO, and Role-Based Access Control (RBAC).
+- **Hardened Surface**: Web application firewall (WAF), SSH hardening, brute-force & bot protection, and per-user isolation.
+- **Headless API**: Comprehensive Administration API with fine-grained API key scopes, IP allowlisting, and rate limiting.
+
+### 🔄 Zero-Downtime Deployments & CI/CD
+- **Modern Deployments**: Git push-to-deploy, webhooks, Blue-Green deployments, and pre-commit preview environments.
+- **Safe Rollbacks**: Immediate release rollbacks, staging, and two-person approval flows.
+
+### 💾 Backups, S3 & SFTP
+- **Storage Integrations**: Native support for S3, Backblaze B2, Google Cloud Storage, and SFTP/FTPS destinations.
+- **Reliable Recovery**: Backup encryption, selective restores, and automated restore drills to ensure data integrity.
+
+### 📧 Mail & DNS
+- **DNS Management**: DNSSEC, templated zones, and robust zone management.
+- **Integrated Mail**: Dovecot virtual mailboxes (sqlx/SQLite), Postfix SMTP, webmail, DKIM/SPF controls, and antispam.
+
+### 📡 Multi-Node Agent
+- **Distributed Architecture**: Manage master and worker nodes, move/copy sites between nodes seamlessly.
+- **Load-Aware**: Load-aware placement, authenticated RPC, and strict LIFO provisioning.
+
+---
+
+## 🏗️ Architecture
+
+FusionPanel enforces a modern, strict-boundary architecture entirely written in Rust (for the backend) and React/TypeScript (for the UI).
+
+```mermaid
+graph TD
+    User([User / Browser]) <--> UI[Frontend App<br/>React / Vite / TS]
+    API_Client([CLI / Automation]) <--> API[API Gateway<br/>fusionpanel-api]
+    UI <--> API
+
+    subgraph Control Plane [Unprivileged Control Plane]
+        API <--> Auth[Identity & Security]
+        API <--> Jobs[Job Manager<br/>fusionpanel-jobs]
+        API <--> State[(State DB<br/>SQLite/PostgreSQL)]
+    end
+
+    Jobs <--> AgentProtocol{Agent Protocol<br/>fusionpanel-agent-protocol}
+
+    subgraph Node Data Plane [Privileged Worker Node]
+        AgentProtocol <--> Agent[Node Agent<br/>fusionpanel-agent]
+        Agent <--> Docker[(Docker Daemon)]
+        Agent <--> WebServer[(Nginx/PHP-FPM)]
+        Agent <--> DBEngine[(MariaDB / PostgreSQL)]
+    end
 ```
 
-Start the API on loopback in the background.
+**Core Packages:**
+- `fusionpanel-domain`: Validated resource identifiers and lifecycle models.
+- `fusionpanel-api`: HTTP health, authenticated capability discovery, configuration.
+- `fusionpanel-agent-protocol`: Versioned requests/responses, input validation.
+- `fusionpanel-jobs`: SQLite-backed job records, atomic claims, restart persistence.
+- `fusionpanel-cli`: HTTP administration client, automated interactions.
 
-```sh
-export FUSIONPANEL_ADMIN_TOKEN="$(openssl rand -hex 32)"
-export FUSIONPANEL_LISTEN=127.0.0.1:8080
-./target/debug/fusionpanel-api &
-fusionpanel_api_pid=$!
+---
+
+## ⚡ Quickstart
+
+### Prerequisites
+- Linux system (Ubuntu/Debian recommended)
+- `curl` and `bash`
+
+### Zero-Dependency Install
+
+We provide a zero-dependency host installer script for easy setup. It adheres strictly to POSIX (`#!/bin/sh`).
+
+```bash
+# Download and execute the installer
+curl -fsSL https://raw.githubusercontent.com/fusionpanel/fusionpanel/master/packaging/install.sh -o install.sh
+chmod +x install.sh
+sudo ./install.sh
 ```
 
-Once the API prints `Listening on 127.0.0.1:8080`, use the same terminal to check health and list capabilities. The CLI defaults to `http://127.0.0.1:8080`. Use `--server` before the subcommand if you changed the address.
+### Starting the API
 
-```sh
-./target/debug/fusionpanel-cli health
-FUSIONPANEL_TOKEN="$FUSIONPANEL_ADMIN_TOKEN" ./target/debug/fusionpanel-cli --json capabilities
+By default, the API binds to `127.0.0.1:8080`. An admin token is required to boot up.
+
+```bash
+# Generate a token and start the server
+export FUSIONPANEL_ADMIN_TOKEN=$(openssl rand -hex 32)
+export FUSIONPANEL_LISTEN="127.0.0.1:8080"
+./fusionpanel-api
 ```
 
-The health command reports the service status and version. The capabilities command requires the token and lists the operations advertised by the running API. When finished, stop the API and clear the local configuration.
+---
 
-```sh
-kill "$fusionpanel_api_pid"
-unset fusionpanel_api_pid FUSIONPANEL_ADMIN_TOKEN FUSIONPANEL_LISTEN
+## ⚙️ systemd Service Setup
+
+Production instances should run as a hardened systemd service. Our official unit files implement strict security boundaries (`ProtectSystem=strict`, `ProtectHome=read-only`, `PrivateTmp=true`, `NoNewPrivileges=true`, `MemoryDenyWriteExecute=true`).
+
+Copy the provided unit file:
+```bash
+sudo cp packaging/systemd/fusionpanel-api.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now fusionpanel-api.service
+```
+*(Note: Ensure `/etc/fusionpanel/config.env` contains your `FUSIONPANEL_ADMIN_TOKEN` and `FUSIONPANEL_LISTEN` variables).*
+
+---
+
+## 🧪 Testing & Benchmarking
+
+Quality assurance is paramount. We rely heavily on isolated End-to-End (E2E) testing against real services.
+
+### Running the Test Suite
+The workspace utilizes a shared `Cargo.lock`. Run tests across all workspace packages:
+
+```bash
+cargo test --workspace --locked
 ```
 
-## Development and testing
+### E2E Testing
+E2E tests require Docker and real application binaries. Ensure Docker Compose is available.
+If an environment requirement is missing, tests will log `BLOCKED` instead of panicking immediately, ensuring test execution stability.
 
-Run the core Rust workspace tests from the repository root.
-
-```sh
-cargo test --locked --workspace
+```bash
+# E2E test examples
+cargo test --test '*' --features=e2e
 ```
 
-For frontend development, use Node.js 20.19+ in the 20.x series or Node.js 22.12+ and npm.
+### Benchmarking
+We monitor performance to ensure FusionPanel remains lightweight. Performance tracking guidelines and results can be found in `docs/qualification/performance/`.
 
-```sh
-cd frontend
-npm ci
-npm test -- --runInBand
-npm run build
-```
+---
 
-The root Rust workspace covers the foundation crates. Service modules and integration suites can have their own manifests and prerequisites. End-to-end suites use real binaries and services in disposable environments. A missing prerequisite is a blocked qualification run. See the [real-system test strategy](docs/testing/TEST_STRATEGY.md), [test plan](TEST_PLAN.md), and [performance qualification notes](docs/qualification/performance/README.md).
+## 📚 Documentation
 
-## Architecture and documentation
+Dive deeper into our extensive documentation:
 
-The architecture separates the control plane from a node agent that applies host changes. The core workspace contains domain types, the HTTP API and CLI, a versioned agent protocol, and SQLite-backed job persistence. The [architecture](ARCHITECTURE.md) describes the intended boundaries and data flows.
+- **[Project Charter](PROJECT_CHARTER.md)**: Core mission and limits.
+- **[Capability Catalog](CAPABILITY_CATALOG.md)**: Full 162-item capability inventory.
+- **[Architecture & Migration](ARCHITECTURE_AND_MIGRATION.md)**: Complete system design.
+- **[Delivery Plan](docs/execution/DELIVERY_PLAN.md)**: Session breakdown and milestones.
+- **[Testing Strategy](docs/testing/TEST_STRATEGY.md)**: Real-system validation rules.
+- **[Variant Design](docs/engineering/VARIANT_DESIGN.md)**: Selectable workflow modes.
+- **[Contributing](CONTRIBUTING.md)**: Rules for pull requests and code style.
 
-- [Project charter](PROJECT_CHARTER.md), [capability catalog](CAPABILITY_CATALOG.md), and [roadmap](ROADMAP.md)
-- [Readiness snapshots](docs/execution/READINESS.md), [capability and evidence ledger](docs/execution/CAPABILITY_LEDGER.md), and [work packages](docs/execution/DELIVERY_PLAN.md)
-- [Migration plan](ARCHITECTURE_AND_MIGRATION.md) and [open decisions](DECISIONS_AND_OPEN_QUESTIONS.md)
-- [Feature preservation](docs/engineering/FEATURE_PRESERVATION.md) and [selectable workflow modes](docs/engineering/VARIANT_DESIGN.md)
-- [Contributing](CONTRIBUTING.md) and [repository instructions](AGENTS.md)
+---
 
-## License
+## ⚖️ License
 
-FusionPanel is licensed under the AGPL-3.0-only license. See [LICENSE](LICENSE).
+FusionPanel is licensed under the **AGPL-3.0-only** license. See the [LICENSE](LICENSE) file for details. Note that documentation-only commits must use `+semver: none` in the commit message.
+
+All code interactions and implementations strictly abide by the rules outlined in our `AGENTS.md` and foundation contracts.

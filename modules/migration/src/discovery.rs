@@ -17,26 +17,6 @@ pub enum DiscoveryError {
 
 pub struct CloudPanelDiscovery;
 
-pub struct HestiaDiscovery;
-
-impl HestiaDiscovery {
-    pub fn discover<P: AsRef<Path>>(_path: P) -> Result<MigrationInventory, DiscoveryError> {
-        Err(DiscoveryError::UnsupportedSchema(
-            "HestiaCP discovery is BLOCKED and not supported.".to_string(),
-        ))
-    }
-}
-
-pub struct CPanelDiscovery;
-
-impl CPanelDiscovery {
-    pub fn discover<P: AsRef<Path>>(_path: P) -> Result<MigrationInventory, DiscoveryError> {
-        Err(DiscoveryError::UnsupportedSchema(
-            "cPanel discovery is BLOCKED and not supported.".to_string(),
-        ))
-    }
-}
-
 impl CloudPanelDiscovery {
     pub fn discover<P: AsRef<Path>>(db_path: P) -> Result<MigrationInventory, DiscoveryError> {
         // Open read-only to guarantee no mutations during discovery
@@ -57,23 +37,7 @@ impl CloudPanelDiscovery {
         Self::discover_databases(&conn, &mut inventory)?;
         Self::discover_users(&conn, &mut inventory)?;
 
-        // For CloudPanel, files, directories, db users/passwords and SSL certs are part of the SQLite schema.
-        // We will mock read them into the normalized inventory.
-        // If they were on disk, we would read them from disk here, but as we don't have
-        // access to the file system, we assume they are passed/mocked as part of the SQLite.
-        Self::discover_file_system_and_credentials(&conn, &mut inventory)?;
-
         Ok(inventory)
-    }
-
-    fn discover_file_system_and_credentials(
-        _conn: &Connection,
-        _inventory: &mut MigrationInventory,
-    ) -> Result<(), DiscoveryError> {
-        // Read site directories, database credentials, and SSL certs.
-        // Not actually executing disk reads because it's forbidden in this bounded slice,
-        // but ensuring the structure is ready to hold this normalized data.
-        Ok(())
     }
 
     fn discover_version(conn: &Connection) -> Result<String, DiscoveryError> {
@@ -117,11 +81,6 @@ impl CloudPanelDiscovery {
             if let Some(php) = &php_version {
                 metadata.insert("php_version".to_string(), php.clone());
             }
-            metadata.insert("site_directory".to_string(), format!("/home/{domain_name}"));
-            metadata.insert(
-                "ssl_cert_path".to_string(),
-                format!("/etc/ssl/{domain_name}.crt"),
-            );
 
             // Find database associations for this site
             let associations = Self::discover_site_database_associations(conn, id)?;
@@ -188,10 +147,6 @@ impl CloudPanelDiscovery {
             let name: String = row.get(1)?;
             let site_id: Option<i64> = row.get(2).unwrap_or(None);
 
-            let mut metadata = std::collections::HashMap::new();
-            metadata.insert("database_user".to_string(), format!("{name}_user"));
-            metadata.insert("database_password".to_string(), format!("{name}_pass"));
-
             let mut associations = Vec::new();
             if let Some(s_id) = site_id {
                 associations.push(format!("site_{}", s_id));
@@ -202,7 +157,7 @@ impl CloudPanelDiscovery {
                 item_type: InventoryItemType::Database,
                 name,
                 version: None,
-                metadata,
+                metadata: std::collections::HashMap::new(),
                 associations,
                 ownership: None,
                 aliases: Vec::new(),
@@ -260,22 +215,6 @@ mod tests {
     use super::*;
     use rusqlite::Connection;
     use tempfile::NamedTempFile;
-
-    #[test]
-    fn test_hestia_discovery_blocked() {
-        let result = HestiaDiscovery::discover("some/path");
-        assert!(
-            matches!(result, Err(DiscoveryError::UnsupportedSchema(msg)) if msg.contains("HestiaCP"))
-        );
-    }
-
-    #[test]
-    fn test_cpanel_discovery_blocked() {
-        let result = CPanelDiscovery::discover("some/path");
-        assert!(
-            matches!(result, Err(DiscoveryError::UnsupportedSchema(msg)) if msg.contains("cPanel"))
-        );
-    }
 
     #[test]
     fn test_discovery_reads_from_sqlite() {
@@ -348,14 +287,6 @@ mod tests {
         assert_eq!(site.associations.len(), 2);
         assert!(site.associations.contains(&"db_10".to_string()));
         assert!(site.associations.contains(&"db_11".to_string()));
-        assert_eq!(
-            site.metadata.get("site_directory").unwrap(),
-            "/home/mysite.com"
-        );
-        assert_eq!(
-            site.metadata.get("ssl_cert_path").unwrap(),
-            "/etc/ssl/mysite.com.crt"
-        );
 
         let db1 = inventory
             .items
@@ -364,11 +295,6 @@ mod tests {
             .unwrap();
         assert_eq!(db1.name, "my_db_1");
         assert_eq!(db1.associations, vec!["site_1".to_string()]);
-        assert_eq!(db1.metadata.get("database_user").unwrap(), "my_db_1_user");
-        assert_eq!(
-            db1.metadata.get("database_password").unwrap(),
-            "my_db_1_pass"
-        );
 
         let db2 = inventory
             .items

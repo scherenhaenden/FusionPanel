@@ -1,7 +1,5 @@
 #![forbid(unsafe_code)]
 
 pub mod adapter;
-pub mod health;
 pub mod mariadb;
-pub mod postgres;
-pub mod quota;
+pub mod postgresql;

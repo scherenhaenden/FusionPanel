@@ -330,12 +330,6 @@ impl Zone {
         Ok(())
     }
 
-    pub fn remove_record(&mut self, record: &Record) -> bool {
-        let len_before = self.records.len();
-        self.records.retain(|r| r != record);
-        self.records.len() < len_before
-    }
-
     pub fn id(&self) -> Uuid {
         self.id
     }
@@ -358,7 +352,7 @@ impl Zone {
 }
 
 impl DomainName {
-    pub fn is_within(&self, zone: &Self) -> bool {
+    fn is_within(&self, zone: &Self) -> bool {
         self == zone
             || self
                 .0

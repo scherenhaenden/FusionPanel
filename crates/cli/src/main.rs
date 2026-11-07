@@ -6,11 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::process::ExitCode;
 use std::time::Duration;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
-use identity::{SqliteIdentityStore, PasswordManager, User, Role, RoleBinding, Scope, TenantId};
-use fusionpanel_control_store::{ControlStore, OwnershipMode};
-use std::path::Path;
 
 #[derive(Parser, Debug)]
 #[command(name = "fusionpanel-cli", version, about, long_about = None)]
@@ -29,24 +24,6 @@ struct Cli {
 enum Commands {
     Health,
     Capabilities,
-    Bootstrap {
-        #[command(subcommand)]
-        command: BootstrapCommands,
-    },
-}
-
-#[derive(Subcommand, Debug)]
-enum BootstrapCommands {
-    Operator {
-        #[arg(long, env = "FUSIONPANEL_DATABASE_URL", default_value = "./fusionpanel.db")]
-        database_url: String,
-
-        #[arg(long, default_value = "admin")]
-        username: String,
-
-        #[arg(long)]
-        password: Option<String>,
-    },
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
@@ -82,18 +59,6 @@ enum CliError {
     ReqwestError(#[from] reqwest::Error),
     #[error("API error ({0}): {1}")]
     ApiError(StatusCode, String),
-    #[error("Identity store error: {0}")]
-    IdentityError(#[from] identity::IdentityError),
-    #[error("Control store error: {0}")]
-    ControlStoreError(#[from] fusionpanel_control_store::StoreError),
-}
-
-#[derive(Serialize)]
-struct BootstrapOutput {
-    user_id: String,
-    username: String,
-    tenant_id: String,
-    password: Option<String>,
 }
 
 async fn run_cli(
@@ -160,61 +125,6 @@ async fn run_cli(
                 writeln!(output, "Capabilities:").unwrap();
                 for cap in caps.capabilities {
                     writeln!(output, "- {}", cap).unwrap();
-                }
-            }
-        }
-        Commands::Bootstrap { command } => match command {
-            BootstrapCommands::Operator { database_url, username, password } => {
-                let (pass, generated) = match password {
-                    Some(p) => (p, None),
-                    None => {
-                        let gen_pass: String = thread_rng()
-                            .sample_iter(&Alphanumeric)
-                            .take(16)
-                            .map(char::from)
-                            .collect();
-                        (gen_pass.clone(), Some(gen_pass))
-                    }
-                };
-
-                let password_hash = PasswordManager::hash_password(&pass)?;
-
-                let db_path = Path::new(&database_url);
-                let id_store = SqliteIdentityStore::open(db_path)?;
-                let mut ctrl_store = ControlStore::new(db_path)?; // run migrations
-
-                let user = User::new(username.clone(), format!("{}@localhost", username), password_hash)?;
-                id_store.create_user(&user)?;
-
-                let tenant_id = TenantId::new_v4();
-                ctrl_store.create_resource(tenant_id.to_uuid(), tenant_id.to_uuid(), OwnershipMode::PlatformManaged, serde_json::json!({
-                    "name": "Default Tenant"
-                }))?;
-
-                let binding = RoleBinding {
-                    user_id: user.id().clone(),
-                    role: Role::super_admin(),
-                    scope: Scope::Tenant { tenant_id },
-                };
-                id_store.save_role_binding(&binding)?;
-
-                let boot_output = BootstrapOutput {
-                    user_id: user.id().to_string(),
-                    username,
-                    tenant_id: tenant_id.to_string(),
-                    password: generated,
-                };
-
-                if cli.json {
-                    writeln!(output, "{}", serde_json::to_string(&boot_output).unwrap()).unwrap();
-                } else {
-                    writeln!(output, "Operator created successfully:").unwrap();
-                    writeln!(output, "User ID: {}", boot_output.user_id).unwrap();
-                    writeln!(output, "Username: {}", boot_output.username).unwrap();
-                    writeln!(output, "Tenant ID: {}", boot_output.tenant_id).unwrap();
-                    if let Some(p) = boot_output.password {
-                        writeln!(output, "Generated Password: {}", p).unwrap();
-                    }
                 }
             }
         }

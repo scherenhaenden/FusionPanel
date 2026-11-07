@@ -152,9 +152,6 @@ pub trait DatabaseAdapter: Send + Sync {
 
     async fn plan_restore(&self, db_name: DbName, input_path: String) -> Result<RestorePlan>;
     async fn apply_restore(&self, plan: &RestorePlan) -> Result<()>;
-
-    async fn drop_database(&self, name: &DbName) -> Result<()>;
-    async fn drop_user(&self, username: &DbUser) -> Result<()>;
 }
 
 pub fn validate_identifier(id: &str) -> Result<()> {

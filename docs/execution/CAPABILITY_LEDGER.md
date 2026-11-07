@@ -1,6 +1,6 @@
 # Capability Delivery and Evidence Ledger
 
-All 162 canonical entries are preserved below with their original owner and evidence notes. For the per-feature split between planned/implemented code and unit, integration, N2N, and manual test evidence, see the [individual feature sheets](FEATURES_2026-11-07.md). The current score baseline is the [6 November snapshot](READINESS_SNAPSHOT_2026-11-06.json); the focused [7 November review](READINESS_SNAPSHOT_2026-11-07.md) does not recalculate all feature scores. PARTIAL means retained implementation evidence with acceptance still open; PLANNED means no credited feature-specific component. BLOCKED is a qualification-lane state, not discarded work.
+All 162 canonical entries are preserved. Current maturity: [3 November snapshot](READINESS_SNAPSHOT_2026-11-03.md), pinned master `0fd70197c7dc52cf1f93e0ccf88c91f77cfa4f6b`. PARTIAL means retained implementation evidence with acceptance still open; PLANNED means no credited feature-specific component. No new product tests were executed. BLOCKED is a qualification-lane state, not a discarded task.
 
 | Capability | Name | Component owner | Integration owner | E2E owner | Closure owner | State | Evidence |
 |---|---|---|---|---|---|---|---|

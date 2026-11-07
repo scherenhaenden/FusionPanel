@@ -1,8 +1,6 @@
 # Roadmap Through 11 November 2026
 
-**Current delivery priority** · Prove the core panel journey, then reproduce it on a clean Debian installation. Module management follows, with website publishing after the panel is usable. See the [product priorities and Gemini handoff](docs/execution/PRODUCT_DELIVERY_PLAN.md).
-
-The [63-session delivery plan](docs/execution/DELIVERY_PLAN.md) records the original November schedule below, package ownership, and dependencies, with a [162-capability evidence ledger](docs/execution/CAPABILITY_LEDGER.md) and [per-session specifications](docs/execution/sessions.json).
+The authoritative schedule is the [63-session delivery plan](docs/execution/DELIVERY_PLAN.md), with a [162-capability evidence ledger](docs/execution/CAPABILITY_LEDGER.md) and [per-session specifications](docs/execution/sessions.json).
 
 - Nov 1–3: foundation and independently testable modules, UI and real-service laboratory.
 - Nov 4–6: authenticated node/runtime integration and actual hosting/data/container/DNS/mail workflows.

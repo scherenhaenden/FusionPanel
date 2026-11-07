@@ -76,7 +76,3 @@ The [source audit](../audits/2026-11-01/SOURCE_AUDIT.md) records release-blockin
 | PR | Scope | Issue | Evidence | Delivery | Remaining |
 |---|---|---|---|---|---|
 | [#250](https://github.com/scherenhaenden/FusionPanel/pull/250) | Complete 162-capability / 63-package snapshot and capability ledger | [#6](https://github.com/scherenhaenden/FusionPanel/issues/6) (coordination) | Pinned master `0fd70197c7dc52cf1f93e0ccf88c91f77cfa4f6b`; 27 new merges; source inspection and catalog arithmetic validation; no fresh product execution | Documentation PR, not merged; capability maturity 7.95%, package maturity 42.54% | Keep #6 open for foundation composition, actual runtime qualification and closure |
-
-## README quickstart and status
-
-The `docs/readme-quickstart` documentation change updates the project overview, local API and CLI instructions, and qualification status. No primary issue applies because the scope spans the README and leaves package acceptance to the existing issues.

@@ -20,18 +20,3 @@ export interface ErrorResponse {
 export interface AuthResponse {
   token: string;
 }
-
-export interface Operator {
-  id: string;
-  email: string;
-  role: string;
-  status: string;
-}
-
-export interface AuditLog {
-  id: string;
-  timestamp: string;
-  action: string;
-  operator: string;
-  details: string;
-}

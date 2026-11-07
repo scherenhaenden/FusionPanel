@@ -10,19 +10,15 @@ use std::fs;
 use std::process::Command;
 
 use deployments::build::{execute_build, plan_build};
+use deployments::webhook::{ReplayGuard, compute_signature};
 use deployments::release::ReleaseManager;
-use deployments::types::{
-    BuildSpec, DeploymentId, DeploymentPlan, DeploymentState, DeploymentStrategy, Environment,
-    GitSource, ProjectType, ReleaseId, SiteId,
-};
-use deployments::webhook::{compute_signature, ReplayGuard};
+use deployments::types::{DeploymentId, DeploymentState, ReleaseId, BuildSpec, DeploymentPlan, DeploymentStrategy, Environment, GitSource, ProjectType, SiteId};
 
 use deployments_integration::{app, AppState};
 
 #[tokio::test]
 async fn test_deployment_lifecycle_and_webhook() {
-    let temp_dir =
-        std::env::temp_dir().join(format!("fusionpanel-deploy-test-{}", uuid::Uuid::new_v4()));
+    let temp_dir = std::env::temp_dir().join(format!("fusionpanel-deploy-test-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&temp_dir).unwrap();
     let releases_base_dir = temp_dir.join("site_root");
     let git_repo_dir = temp_dir.join("repo");
@@ -32,19 +28,18 @@ async fn test_deployment_lifecycle_and_webhook() {
     let replay_guard = Arc::new(ReplayGuard::new(300));
     let release_manager = Arc::new(Mutex::new(ReleaseManager::new(&releases_base_dir)));
     {
-        let rm = release_manager.lock().await;
-        rm.initialize().unwrap();
+         let rm = release_manager.lock().await;
+         rm.initialize().unwrap();
     }
-    let control_store = Arc::new(Mutex::new(
-        fusionpanel_control_store::ControlStore::new_in_memory().unwrap(),
-    ));
-    let tenant_id = uuid::Uuid::new_v4();
+    let deployments = Arc::new(Mutex::new(std::collections::HashMap::new()));
+    let approvals = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
     let state = Arc::new(AppState {
         webhook_secret: webhook_secret.clone(),
         replay_guard,
         release_manager: release_manager.clone(),
-        control_store,
+        deployments: deployments.clone(),
+        approvals: approvals.clone(),
     });
 
     let router = app(state.clone());
@@ -101,7 +96,6 @@ async fn test_deployment_lifecycle_and_webhook() {
         .header("X-GitHub-Delivery", "delivery-1")
         .header("X-Hub-Signature-256", &signature)
         .header(header::CONTENT_TYPE, "application/json")
-        .header("x-tenant-id", tenant_id.to_string())
         .body(Body::from(payload_bytes.clone()))
         .unwrap();
 
@@ -114,23 +108,18 @@ async fn test_deployment_lifecycle_and_webhook() {
         .method("POST")
         .uri("/deployments")
         .header(header::CONTENT_TYPE, "application/json")
-        .header("x-tenant-id", tenant_id.to_string())
         .body(Body::from(
             serde_json::to_vec(&serde_json::json!({
                 "initiator": "alice",
                 "release_id": release1.as_str()
-            }))
-            .unwrap(),
+            })).unwrap()
         ))
         .unwrap();
 
     let response = router.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::CREATED);
 
-    let body_bytes = http_body_util::BodyExt::collect(response.into_body())
-        .await
-        .unwrap()
-        .to_bytes();
+    let body_bytes = http_body_util::BodyExt::collect(response.into_body()).await.unwrap().to_bytes();
     let dep_id: DeploymentId = serde_json::from_slice(&body_bytes).unwrap();
 
     // 3. Simulate build execution using real components
@@ -168,13 +157,11 @@ async fn test_deployment_lifecycle_and_webhook() {
         .method("POST")
         .uri(format!("/deployments/{}/approve", dep_id.0))
         .header(header::CONTENT_TYPE, "application/json")
-        .header("x-tenant-id", tenant_id.to_string())
         .body(Body::from(
             serde_json::to_vec(&serde_json::json!({
                 "approver": "bob",
                 "release_id": release1.as_str()
-            }))
-            .unwrap(),
+            })).unwrap()
         ))
         .unwrap();
 
@@ -184,19 +171,14 @@ async fn test_deployment_lifecycle_and_webhook() {
     // 5. Check Deployment state
     let req = axum::http::Request::builder()
         .method("GET")
-        .header("x-tenant-id", tenant_id.to_string())
         .uri(format!("/deployments/{}", dep_id.0))
         .body(Body::empty())
         .unwrap();
 
     let response = router.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body_bytes = http_body_util::BodyExt::collect(response.into_body())
-        .await
-        .unwrap()
-        .to_bytes();
-    let record: deployments::workflow::DeploymentRecord =
-        serde_json::from_slice(&body_bytes).unwrap();
+    let body_bytes = http_body_util::BodyExt::collect(response.into_body()).await.unwrap().to_bytes();
+    let record: deployments::workflow::DeploymentRecord = serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(record.current_state, DeploymentState::Active);
 
     // Check observed content continuity
@@ -223,21 +205,16 @@ async fn test_deployment_lifecycle_and_webhook() {
         .method("POST")
         .uri("/deployments")
         .header(header::CONTENT_TYPE, "application/json")
-        .header("x-tenant-id", tenant_id.to_string())
         .body(Body::from(
             serde_json::to_vec(&serde_json::json!({
                 "initiator": "alice",
                 "release_id": release2.as_str()
-            }))
-            .unwrap(),
+            })).unwrap()
         ))
         .unwrap();
 
     let response = router.clone().oneshot(req).await.unwrap();
-    let body_bytes = http_body_util::BodyExt::collect(response.into_body())
-        .await
-        .unwrap()
-        .to_bytes();
+    let body_bytes = http_body_util::BodyExt::collect(response.into_body()).await.unwrap().to_bytes();
     let dep_id2: DeploymentId = serde_json::from_slice(&body_bytes).unwrap();
 
     {
@@ -272,13 +249,11 @@ async fn test_deployment_lifecycle_and_webhook() {
         .method("POST")
         .uri(format!("/deployments/{}/approve", dep_id2.0))
         .header(header::CONTENT_TYPE, "application/json")
-        .header("x-tenant-id", tenant_id.to_string())
         .body(Body::from(
             serde_json::to_vec(&serde_json::json!({
                 "approver": "bob",
                 "release_id": release2.as_str()
-            }))
-            .unwrap(),
+            })).unwrap()
         ))
         .unwrap();
     let response = router.clone().oneshot(req).await.unwrap();
@@ -295,22 +270,15 @@ async fn test_deployment_lifecycle_and_webhook() {
     let req = axum::http::Request::builder()
         .method("POST")
         .uri(format!("/deployments/{}/health_failure", dep_id2.0))
-        .header("x-tenant-id", tenant_id.to_string())
         .body(Body::empty())
         .unwrap();
 
     let response = router.clone().oneshot(req).await.unwrap();
     let status = response.status();
     if status != StatusCode::OK {
-        let err_body = http_body_util::BodyExt::collect(response.into_body())
-            .await
-            .unwrap()
-            .to_bytes();
+        let err_body = http_body_util::BodyExt::collect(response.into_body()).await.unwrap().to_bytes();
         let err_str = String::from_utf8_lossy(&err_body);
-        panic!(
-            "Health failure rollback failed with status {}: {}",
-            status, err_str
-        );
+        panic!("Health failure rollback failed with status {}: {}", status, err_str);
     }
     assert_eq!(status, StatusCode::OK);
 
@@ -329,7 +297,6 @@ async fn test_deployment_lifecycle_and_webhook() {
         .header("X-GitHub-Delivery", "delivery-1") // Same delivery ID
         .header("X-Hub-Signature-256", &signature)
         .header(header::CONTENT_TYPE, "application/json")
-        .header("x-tenant-id", tenant_id.to_string())
         .body(Body::from(payload_bytes.clone()))
         .unwrap();
 

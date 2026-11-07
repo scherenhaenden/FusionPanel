@@ -1,7 +1,5 @@
 #![forbid(unsafe_code)]
 
-#![forbid(unsafe_code)]
-
 #[path = "live_api/common.rs"]
 mod common;
 

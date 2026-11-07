@@ -1,6 +1,6 @@
 use databases::adapter::*;
 use databases::mariadb::MariaDbAdapter;
-use databases::postgres::PostgresAdapter;
+use databases::postgresql::PostgresAdapter;
 use std::env;
 use std::fs;
 use uuid::Uuid;
