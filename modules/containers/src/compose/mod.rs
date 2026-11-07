@@ -39,18 +39,18 @@ pub fn parse_and_validate_file(path: &str) -> Result<ComposeFile, ComposeError> 
 fn substitute_env_vars(content: &str, env: &HashMap<String, String>) -> String {
     // Standard Docker Compose environment variable interpolation format:
     // Support $VARIABLE, ${VARIABLE}, ${VARIABLE:-default}, and escape $$VARIABLE
-
+    
     // Replace $$ with a temporary placeholder that won't match our real variables
     let temp_escaped = content.replace("$$", "\x00ESCAPED_DOLLAR\x00");
-
+    
     // Matches $VAR and ${VAR} and ${VAR:-default}
     let re = Regex::new(r"\$(?:([A-Za-z0-9_]+)|\{([A-Za-z0-9_]+)(?::-([^}]+))?\}?)").unwrap();
-
+    
     let substituted = re.replace_all(&temp_escaped, |caps: &regex::Captures| {
         // cap 1 is $VAR
         // cap 2 is ${VAR} or ${VAR:-default}
         // cap 3 is default
-
+        
         let var_name = caps.get(1).or_else(|| caps.get(2)).map(|m| m.as_str()).unwrap_or("");
         let default_val = caps.get(3).map(|m| m.as_str());
 
@@ -62,7 +62,7 @@ fn substitute_env_vars(content: &str, env: &HashMap<String, String>) -> String {
             "".to_string() // Empty string if not found and no default
         }
     }).to_string();
-
+    
     // Restore the escaped $$ as $
     substituted.replace("\x00ESCAPED_DOLLAR\x00", "$$")
 }

@@ -57,7 +57,10 @@ impl IdentityStore for MockStore {
         Ok(())
     }
 
-    async fn get_user_role_bindings(&self, _user_id: UserId) -> Result<Vec<identity::rbac::RoleBinding>, IdentityError> {
+    async fn get_user_role_bindings(
+        &self,
+        _user_id: UserId,
+    ) -> Result<Vec<identity::rbac::RoleBinding>, IdentityError> {
         Ok(vec![])
     }
 

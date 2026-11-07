@@ -1,0 +1,40 @@
+# FusionPanel product delivery priorities
+
+**7 November 2026 · Reviewed master at `d00561797cbcf431d908599d85f9a47b8ccebf56` · Europe/Berlin**
+
+| Priority | User outcome | Evidence already available | Next proof |
+|---|---|---|---|
+| **1 · Core** | An operator can start the panel, sign in, see the running instance and its available operations, and sign out. | The running API serves health and capability discovery. Identity code has SQLite users and sessions, and the frontend has a login screen. The identity router runs separately from the main API. | In a disposable local environment, run the real backend and browser with a persistent store. Verify the authorized view, rejection of invalid credentials and revocation on logout. Publish one repeatable command and a short runbook. |
+| **2 · Install and administer the panel** | A second operator can install the same pilot on a clean Debian VM, sign in after reboot and administer access. | The installer, systemd units and updater exist. Administration routes have invitation and audit operations. The pilot still needs a real VM run and authenticated administration on the installed system. | Install a pinned artifact, start services, reboot and repeat the core demo. Then demonstrate one persisted access-management action before broadening the administration UI. Qualify update and recovery on the same supported configuration. |
+| **3 · Add and manage modules** | An operator can enable an available module and use it to perform a real task. | The database screen, MariaDB adapter and fixture tooling give us an existing path to exercise. | After the panel pilot, create and list a tenant-owned MariaDB database, use a scoped account to write and read data, and verify ownership after restart. Exercise denied access from a second tenant. |
+| **4 · Publish and operate websites** | An operator can provision and serve a site. | Hosting configuration and compensation code, and WordPress integration work, are in the tree. | Serve a tenant-owned static site from a real server and prove recovery from failed provisioning. Qualify PHP, WordPress, public DNS and site TLS in separate journeys. |
+
+The first handoff is a **usable pilot on one clean Debian VM**. Priority 1 provides the fastest proof of the core journey using local processes and SQLite. The first checkpoint in Priority 2 is to repeat that journey after installation and reboot. Access management, update and recovery are subsequent checkpoints in Priority 2. Start VM preparation once the pilot configuration is known so availability can be checked while the core work proceeds. Keep health-only checks as diagnostics and require the complete signed-in browser journey for pilot evidence.
+
+Use priority to choose work and evidence to decide whether the result is ready. Qualification belongs to each journey. Apply [the real-system test strategy](../testing/TEST_STRATEGY.md), the [package ownership plan](DELIVERY_PLAN.md), and the [capability ledger](CAPABILITY_LEDGER.md). The [readiness snapshot](READINESS_SNAPSHOT_2026-11-06.md) records evidence from its own cut. Its component, integration, E2E and closure scores do not set this order.
+
+Keep one primary user journey active. Before assigning work, confirm existing session and PR results, hand off exclusive paths, and reuse reviewed work. Preserve the [W04-19 router result](https://jules.google.com/session/13321805968943877801), [W04-38 database fixture result](https://jules.google.com/session/11712230962197907175), and [frontend PR #266](https://github.com/scherenhaenden/FusionPanel/pull/266) for the applicable stages. Keep Jules at or below 15 nonterminal sessions and count unknown states as occupied until verified.
+
+## Core exit checks
+
+1. From a clean checkout, run documented commands that build or start the real API and frontend. Create the initial operator through a supported bootstrap path with generated credentials. Use a temporary SQLite database and a single local origin or another documented browser-safe setup.
+2. Sign in through the browser. Show live API status and the capabilities available to that authenticated operator. Refresh the page and confirm the session stays valid. An unsupported module is shown as unavailable.
+3. Exercise a real protected request with an unauthenticated client and with invalid credentials. Sign out through the browser and replay the former session against a protected endpoint. The API must reject it.
+4. Restart the API with the same database and verify that the operator can sign in again. Verify that the revoked session remains invalid. Persisted membership must determine the scope for authorization checks. Use a second principal to show that a permission or tenant boundary is enforced.
+5. Record the candidate SHA, the exact commands, the observed outcomes, and cleanup. A second person must be able to reproduce the browser journey without intercepting requests or supplying mock success.
+
+### Current blockers to check first
+
+- The main API mounts `/v1/health` and `/v1/capabilities`. The separate identity router mounts `/api/v1/auth/*`, and the frontend calls `/v1/auth/*`. Agree and test one end-to-end contract with the actual client and mounted router. Preserve existing supported contracts. [Main API](../../crates/api/src/main.rs) · [Identity routes](../../integration/identity/src/routes.rs) · [Frontend client](../../frontend/src/api/index.ts)
+- Login currently assigns a placeholder tenant. Resolve the authenticated principal and its real persisted membership before using it to authorize anything. Check server-side revocation and the browser cookie policy on the actual pilot origin. [Identity routes](../../integration/identity/src/routes.rs)
+- A clean install needs a pinned build that can run the demonstrated journey. Verify the artifact and service startup in the VM. Capture installer and reboot output and stop the install lane with an explicit blocker if the VM or artifact is missing. [Installer](../../packaging/install.sh) · [Systemd service](../../packaging/systemd/fusionpanel.service)
+
+## Gemini handoff
+
+Work on **Priority 1 only**. Deliver the shortest repeatable path from a clean checkout to browser login, real panel status, and server-side logout against the main FusionPanel API. Use the five core exit checks above as acceptance criteria. Begin at the current GitHub `master` SHA and include it in your report. The planning review saw `d00561797cbcf431d908599d85f9a47b8ccebf56`.
+
+- Reproduce the first failing step. Review the existing identity change and any pending router work before writing a competing implementation. Use one focused branch or PR against `master` and reference issue [#31](https://github.com/scherenhaenden/FusionPanel/issues/31) for the identity integration work.
+- Keep the initial change in `crates/api/`, `integration/identity/`, `frontend/`, and the relevant identity acceptance test or pilot runbook. Coordinate a handoff before editing shared manifests or the lockfile. Identify the exact missing contract if changes to the identity store or another owned module are required. [Repository instructions](../../AGENTS.md)
+- Use `cargo test --locked --workspace`, the applicable identity package tests, and `npm ci` followed by `npm run build` in `frontend/` as starting checks. Provide the actual command that starts and tests the browser journey against real processes and SQLite. Include the restart and revoked-session checks in that evidence.
+- Report commands and results with `PASS`, `FAIL`, `BLOCKED`, or `NOT_RUN` for each applicable lane. If a prerequisite is missing, give its name, the owner or handoff needed, and the next command to run. Provide the candidate SHA and a short operator runbook.
+- Keep installation and VM qualification in Priority 2. Use the first demo to hand off the exact working configuration to the installer owner. The full release decision follows the existing W04 qualification gate. [W04 release decision](waves/W04_2026-11-03/final/RELEASE_DECISION.md)

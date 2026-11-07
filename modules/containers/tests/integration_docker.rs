@@ -27,7 +27,8 @@ async fn test_docker_lifecycle() {
     let container_id = ContainerId::new(format!("test-{}", Uuid::new_v4())).unwrap();
     let image_ref = ImageRef::new("alpine:latest".to_string()).unwrap();
 
-    let spec = ContainerSpec::new(container_id.clone(), image_ref, vec![], vec![]);
+    let spec = ContainerSpec::new(container_id.clone(), image_ref, vec![], vec![])
+        .with_command(vec!["sleep".to_string(), "30".to_string()]);
 
     // Create
     engine.create(&spec).await.expect("Failed to create container");
