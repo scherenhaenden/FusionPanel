@@ -1,10 +1,12 @@
 # Current readiness milestone
 
-Latest: [2 November, revision 3](READINESS_SNAPSHOT_2026-11-02_R3.md), baseline `32de924fc5376afb5aa06e30817aba22f09b49ef`.
+Latest [6 November 2026](READINESS_SNAPSHOT_2026-11-06.md), baseline `ab7cbf27d10abb7635730a6daeba8a590a65711e` on verified GitHub `master`.
 
-| Scope | Maturity | Remaining evidence gates | Fully accepted |
+| Scope | Maturity | Change since 5 November | Fully accepted |
 |---|---:|---:|---:|
-| 162 features | 7.72% | 92.28% | 0/162 |
-| 63 packages | 41.43% | 58.57% | 3/63 |
+| 162 capabilities | 8.02% | +0.07 pp | 0/162 |
+| 63 packages | 43.49% | +0.63 pp | 3/63 |
 
-These measure evidence gates, not code completion or engineering time. Source-only refresh through merged PR #212; no new product tests executed. Each row lists remaining work. [JSON](READINESS_SNAPSHOT_2026-11-02_R3.json); [previous revision](READINESS_SNAPSHOT_2026-11-02_R2.md).
+The scores reflect qualified evidence. Credential encryption gained component credit and the secrets package gained file-based integration credit. Foundation reconciliation and the HOST/WP audit gained partial implementation credit. The main API still lacks the routes needed for the MariaDB pilot, and both new CI audit scripts failed locally.
+
+[Machine-readable catalog](READINESS_SNAPSHOT_2026-11-06.json) · [Previous snapshot](READINESS_SNAPSHOT_2026-11-05.md)

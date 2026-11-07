@@ -1,4 +1,4 @@
-use mail::domain::models::MailboxAccount;
+use mail::domain::MailboxAccount;
 use sqlx::SqlitePool;
 use std::path::PathBuf;
 use thiserror::Error;
@@ -70,27 +70,6 @@ impl MailWorker {
 
     pub async fn sync_accounts(&self, accounts: &[MailboxAccount]) -> Result<(), MailWorkerError> {
         let mut tx = self.db.begin().await?;
-        sqlx::query("DELETE FROM users").execute(&mut *tx).await?;
-
-        for acc in accounts {
-            let email = acc.email.as_string();
-            let parts: Vec<&str> = email.split('@').collect();
-            let username = parts[0];
-            let domain = parts[1];
-            let maildir = format!("{}/{}/", domain, username);
-
-            sqlx::query(
-                "INSERT INTO users (username, domain, password, maildir, quota) VALUES (?, ?, ?, ?, ?)",
-            )
-            .bind(username)
-            .bind(domain)
-            .bind(acc.password_hash.as_str())
-            .bind(maildir)
-            .bind(acc.quota.bytes() as i64)
-            .execute(&mut *tx)
-            .await?;
-        }
-        tx.commit().await?;
 
         let mut domains: Vec<String> = accounts
             .iter()
@@ -98,7 +77,6 @@ impl MailWorker {
             .collect();
         domains.sort();
         domains.dedup();
-
         let domains_str: Vec<&str> = domains.iter().map(|d| d.as_str()).collect();
 
         let domains_config = mail::config::postfix::render_virtual_mailbox_domains(&domains_str)
@@ -121,33 +99,290 @@ impl MailWorker {
         let maps_config = mail::config::postfix::render_virtual_mailbox_maps(&mailboxes)
             .map_err(|e| MailWorkerError::PostfixRender(format!("{:?}", e)))?;
 
-        fs::write(&self.postfix_virtual_domains_path, domains_config).await?;
-        fs::write(&self.postfix_virtual_mailboxes_path, maps_config).await?;
+        let temp_domains_path = self.postfix_virtual_domains_path.with_extension("tmp");
+        let temp_mailboxes_path = self.postfix_virtual_mailboxes_path.with_extension("tmp");
 
-        self.run_postmap(&self.postfix_virtual_domains_path).await?;
-        self.run_postmap(&self.postfix_virtual_mailboxes_path)
+        fs::write(&temp_domains_path, domains_config).await?;
+        fs::write(&temp_mailboxes_path, maps_config).await?;
+
+        if let Err(e) = self.run_postmap(&temp_domains_path).await {
+            let _ = fs::remove_file(&temp_domains_path).await;
+            let _ = fs::remove_file(&temp_mailboxes_path).await;
+            let _ = tx.rollback().await;
+            return Err(e);
+        }
+        if let Err(e) = self.run_postmap(&temp_mailboxes_path).await {
+            let _ = fs::remove_file(&temp_domains_path).await;
+            let temp_domains_db = PathBuf::from(format!("{}.db", temp_domains_path.display()));
+            let _ = fs::remove_file(&temp_domains_db).await;
+            let _ = fs::remove_file(&temp_mailboxes_path).await;
+            let _ = tx.rollback().await;
+            return Err(e);
+        }
+
+        sqlx::query("DELETE FROM users").execute(&mut *tx).await?;
+
+        for acc in accounts {
+            let email = acc.email.as_string();
+            let parts: Vec<&str> = email.split('@').collect();
+            let username = parts[0];
+            let domain = parts[1];
+            let maildir = format!("{}/{}/", domain, username);
+
+            sqlx::query(
+                "INSERT INTO users (username, domain, password, maildir, quota) VALUES (?, ?, ?, ?, ?)",
+            )
+            .bind(username)
+            .bind(domain)
+            .bind(acc.password_hash.as_str())
+            .bind(maildir)
+            .bind(acc.quota.bytes() as i64)
+            .execute(&mut *tx)
             .await?;
+        }
+
+        let temp_domains_db = PathBuf::from(format!("{}.db", temp_domains_path.display()));
+        let temp_mailboxes_db = PathBuf::from(format!("{}.db", temp_mailboxes_path.display()));
+        let domains_db = PathBuf::from(format!(
+            "{}.db",
+            self.postfix_virtual_domains_path.display()
+        ));
+        let mailboxes_db = PathBuf::from(format!(
+            "{}.db",
+            self.postfix_virtual_mailboxes_path.display()
+        ));
+
+        let bak_domains = PathBuf::from(format!(
+            "{}.bak",
+            self.postfix_virtual_domains_path.display()
+        ));
+        let bak_domains_db = PathBuf::from(format!(
+            "{}.bak.db",
+            self.postfix_virtual_domains_path.display()
+        ));
+        let bak_mailboxes = PathBuf::from(format!(
+            "{}.bak",
+            self.postfix_virtual_mailboxes_path.display()
+        ));
+        let bak_mailboxes_db = PathBuf::from(format!(
+            "{}.bak.db",
+            self.postfix_virtual_mailboxes_path.display()
+        ));
+
+        let domains_existed = self.postfix_virtual_domains_path.exists();
+        let domains_db_existed = domains_db.exists();
+        let mailboxes_existed = self.postfix_virtual_mailboxes_path.exists();
+        let mailboxes_db_existed = mailboxes_db.exists();
+
+        if domains_existed {
+            let _ = fs::copy(&self.postfix_virtual_domains_path, &bak_domains).await;
+        }
+        if domains_db_existed {
+            let _ = fs::copy(&domains_db, &bak_domains_db).await;
+        }
+        if mailboxes_existed {
+            let _ = fs::copy(&self.postfix_virtual_mailboxes_path, &bak_mailboxes).await;
+        }
+        if mailboxes_db_existed {
+            let _ = fs::copy(&mailboxes_db, &bak_mailboxes_db).await;
+        }
+
+        let r1 = fs::rename(&temp_domains_path, &self.postfix_virtual_domains_path).await;
+        let r2 = fs::rename(&temp_domains_db, &domains_db).await;
+        let r3 = fs::rename(&temp_mailboxes_path, &self.postfix_virtual_mailboxes_path).await;
+        let r4 = fs::rename(&temp_mailboxes_db, &mailboxes_db).await;
+
+        if r1.is_err() || r2.is_err() || r3.is_err() || r4.is_err() {
+            if domains_existed {
+                let _ = fs::rename(&bak_domains, &self.postfix_virtual_domains_path).await;
+            } else {
+                let _ = fs::remove_file(&self.postfix_virtual_domains_path).await;
+            }
+            if domains_db_existed {
+                let _ = fs::rename(&bak_domains_db, &domains_db).await;
+            } else {
+                let _ = fs::remove_file(&domains_db).await;
+            }
+            if mailboxes_existed {
+                let _ = fs::rename(&bak_mailboxes, &self.postfix_virtual_mailboxes_path).await;
+            } else {
+                let _ = fs::remove_file(&self.postfix_virtual_mailboxes_path).await;
+            }
+            if mailboxes_db_existed {
+                let _ = fs::rename(&bak_mailboxes_db, &mailboxes_db).await;
+            } else {
+                let _ = fs::remove_file(&mailboxes_db).await;
+            }
+            let _ = tx.rollback().await;
+            return Err(MailWorkerError::CommandFailed(
+                "Failed to rename configuration files into place".to_string(),
+            ));
+        }
+
+        if let Err(e) = self.reload_daemons().await {
+            if domains_existed {
+                let _ = fs::rename(&bak_domains, &self.postfix_virtual_domains_path).await;
+            } else {
+                let _ = fs::remove_file(&self.postfix_virtual_domains_path).await;
+            }
+            if domains_db_existed {
+                let _ = fs::rename(&bak_domains_db, &domains_db).await;
+            } else {
+                let _ = fs::remove_file(&domains_db).await;
+            }
+            if mailboxes_existed {
+                let _ = fs::rename(&bak_mailboxes, &self.postfix_virtual_mailboxes_path).await;
+            } else {
+                let _ = fs::remove_file(&self.postfix_virtual_mailboxes_path).await;
+            }
+            if mailboxes_db_existed {
+                let _ = fs::rename(&bak_mailboxes_db, &mailboxes_db).await;
+            } else {
+                let _ = fs::remove_file(&mailboxes_db).await;
+            }
+
+            let _ = tx.rollback().await;
+            return Err(e);
+        }
+
+        if let Err(e) = tx.commit().await {
+            if domains_existed {
+                let _ = fs::rename(&bak_domains, &self.postfix_virtual_domains_path).await;
+            } else {
+                let _ = fs::remove_file(&self.postfix_virtual_domains_path).await;
+            }
+            if domains_db_existed {
+                let _ = fs::rename(&bak_domains_db, &domains_db).await;
+            } else {
+                let _ = fs::remove_file(&domains_db).await;
+            }
+            if mailboxes_existed {
+                let _ = fs::rename(&bak_mailboxes, &self.postfix_virtual_mailboxes_path).await;
+            } else {
+                let _ = fs::remove_file(&self.postfix_virtual_mailboxes_path).await;
+            }
+            if mailboxes_db_existed {
+                let _ = fs::rename(&bak_mailboxes_db, &mailboxes_db).await;
+            } else {
+                let _ = fs::remove_file(&mailboxes_db).await;
+            }
+            let _ = self.reload_daemons().await;
+            return Err(e.into());
+        }
+
+        let _ = fs::remove_file(&bak_domains).await;
+        let _ = fs::remove_file(&bak_domains_db).await;
+        let _ = fs::remove_file(&bak_mailboxes).await;
+        let _ = fs::remove_file(&bak_mailboxes_db).await;
 
         Ok(())
     }
 
     pub async fn sync_aliases(&self, aliases: &[(&str, &str)]) -> Result<(), MailWorkerError> {
         let mut tx = self.db.begin().await?;
-        sqlx::query("DELETE FROM aliases").execute(&mut *tx).await?;
 
         let mut config = String::new();
+        for (source, dest) in aliases {
+            config.push_str(&format!("{} {}\n", source, dest));
+        }
+
+        let temp_aliases_path = self.postfix_virtual_aliases_path.with_extension("tmp");
+        fs::write(&temp_aliases_path, config).await?;
+
+        if let Err(e) = self.run_postmap(&temp_aliases_path).await {
+            let _ = fs::remove_file(&temp_aliases_path).await;
+            let _ = tx.rollback().await;
+            return Err(e);
+        }
+
+        sqlx::query("DELETE FROM aliases").execute(&mut *tx).await?;
+
         for (source, dest) in aliases {
             sqlx::query("INSERT INTO aliases (source, destination) VALUES (?, ?)")
                 .bind(*source)
                 .bind(*dest)
                 .execute(&mut *tx)
                 .await?;
-            config.push_str(&format!("{} {}\n", source, dest));
         }
-        tx.commit().await?;
 
-        fs::write(&self.postfix_virtual_aliases_path, config).await?;
-        self.run_postmap(&self.postfix_virtual_aliases_path).await?;
+        let temp_aliases_db = PathBuf::from(format!("{}.db", temp_aliases_path.display()));
+        let aliases_db = PathBuf::from(format!(
+            "{}.db",
+            self.postfix_virtual_aliases_path.display()
+        ));
+
+        let bak_aliases = PathBuf::from(format!(
+            "{}.bak",
+            self.postfix_virtual_aliases_path.display()
+        ));
+        let bak_aliases_db = PathBuf::from(format!(
+            "{}.bak.db",
+            self.postfix_virtual_aliases_path.display()
+        ));
+
+        let aliases_existed = self.postfix_virtual_aliases_path.exists();
+        let aliases_db_existed = aliases_db.exists();
+
+        if aliases_existed {
+            let _ = fs::copy(&self.postfix_virtual_aliases_path, &bak_aliases).await;
+        }
+        if aliases_db_existed {
+            let _ = fs::copy(&aliases_db, &bak_aliases_db).await;
+        }
+
+        let r1 = fs::rename(&temp_aliases_path, &self.postfix_virtual_aliases_path).await;
+        let r2 = fs::rename(&temp_aliases_db, &aliases_db).await;
+
+        if r1.is_err() || r2.is_err() {
+            if aliases_existed {
+                let _ = fs::rename(&bak_aliases, &self.postfix_virtual_aliases_path).await;
+            } else {
+                let _ = fs::remove_file(&self.postfix_virtual_aliases_path).await;
+            }
+            if aliases_db_existed {
+                let _ = fs::rename(&bak_aliases_db, &aliases_db).await;
+            } else {
+                let _ = fs::remove_file(&aliases_db).await;
+            }
+            let _ = tx.rollback().await;
+            return Err(MailWorkerError::CommandFailed(
+                "Failed to rename configuration files into place".to_string(),
+            ));
+        }
+
+        if let Err(e) = self.reload_daemons().await {
+            if aliases_existed {
+                let _ = fs::rename(&bak_aliases, &self.postfix_virtual_aliases_path).await;
+            } else {
+                let _ = fs::remove_file(&self.postfix_virtual_aliases_path).await;
+            }
+            if aliases_db_existed {
+                let _ = fs::rename(&bak_aliases_db, &aliases_db).await;
+            } else {
+                let _ = fs::remove_file(&aliases_db).await;
+            }
+
+            let _ = tx.rollback().await;
+            return Err(e);
+        }
+
+        if let Err(e) = tx.commit().await {
+            if aliases_existed {
+                let _ = fs::rename(&bak_aliases, &self.postfix_virtual_aliases_path).await;
+            } else {
+                let _ = fs::remove_file(&self.postfix_virtual_aliases_path).await;
+            }
+            if aliases_db_existed {
+                let _ = fs::rename(&bak_aliases_db, &aliases_db).await;
+            } else {
+                let _ = fs::remove_file(&aliases_db).await;
+            }
+            let _ = self.reload_daemons().await;
+            return Err(e.into());
+        }
+
+        let _ = fs::remove_file(&bak_aliases).await;
+        let _ = fs::remove_file(&bak_aliases_db).await;
 
         Ok(())
     }

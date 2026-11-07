@@ -1,22 +1,24 @@
 export class SessionManager {
-  private static readonly TOKEN_KEY = 'fusionpanel_auth_token';
+  // This marker is only a UI hint. The credential itself stays in the
+  // backend's HttpOnly SESSION_ID cookie and is never exposed to JavaScript.
+  private static readonly SESSION_KEY = 'fusionpanel_session_authenticated';
 
-  static getToken(): string | null {
+  static isAuthenticated(): boolean {
     if (typeof localStorage !== 'undefined') {
-      return localStorage.getItem(this.TOKEN_KEY);
+      return localStorage.getItem(this.SESSION_KEY) === '1';
     }
-    return null; // For environments without localStorage (e.g., Node in tests without mock)
+    return false;
   }
 
-  static setToken(token: string): void {
+  static markAuthenticated(): void {
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(this.TOKEN_KEY, token);
+      localStorage.setItem(this.SESSION_KEY, '1');
     }
   }
 
-  static clearToken(): void {
+  static clear(): void {
     if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(this.TOKEN_KEY);
+      localStorage.removeItem(this.SESSION_KEY);
     }
   }
 }

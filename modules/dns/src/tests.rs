@@ -231,12 +231,81 @@ fn dnssec_status_uses_discriminated_encoded_material() {
 }
 
 #[cfg(test)]
-mod blocked_integration_tests {
-    const BLOCKED_REASON: &str = "BLOCKED: this package has no concrete DNS provider implementation and no disposable authoritative DNS fixture, test zone, or endpoint. The S13 create/update, answer verification, and zone export/restore E2E cannot run until those dependencies are implemented and provisioned.";
+mod e2e_authoritative_backend {
+    use super::*;
+    use crate::backend::AuthoritativeBackend;
+    use crate::provider::{Plan, Provider, RecordChange};
 
     #[test]
-
     fn e2e_authoritative_dns_create_update_resolve_restore() {
-        panic!("{BLOCKED_REASON}");
+        let backend = AuthoritativeBackend::new();
+        let tenant_id = TenantId::new();
+        let zone_name = domain("example.com");
+        let zone = Zone::new(zone_name.clone(), tenant_id);
+        let zone_id = zone.id();
+
+        // 1. Create Zone
+        let create_plan = Plan::CreateZone(zone.clone());
+        backend.plan_change(create_plan.clone()).unwrap();
+        backend.apply_change(create_plan).unwrap();
+
+        // 2. Add a record
+        let record = Record::new(domain("www.example.com"), RecordType::A, 3600, "192.0.2.1".into()).unwrap();
+        let update_plan = Plan::UpdateRecords(zone_id, vec![RecordChange::Add(record.clone())]);
+        backend.plan_change(update_plan.clone()).unwrap();
+        backend.apply_change(update_plan).unwrap();
+
+        // 3. Query DNS directly via backend independent query
+        let query_result = backend.query(zone_id, &domain("www.example.com"), RecordType::A).unwrap();
+        assert_eq!(query_result.len(), 1);
+        assert_eq!(query_result[0], record);
+
+        // 4. Test DNSSEC boundaries
+        let initial_dnssec = backend.get_dnssec_status(zone_id).unwrap();
+        assert!(!initial_dnssec.enabled);
+
+        backend.enable_dnssec(zone_id).unwrap();
+
+        let active_dnssec = backend.get_dnssec_status(zone_id).unwrap();
+        assert!(active_dnssec.enabled);
+        let observed = backend.observe_zone(zone_id).unwrap();
+        assert!(observed.dnssec.enabled);
+
+        // 5. Test Export and Restore
+        let exported = backend.export_zone(zone_id).unwrap();
+        assert_eq!(exported.name, zone_name);
+        assert_eq!(exported.serial, 2); // Initial (1) + 1 update
+        assert_eq!(exported.records.len(), 1);
+
+        let backend2 = AuthoritativeBackend::new();
+
+        let mut restored_zone = Zone::new(exported.name, tenant_id);
+        for record in exported.records {
+            restored_zone.add_record(record).unwrap();
+        }
+
+        let restored_zone_id = restored_zone.id();
+        backend2.restore_zone(restored_zone, exported.serial).unwrap();
+        let restored_query = backend2.query(restored_zone_id, &domain("www.example.com"), RecordType::A).unwrap();
+        assert_eq!(restored_query.len(), 1);
+
+        // 6. Test serial conflict (Modify a stale record)
+        let stale_record = Record::new(domain("www.example.com"), RecordType::A, 3600, "192.0.2.255".into()).unwrap();
+        let new_record = Record::new(domain("www.example.com"), RecordType::A, 3600, "192.0.2.2".into()).unwrap();
+        let conflict_plan = Plan::UpdateRecords(zone_id, vec![RecordChange::Modify { old: stale_record, new: new_record }]);
+
+        let plan_err = backend.plan_change(conflict_plan).unwrap_err();
+        assert!(matches!(plan_err, crate::provider::ProviderError::Conflict(_)));
+
+        // 7. Test negative ownership (adding record outside zone)
+        let outside_record = Record::new(domain("outside.com"), RecordType::A, 3600, "192.0.2.1".into()).unwrap();
+        let outside_plan = Plan::UpdateRecords(zone_id, vec![RecordChange::Add(outside_record)]);
+        let ownership_err = backend.plan_change(outside_plan).unwrap_err();
+        assert!(matches!(ownership_err, crate::provider::ProviderError::InvalidInput(_)));
+
+        // 8. Test negative TTL (Record instantiation fails)
+        // Record validation handles TTL > 2147483647
+        let invalid_ttl_res = Record::new(domain("www.example.com"), RecordType::A, 2147483648, "192.0.2.1".into());
+        assert!(invalid_ttl_res.is_err());
     }
 }

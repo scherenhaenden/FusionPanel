@@ -46,9 +46,20 @@ jobs:
             fi
           fi
 
-  dependency-lane:
+  validation:
     runs-on: ubuntu-latest
     needs: discovery
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Audit Unsafe Code
+        run: ./scripts/ci/audit_unsafe.sh
+      - name: Check Mock Bypasses
+        run: ./scripts/ci/check_mock_bypasses.sh
+
+  dependency-lane:
+    runs-on: ubuntu-latest
+    needs: [discovery, validation]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -83,11 +94,31 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.manifest }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.manifest }}-
+            ${{ runner.os }}-cargo-
 
       - name: Compile
         run: cargo build --manifest-path ${{ matrix.manifest }} 2>&1 | tee compile.log
         env:
           CARGO_TERM_COLOR: always
+
+      - name: Check Formatting
+        run: cargo fmt --manifest-path ${{ matrix.manifest }} -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --manifest-path ${{ matrix.manifest }} -- -D warnings
 
       - name: Run Tests
         id: test
@@ -144,6 +175,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Rust Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.manifest }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.manifest }}-
+            ${{ runner.os }}-cargo-
 
       - name: Compile and Test
         run: |

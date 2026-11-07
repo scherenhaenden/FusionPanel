@@ -1,9 +1,9 @@
-use sha2::{Digest, Sha256};
-use hmac::{Hmac, Mac};
-use hex;
 use chrono::{DateTime, Utc};
-use std::collections::BTreeMap;
+use hex;
+use hmac::{Hmac, Mac};
 use reqwest::header::HeaderMap;
+use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -38,7 +38,8 @@ pub fn sign(req: &mut SigV4Request) -> HeaderMap {
     let date_stamp = req.datetime.format("%Y%m%d").to_string();
     let service = "s3";
 
-    req.headers.insert("x-amz-date".to_string(), amz_date.clone());
+    req.headers
+        .insert("x-amz-date".to_string(), amz_date.clone());
 
     let url_parts: Vec<&str> = req.endpoint.splitn(2, "://").collect();
     let without_scheme = url_parts.get(1).unwrap_or(&req.endpoint);
@@ -55,28 +56,45 @@ pub fn sign(req: &mut SigV4Request) -> HeaderMap {
     };
 
     let (path, query) = if let Some(idx) = path_query.find('?') {
-        (&path_query[..idx], &path_query[idx+1..])
+        (&path_query[..idx], &path_query[idx + 1..])
     } else {
         (path_query.as_str(), "")
     };
 
-    let mut query_params: Vec<(&str, &str)> = query.split('&').filter(|s| !s.is_empty()).map(|kv| {
-        let mut parts = kv.splitn(2, '=');
-        (parts.next().unwrap(), parts.next().unwrap_or(""))
-    }).collect();
+    let mut query_params: Vec<(&str, &str)> = query
+        .split('&')
+        .filter(|s| !s.is_empty())
+        .map(|kv| {
+            let mut parts = kv.splitn(2, '=');
+            (parts.next().unwrap(), parts.next().unwrap_or(""))
+        })
+        .collect();
     query_params.sort_by(|a, b| a.0.cmp(b.0));
 
-    let canonical_querystring = query_params.iter().map(|(k, v)| {
-        let k = urlencoding::encode(k);
-        let v = urlencoding::encode(v);
-        format!("{}={}", k, v)
-    }).collect::<Vec<String>>().join("&");
+    let canonical_querystring = query_params
+        .iter()
+        .map(|(k, v)| {
+            let k = urlencoding::encode(k);
+            let v = urlencoding::encode(v);
+            format!("{}={}", k, v)
+        })
+        .collect::<Vec<String>>()
+        .join("&");
 
-    let canonical_uri = path.split('/').map(|s| urlencoding::encode(s).into_owned()).collect::<Vec<String>>().join("/");
-    let canonical_uri = if canonical_uri.is_empty() { "/".to_string() } else { canonical_uri };
+    let canonical_uri = path
+        .split('/')
+        .map(|s| urlencoding::encode(s).into_owned())
+        .collect::<Vec<String>>()
+        .join("/");
+    let canonical_uri = if canonical_uri.is_empty() {
+        "/".to_string()
+    } else {
+        canonical_uri
+    };
 
     let payload_hash = sha256_hex(req.body);
-    req.headers.insert("x-amz-content-sha256".to_string(), payload_hash.clone());
+    req.headers
+        .insert("x-amz-content-sha256".to_string(), payload_hash.clone());
 
     let mut signed_headers = String::new();
     let mut canonical_headers = String::new();
@@ -105,7 +123,10 @@ pub fn sign(req: &mut SigV4Request) -> HeaderMap {
         sha256_hex(canonical_request.as_bytes())
     );
 
-    let k_date = hmac_sha256(format!("AWS4{}", req.secret_key).as_bytes(), date_stamp.as_bytes());
+    let k_date = hmac_sha256(
+        format!("AWS4{}", req.secret_key).as_bytes(),
+        date_stamp.as_bytes(),
+    );
     let k_region = hmac_sha256(&k_date, req.region.as_bytes());
     let k_service = hmac_sha256(&k_region, service.as_bytes());
     let k_signing = hmac_sha256(&k_service, b"aws4_request");

@@ -2,6 +2,16 @@ use crate::adapter::*;
 use async_trait::async_trait;
 use std::process::Stdio;
 use tokio::process::Command;
+use uuid::Uuid;
+
+fn quote_password_literal(password: &str) -> String {
+    loop {
+        let delimiter = format!("$fusionpanel_{}$", Uuid::new_v4().simple());
+        if !password.contains(&delimiter) {
+            return format!("{delimiter}{password}{delimiter}");
+        }
+    }
+}
 
 pub struct PostgresAdapter {
     config: DatabaseConfig,
@@ -46,6 +56,73 @@ impl DatabaseAdapter for PostgresAdapter {
         &self.config
     }
 
+    async fn database_exists(&self, name: &DbName) -> Result<bool> {
+        let mut cmd = self.build_cmd("psql");
+        cmd.args(["-d", "postgres", "-t", "-A", "-c", &format!(
+            "SELECT 1 FROM pg_database WHERE datname = '{}';",
+            name.0
+        )]);
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute psql: {}", e))
+        })?;
+        if !output.status.success() {
+            return Err(DatabaseError::OperationFailed(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+            ));
+        }
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        Ok(out_str.trim() == "1")
+    }
+
+    async fn list_databases(&self) -> Result<Vec<ObservedDatabase>> {
+        let mut cmd = self.build_cmd("psql");
+        // Filter out template1, template0, etc. Postgres typical system schemas don't appear in pg_database but system templates do.
+        // We exclude databases starting with 'template' and 'postgres' itself.
+        cmd.args(["-d", "postgres", "-t", "-A", "-c",
+            "SELECT datname, pg_encoding_to_char(encoding), datcollate FROM pg_database \
+             WHERE datistemplate = false AND datname != 'postgres';"
+        ]);
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute psql: {}", e))
+        })?;
+        if !output.status.success() {
+            return Err(DatabaseError::OperationFailed(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+            ));
+        }
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        let mut dbs = Vec::new();
+        for line in out_str.lines() {
+            let parts: Vec<&str> = line.split('|').collect();
+            if parts.len() == 3 {
+                dbs.push(ObservedDatabase {
+                    name: DbName(parts[0].to_string()),
+                    charset: parts[1].to_string(),
+                    collation: parts[2].to_string(),
+                });
+            }
+        }
+        Ok(dbs)
+    }
+
+    async fn user_exists(&self, username: &DbUser) -> Result<bool> {
+        let mut cmd = self.build_cmd("psql");
+        cmd.args(["-d", "postgres", "-t", "-A", "-c", &format!(
+            "SELECT 1 FROM pg_roles WHERE rolname = '{}';",
+            username.0
+        )]);
+        let output = cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute psql: {}", e))
+        })?;
+        if !output.status.success() {
+            return Err(DatabaseError::OperationFailed(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+            ));
+        }
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        Ok(out_str.trim() == "1")
+    }
+
     async fn check_connection(&self) -> Result<()> {
         let mut cmd = self.build_cmd("psql");
         cmd.args(["-d", "postgres", "-c", "SELECT 1;"]);
@@ -74,6 +151,14 @@ impl DatabaseAdapter for PostgresAdapter {
     async fn apply_create_database(&self, plan: &CreateDbPlan) -> Result<()> {
         validate_identifier(&plan.db_name.0)?;
         validate_identifier(&plan.owner.0)?;
+
+        if self.database_exists(&plan.db_name).await? {
+            return Err(DatabaseError::Conflict(format!(
+                "Database '{}' already exists",
+                plan.db_name.0
+            )));
+        }
+
         let sql = format!(
             "CREATE DATABASE \"{}\" OWNER \"{}\" ENCODING 'UTF8';",
             plan.db_name.0, plan.owner.0
@@ -88,9 +173,6 @@ impl DatabaseAdapter for PostgresAdapter {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            if stderr.contains("already exists") {
-                return Ok(());
-            }
             return Err(DatabaseError::OperationFailed(stderr));
         }
         Ok(())
@@ -110,10 +192,10 @@ impl DatabaseAdapter for PostgresAdapter {
 
     async fn apply_create_user(&self, plan: &CreateUserPlan) -> Result<()> {
         validate_identifier(&plan.username.0)?;
-        let escaped_pwd = plan.password_ref.0.replace("'", "''");
         let sql = format!(
-            "CREATE USER \"{}\" WITH PASSWORD '{}';",
-            plan.username.0, escaped_pwd
+            "CREATE USER \"{}\" WITH PASSWORD {};",
+            plan.username.0,
+            quote_password_literal(&plan.password_ref.0)
         );
 
         let mut cmd = self.build_cmd("psql");
@@ -141,8 +223,9 @@ impl DatabaseAdapter for PostgresAdapter {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             if stderr.contains("already exists") {
                 let alter_sql = format!(
-                    "ALTER USER \"{}\" WITH PASSWORD '{}';",
-                    plan.username.0, escaped_pwd
+                    "ALTER USER \"{}\" WITH PASSWORD {};",
+                    plan.username.0,
+                    quote_password_literal(&plan.password_ref.0)
                 );
                 let mut alter_cmd = self.build_cmd("psql");
                 alter_cmd.args(["-v", "ON_ERROR_STOP=1", "-d", "postgres"]);
@@ -169,12 +252,12 @@ impl DatabaseAdapter for PostgresAdapter {
                 })?;
                 if !alter_output.status.success() {
                     let alter_err = String::from_utf8_lossy(&alter_output.stderr).to_string();
-                    let safe_err = alter_err.replace(&plan.password_ref.0, "[REDACTED]").replace(&escaped_pwd, "[REDACTED]");
+                    let safe_err = alter_err.replace(&plan.password_ref.0, "[REDACTED]");
                     return Err(DatabaseError::OperationFailed(safe_err));
                 }
                 return Ok(());
             }
-            let safe_err = stderr.replace(&plan.password_ref.0, "[REDACTED]").replace(&escaped_pwd, "[REDACTED]");
+            let safe_err = stderr.replace(&plan.password_ref.0, "[REDACTED]");
             return Err(DatabaseError::OperationFailed(safe_err));
         }
         Ok(())

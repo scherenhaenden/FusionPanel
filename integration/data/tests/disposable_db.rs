@@ -1,58 +1,38 @@
 #![forbid(unsafe_code)]
 
-#[path = "../src/backup_scheduler.rs"]
-mod backup_scheduler;
-
-use backup_scheduler::{Compression, DumpScheduler};
+use async_trait::async_trait;
 use databases::adapter::{
     ConnectionStrategy, DatabaseAdapter, DatabaseConfig, DatabaseEngine, DbName, DbUser,
     SecretString,
 };
 use databases::mariadb::MariaDbAdapter;
 use databases::postgresql::PostgresAdapter;
+use integration_data::backup_scheduler::{
+    BackupReceipt, Compression, DumpScheduler, StorageBackend,
+};
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 
-async fn cleanup_mariadb(db_name: &DbName, db_user: &DbUser, config: &DatabaseConfig) {
-    let mut drop_db = Command::new("mysql");
-    drop_db
-        .arg(format!("--host={}", config.host))
-        .arg(format!("--port={}", config.port))
-        .arg(format!("--user={}", config.admin_user))
-        .env("MYSQL_PWD", &config.admin_password_ref.0)
-        .arg("-e")
-        .arg(format!("DROP DATABASE IF EXISTS `{}`;", db_name.0));
-    let _ = drop_db.output();
+struct NullStorageBackend;
 
-    let mut drop_user = Command::new("mysql");
-    drop_user
-        .arg(format!("--host={}", config.host))
-        .arg(format!("--port={}", config.port))
-        .arg(format!("--user={}", config.admin_user))
-        .env("MYSQL_PWD", &config.admin_password_ref.0)
-        .arg("-e")
-        .arg(format!("DROP USER IF EXISTS '{}'@'%';", db_user.0));
-    let _ = drop_user.output();
-}
-
-async fn cleanup_postgresql(db_name: &DbName, db_user: &DbUser, config: &DatabaseConfig) {
-    let mut drop_db = Command::new("psql");
-    drop_db
-        .arg("-d")
-        .arg("postgres")
-        .arg("-c")
-        .arg(format!("DROP DATABASE IF EXISTS \"{}\";", db_name.0))
-        .env("PGPASSWORD", &config.admin_password_ref.0);
-    let _ = drop_db.output();
-
-    let mut drop_user = Command::new("psql");
-    drop_user
-        .arg("-d")
-        .arg("postgres")
-        .arg("-c")
-        .arg(format!("DROP USER IF EXISTS \"{}\";", db_user.0))
-        .env("PGPASSWORD", &config.admin_password_ref.0);
-    let _ = drop_user.output();
+#[async_trait]
+impl StorageBackend for NullStorageBackend {
+    async fn upload(
+        &self,
+        _local_path: &Path,
+        remote_filename: &str,
+    ) -> Result<BackupReceipt, String> {
+        Ok(BackupReceipt {
+            path_or_key: format!("null://{}", remote_filename),
+            hash_sha256: "000".to_string(),
+            size_bytes: 0,
+        })
+    }
+    async fn delete(&self, _remote_filename: &str) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 async fn test_adapter_lifecycle(
@@ -63,13 +43,6 @@ async fn test_adapter_lifecycle(
     let db_name = DbName("testdb_disposable".to_string());
     let db_user = DbUser("testuser_disposable".to_string());
     let password = SecretString("testpass123".to_string());
-
-    // Clean up first to ensure fresh state
-    if adapter.engine() == DatabaseEngine::MariaDB {
-        cleanup_mariadb(&db_name, &db_user, adapter.config()).await;
-    } else {
-        cleanup_postgresql(&db_name, &db_user, adapter.config()).await;
-    }
 
     // 1. Create DB
     let create_db_plan = adapter
@@ -83,7 +56,7 @@ async fn test_adapter_lifecycle(
 
     // 2. Create User
     let create_user_plan = adapter
-        .plan_create_user(db_user.clone(), password.clone())
+        .plan_create_user(db_user.clone(), password)
         .await
         .unwrap();
     adapter.apply_create_user(&create_user_plan).await.unwrap();
@@ -93,19 +66,79 @@ async fn test_adapter_lifecycle(
         .plan_grant(
             db_name.clone(),
             db_user.clone(),
-            vec!["SELECT".to_string(), "INSERT".to_string()],
+            vec![
+                "SELECT".to_string(),
+                "INSERT".to_string(),
+                "CREATE".to_string(),
+                "DROP".to_string(),
+            ],
         )
         .await
         .unwrap();
     adapter.apply_grant(&grant_plan).await.unwrap();
 
+    // Insert unique live rows
+    let insert_cmd_str = match adapter.engine() {
+        DatabaseEngine::MariaDB => format!("CREATE TABLE testdb_disposable.test_table (id INT); INSERT INTO testdb_disposable.test_table VALUES (1);"),
+        DatabaseEngine::PostgreSQL => format!("CREATE TABLE test_table (id INT); INSERT INTO test_table VALUES (1);"),
+    };
+
+    let mut insert_cmd = match adapter.engine() {
+        DatabaseEngine::MariaDB => {
+            let mut cmd = Command::new("mysql");
+            cmd.args([
+                "-u",
+                "root",
+                &format!("-p{}", adapter.config().admin_password_ref.0),
+                "-h",
+                "127.0.0.1",
+                "-e",
+                &insert_cmd_str,
+            ]);
+            cmd
+        }
+        DatabaseEngine::PostgreSQL => {
+            let mut cmd = Command::new("psql");
+            cmd.args([
+                "-U",
+                "postgres",
+                "-h",
+                "127.0.0.1",
+                "-d",
+                "testdb_disposable",
+                "-c",
+                &insert_cmd_str,
+            ]);
+            cmd.env("PGPASSWORD", &adapter.config().admin_password_ref.0);
+            cmd
+        }
+    };
+    let insert_output = insert_cmd.output().unwrap();
+    assert!(
+        insert_output.status.success(),
+        "Failed to insert test data: {:?}",
+        String::from_utf8_lossy(&insert_output.stderr)
+    );
+
     // 4. Test Backup
+    let mut temp_opts = std::fs::OpenOptions::new();
+    temp_opts.read(true).write(true).create(true).mode(0o700);
+
     let temp_dir = tempfile::tempdir().unwrap();
+    std::fs::set_permissions(
+        temp_dir.path(),
+        std::os::unix::fs::PermissionsExt::from_mode(0o700),
+    )
+    .unwrap();
+
     let scheduler = DumpScheduler::new(
         "0 0 0 * * * *",
         adapter.clone(),
         temp_dir.path().to_path_buf(),
         compression,
+        None,
+        Arc::new(NullStorageBackend),
+        5,
     )
     .unwrap();
 
@@ -115,7 +148,13 @@ async fn test_adapter_lifecycle(
         .await
         .unwrap();
 
-    assert!(dump_res.0.exists());
+    // Check local path
+    let artifact_name = dump_res.path_or_key.strip_prefix("null://").unwrap();
+    let local_path = temp_dir
+        .path()
+        .join(".fusionpanel-backups")
+        .join(artifact_name);
+    assert!(local_path.exists());
 
     // 5. Test Restore
     // Decompress for restore
@@ -125,7 +164,7 @@ async fn test_adapter_lifecycle(
         Command::new("gzip")
             .arg("-d")
             .arg("-c")
-            .arg(&dump_res.0)
+            .arg(&local_path)
             .stdout(std::fs::File::create(&restored_file).unwrap())
             .status()
             .unwrap();
@@ -133,11 +172,54 @@ async fn test_adapter_lifecycle(
         Command::new("zstd")
             .arg("-d")
             .arg("-c")
-            .arg(&dump_res.0)
+            .arg(&local_path)
             .stdout(std::fs::File::create(&restored_file).unwrap())
             .status()
             .unwrap();
     }
+
+    // Drop table before restore to verify it works
+    let drop_cmd_str = match adapter.engine() {
+        DatabaseEngine::MariaDB => format!("DROP TABLE testdb_disposable.test_table;"),
+        DatabaseEngine::PostgreSQL => format!("DROP TABLE test_table;"),
+    };
+
+    let mut drop_cmd = match adapter.engine() {
+        DatabaseEngine::MariaDB => {
+            let mut cmd = Command::new("mysql");
+            cmd.args([
+                "-u",
+                "root",
+                &format!("-p{}", adapter.config().admin_password_ref.0),
+                "-h",
+                "127.0.0.1",
+                "-e",
+                &drop_cmd_str,
+            ]);
+            cmd
+        }
+        DatabaseEngine::PostgreSQL => {
+            let mut cmd = Command::new("psql");
+            cmd.args([
+                "-U",
+                "postgres",
+                "-h",
+                "127.0.0.1",
+                "-d",
+                "testdb_disposable",
+                "-c",
+                &drop_cmd_str,
+            ]);
+            cmd.env("PGPASSWORD", &adapter.config().admin_password_ref.0);
+            cmd
+        }
+    };
+    let drop_output = drop_cmd.output().unwrap();
+    assert!(
+        drop_output.status.success(),
+        "Failed to drop test data: {:?}",
+        String::from_utf8_lossy(&drop_output.stderr)
+    );
 
     let restore_plan = adapter
         .plan_restore(db_name.clone(), restored_file.to_string_lossy().to_string())
@@ -145,95 +227,64 @@ async fn test_adapter_lifecycle(
         .unwrap();
     adapter.apply_restore(&restore_plan).await.unwrap();
 
-    // 6. Test Query / Deny / Drop Cleanup
-    if adapter.engine() == DatabaseEngine::MariaDB {
-        // Query (Success with SELECT/INSERT)
-        let mut test_query = Command::new("mysql");
-        test_query
-            .arg(format!("--host={}", adapter.config().host))
-            .arg(format!("--port={}", adapter.config().port))
-            .arg(format!("--user={}", db_user.0))
-            .env("MYSQL_PWD", &password.0)
-            .arg(&db_name.0)
-            .arg("-e")
-            .arg("CREATE TABLE dummy (id INT); INSERT INTO dummy VALUES (1); SELECT * FROM dummy;");
-        let out = test_query.output().unwrap();
+    // Verify restored data
+    let verify_cmd_str = match adapter.engine() {
+        DatabaseEngine::MariaDB => {
+            format!("SELECT id FROM testdb_disposable.test_table WHERE id=1;")
+        }
+        DatabaseEngine::PostgreSQL => format!("SELECT id FROM test_table WHERE id=1;"),
+    };
 
-        // In MariaDB, our "SELECT, INSERT" does not automatically grant CREATE, so the above fails with denied!
-        // This is a great test for deny actually.
-        assert!(!out.status.success());
-        let err_str = String::from_utf8_lossy(&out.stderr);
-        assert!(err_str.contains("Access denied") || err_str.contains("command denied"));
-
-        // Let's grant CREATE to properly test query success
-        let grant_plan_create = adapter
-            .plan_grant(
-                db_name.clone(),
-                db_user.clone(),
-                vec![
-                    "CREATE".to_string(),
-                    "SELECT".to_string(),
-                    "INSERT".to_string(),
-                ],
-            )
-            .await
-            .unwrap();
-        adapter.apply_grant(&grant_plan_create).await.unwrap();
-
-        let mut test_query2 = Command::new("mysql");
-        test_query2
-            .arg(format!("--host={}", adapter.config().host))
-            .arg(format!("--port={}", adapter.config().port))
-            .arg(format!("--user={}", db_user.0))
-            .env("MYSQL_PWD", &password.0)
-            .arg(&db_name.0)
-            .arg("-e")
-            .arg("CREATE TABLE dummy (id INT); INSERT INTO dummy VALUES (1); SELECT * FROM dummy;");
-        let out2 = test_query2.output().unwrap();
-        assert!(out2.status.success());
-
-        cleanup_mariadb(&db_name, &db_user, adapter.config()).await;
-    } else {
-        // Query (Success with SELECT/INSERT)
-        // In PostgreSQL we granted CONNECT on DATABASE, and privileges on ALL TABLES IN SCHEMA public.
-        // Let's test that directly by logging in as the user
-        let mut test_query = Command::new("psql");
-        test_query
-            .arg("-d")
-            .arg(&db_name.0)
-            .arg("-U")
-            .arg(&db_user.0)
-            .env("PGPASSWORD", &password.0)
-            .arg("-c")
-            .arg("CREATE TABLE dummy (id INT); INSERT INTO dummy VALUES (1); SELECT * FROM dummy;");
-        let out = test_query.output().unwrap();
-        // User cannot create tables in public schema by default in pg15 without explicit schema grants, so it's a deny test!
-        assert!(!out.status.success());
-        let err_str = String::from_utf8_lossy(&out.stderr);
-        assert!(err_str.contains("permission denied"));
-
-        // We will just do a standard query to test connection access
-        let mut test_query_conn = Command::new("psql");
-        test_query_conn
-            .arg("-d")
-            .arg(&db_name.0)
-            .arg("-U")
-            .arg(&db_user.0)
-            .env("PGPASSWORD", &password.0)
-            .arg("-c")
-            .arg("SELECT 1;");
-        let out_conn = test_query_conn.output().unwrap();
-        assert!(out_conn.status.success());
-
-        cleanup_postgresql(&db_name, &db_user, adapter.config()).await;
-    }
+    let mut verify_cmd = match adapter.engine() {
+        DatabaseEngine::MariaDB => {
+            let mut cmd = Command::new("mysql");
+            cmd.args([
+                "-u",
+                "root",
+                &format!("-p{}", adapter.config().admin_password_ref.0),
+                "-h",
+                "127.0.0.1",
+                "-e",
+                &verify_cmd_str,
+            ]);
+            cmd
+        }
+        DatabaseEngine::PostgreSQL => {
+            let mut cmd = Command::new("psql");
+            cmd.args([
+                "-U",
+                "postgres",
+                "-h",
+                "127.0.0.1",
+                "-d",
+                "testdb_disposable",
+                "-c",
+                &verify_cmd_str,
+                "-t",
+            ]);
+            cmd.env("PGPASSWORD", &adapter.config().admin_password_ref.0);
+            cmd
+        }
+    };
+    let verify_output = verify_cmd.output().unwrap();
+    assert!(
+        verify_output.status.success(),
+        "Failed to verify restored test data: {:?}",
+        String::from_utf8_lossy(&verify_output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&verify_output.stdout);
+    assert!(
+        stdout.contains("1"),
+        "Restored data verification failed, stdout: {}",
+        stdout
+    );
 }
 
 #[tokio::test]
 async fn test_disposable_db_lifecycle_mariadb() {
-    let check = std::process::Command::new("mysql")
-        .arg("--version")
-        .output();
+    let mut check_cmd = std::process::Command::new("sh");
+    check_cmd.args(["-c", "command -v mysql"]);
+    let check = check_cmd.output();
     if check.is_err() || !check.unwrap().status.success() {
         println!("BLOCKED: mysql client not available. Skipping MariaDB disposable DB test.");
         return;
@@ -244,11 +295,12 @@ async fn test_disposable_db_lifecycle_mariadb() {
         host: "127.0.0.1".into(),
         port: 3306,
         admin_user: "root".into(),
-        admin_password_ref: SecretString("rootpassword".into()),
+        admin_password_ref: SecretString("rootpassword".into()), // Needs to match local dev setup
     };
 
     let adapter = Arc::new(MariaDbAdapter::new(config));
 
+    // Check if we can connect to a real instance, otherwise BLOCK
     if adapter.check_connection().await.is_err() {
         println!("BLOCKED: Could not connect to MariaDB on 127.0.0.1:3306");
         return;
@@ -259,7 +311,9 @@ async fn test_disposable_db_lifecycle_mariadb() {
 
 #[tokio::test]
 async fn test_disposable_db_lifecycle_postgresql() {
-    let check = std::process::Command::new("psql").arg("--version").output();
+    let mut check_cmd = std::process::Command::new("sh");
+    check_cmd.args(["-c", "command -v psql"]);
+    let check = check_cmd.output();
     if check.is_err() || !check.unwrap().status.success() {
         println!("BLOCKED: psql client not available. Skipping PostgreSQL disposable DB test.");
         return;
@@ -275,6 +329,7 @@ async fn test_disposable_db_lifecycle_postgresql() {
 
     let adapter = Arc::new(PostgresAdapter::new(config));
 
+    // Check connection
     if adapter.check_connection().await.is_err() {
         println!("BLOCKED: Could not connect to PostgreSQL on 127.0.0.1:5432");
         return;

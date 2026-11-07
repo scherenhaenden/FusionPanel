@@ -10,6 +10,7 @@ pub enum IncidentState {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Incident {
     pub id: String,
+    pub tenant_id: Option<String>,
     pub title: String,
     pub state: IncidentState,
     pub created_at: u64,
@@ -17,9 +18,10 @@ pub struct Incident {
 }
 
 impl Incident {
-    pub fn new(id: String, title: String, timestamp: u64) -> Self {
+    pub fn new(id: String, title: String, timestamp: u64, tenant_id: Option<String>) -> Self {
         Self {
             id,
+            tenant_id,
             title,
             state: IncidentState::Triggered,
             created_at: timestamp,

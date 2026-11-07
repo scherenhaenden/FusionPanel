@@ -9,5 +9,13 @@ publish = false
 
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
+databases = { path = "../../../modules/databases" }
+integration-data = { path = "../../../integration/data" }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+async-trait = "0.1.92"
+sha2 = "0.11.1"
+hex = "0.4.3"
 
 [dev-dependencies]
+tempfile = "3.10"
+zstd = "0.13"

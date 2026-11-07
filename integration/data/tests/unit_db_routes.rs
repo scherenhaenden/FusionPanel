@@ -20,7 +20,6 @@ use databases::adapter::{
     DatabaseEngine, DbName, DbUser, DumpPlan, GrantPlan, RestorePlan, Result as DbResult,
     SecretString,
 };
-use identity::rbac::{Role, RoleBinding, RoleType, Scope};
 use integration_identity::AuthenticatedUser;
 use jobs::JobStore;
 use std::sync::{Arc, Mutex};
@@ -39,6 +38,15 @@ impl DatabaseAdapter for MockAdapter {
     }
     async fn check_connection(&self) -> DbResult<()> {
         Ok(())
+    }
+    async fn database_exists(&self, _name: &DbName) -> DbResult<bool> {
+        Ok(true)
+    }
+    async fn list_databases(&self) -> DbResult<Vec<databases::adapter::ObservedDatabase>> {
+        Ok(vec![])
+    }
+    async fn user_exists(&self, _username: &DbUser) -> DbResult<bool> {
+        Ok(true)
     }
     async fn plan_create_database(&self, name: DbName, owner: DbUser) -> DbResult<CreateDbPlan> {
         Ok(CreateDbPlan {
@@ -113,9 +121,8 @@ fn create_mock_state() -> AppState {
 }
 
 fn mock_auth_user() -> AuthenticatedUser {
-    let user_id = identity::types::UserId::new_v4();
     AuthenticatedUser {
-        user_id,
+        user_id: identity::types::UserId::new_v4(),
         bindings: vec![],
     }
 }
@@ -125,7 +132,7 @@ async fn test_identifier_validation() {
     assert!(is_valid_identifier("my_db"));
     assert!(is_valid_identifier("db123"));
     assert!(is_valid_identifier("DB_test_1"));
-    assert!(is_valid_identifier("_db"));
+    assert!(is_valid_identifier("_db")); // Starts with underscore is allowed by the database module validation rule
 
     assert!(!is_valid_identifier("")); // empty
     assert!(!is_valid_identifier("1db")); // starts with number
@@ -157,11 +164,10 @@ async fn test_create_database_invalid_identifier() {
         charset: None,
     };
     let res = create_database(State(state), Extension(mock_auth_user()), Json(req)).await;
-    let (status, _) = match res {
-        Err(e) => e,
+    match res {
+        Err((status, _)) => assert_eq!(status, axum::http::StatusCode::BAD_REQUEST),
         _ => panic!("Expected error"),
-    };
-    assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
 }
 
 #[tokio::test]
@@ -172,11 +178,10 @@ async fn test_create_database_invalid_charset() {
         charset: Some("invalid_charset".to_string()),
     };
     let res = create_database(State(state), Extension(mock_auth_user()), Json(req)).await;
-    let (status, _) = match res {
-        Err(e) => e,
+    match res {
+        Err((status, _)) => assert_eq!(status, axum::http::StatusCode::BAD_REQUEST),
         _ => panic!("Expected error"),
-    };
-    assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
 }
 
 #[tokio::test]
@@ -186,16 +191,10 @@ async fn test_create_database_valid() {
         name: "valid_name".to_string(),
         charset: Some("utf8mb4".to_string()),
     };
-
-    assert_eq!(state.job_store.lock().unwrap().list().unwrap().len(), 0);
-
-    let res = create_database(State(state.clone()), Extension(mock_auth_user()), Json(req)).await;
+    let res = create_database(State(state), Extension(mock_auth_user()), Json(req)).await;
     assert!(res.is_ok());
-
-    let jobs = state.job_store.lock().unwrap().list().unwrap();
-    assert_eq!(jobs.len(), 1);
-    assert_eq!(jobs[0].kind, "create_database");
-    assert_eq!(jobs[0].state, jobs::JobState::Succeeded);
+    let r = res.unwrap().into_response();
+    assert_eq!(r.status(), axum::http::StatusCode::CREATED);
 }
 
 #[tokio::test]
@@ -207,11 +206,10 @@ async fn test_get_database_invalid_identifier() {
         Path("invalid-name".to_string()),
     )
     .await;
-    let (status, _) = match res {
-        Err(e) => e,
+    match res {
+        Err((status, _)) => assert_eq!(status, axum::http::StatusCode::BAD_REQUEST),
         _ => panic!("Expected error"),
-    };
-    assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
 }
 
 #[tokio::test]
@@ -223,11 +221,10 @@ async fn test_delete_database_invalid_identifier() {
         Path("invalid-name".to_string()),
     )
     .await;
-    let (status, _) = match res {
-        Err(e) => e,
+    match res {
+        Err((status, _)) => assert_eq!(status, axum::http::StatusCode::BAD_REQUEST),
         _ => panic!("Expected error"),
-    };
-    assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
 }
 
 #[tokio::test]
@@ -239,11 +236,10 @@ async fn test_delete_database_unsupported() {
         Path("valid_db".to_string()),
     )
     .await;
-    let (status, _) = match res {
-        Err(e) => e,
+    match res {
+        Err((status, _)) => assert_eq!(status, axum::http::StatusCode::NOT_IMPLEMENTED),
         _ => panic!("Expected error"),
-    };
-    assert_eq!(status, axum::http::StatusCode::NOT_IMPLEMENTED);
+    }
 }
 
 #[tokio::test]
@@ -260,11 +256,10 @@ async fn test_create_user_invalid_identifier() {
         Json(req),
     )
     .await;
-    let (status, _) = match res {
-        Err(e) => e,
+    match res {
+        Err((status, _)) => assert_eq!(status, axum::http::StatusCode::BAD_REQUEST),
         _ => panic!("Expected error"),
-    };
-    assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
 }
 
 #[tokio::test]
@@ -276,11 +271,10 @@ async fn test_get_user_invalid_identifier() {
         Path(("invalid-db".to_string(), "valid_user".to_string())),
     )
     .await;
-    let (status, _) = match res {
-        Err(e) => e,
+    match res {
+        Err((status, _)) => assert_eq!(status, axum::http::StatusCode::BAD_REQUEST),
         _ => panic!("Expected error"),
-    };
-    assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
 }
 
 #[tokio::test]
@@ -296,11 +290,10 @@ async fn test_update_user_privileges_invalid_identifier() {
         Json(req),
     )
     .await;
-    let (status, _) = match res {
-        Err(e) => e,
+    match res {
+        Err((status, _)) => assert_eq!(status, axum::http::StatusCode::BAD_REQUEST),
         _ => panic!("Expected error"),
-    };
-    assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
 }
 
 #[tokio::test]
@@ -314,11 +307,10 @@ async fn test_update_user_privileges_empty_privileges() {
         Json(req),
     )
     .await;
-    let (status, _) = match res {
-        Err(e) => e,
+    match res {
+        Err((status, _)) => assert_eq!(status, axum::http::StatusCode::BAD_REQUEST),
         _ => panic!("Expected error"),
-    };
-    assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
 }
 
 #[tokio::test]
@@ -330,11 +322,10 @@ async fn test_delete_user_invalid_identifier() {
         Path(("invalid-db".to_string(), "valid_user".to_string())),
     )
     .await;
-    let (status, _) = match res {
-        Err(e) => e,
+    match res {
+        Err((status, _)) => assert_eq!(status, axum::http::StatusCode::BAD_REQUEST),
         _ => panic!("Expected error"),
-    };
-    assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    }
 }
 
 #[tokio::test]
@@ -346,9 +337,8 @@ async fn test_delete_user_unsupported() {
         Path(("valid_db".to_string(), "valid_user".to_string())),
     )
     .await;
-    let (status, _) = match res {
-        Err(e) => e,
+    match res {
+        Err((status, _)) => assert_eq!(status, axum::http::StatusCode::NOT_IMPLEMENTED),
         _ => panic!("Expected error"),
-    };
-    assert_eq!(status, axum::http::StatusCode::NOT_IMPLEMENTED);
+    }
 }

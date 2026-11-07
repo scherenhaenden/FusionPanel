@@ -22,7 +22,7 @@ mod tests {
 
         // Block 1: Create store and write secret
         {
-            let store = SecretStore::new(&storage_path, &master_key).unwrap();
+            let store = SecretStore::new(&storage_path, &master_key, None).unwrap();
             let secret_ref = store.create_secret(tenant, scope, &original_material).unwrap();
             secret_id = secret_ref.id.clone();
         }
@@ -36,7 +36,7 @@ mod tests {
 
         // Block 2: Reopen store and read secret
         {
-            let mut store = SecretStore::new(&storage_path, &master_key).unwrap();
+            let mut store = SecretStore::new(&storage_path, &master_key, None).unwrap();
             let read_material = store.read_secret(&secret_id, tenant, scope).unwrap();
             assert_eq!(read_material.as_bytes(), original_material.as_bytes());
 
@@ -47,7 +47,7 @@ mod tests {
 
         // Block 3: Reopen with NEW key and read secret
         {
-            let store = SecretStore::new(&storage_path, &master_key);
+            let store = SecretStore::new(&storage_path, &master_key, None);
             // Opening with old key shouldn't fail store creation, but decrypting will fail
             let store_old = store.unwrap();
             let err = store_old.read_secret(&secret_id, tenant, scope).unwrap_err();
@@ -67,7 +67,7 @@ mod tests {
 
         // Block 1: Initial store and secret creation
         {
-            let store = SecretStore::new(&storage_path, &master_key).unwrap();
+            let store = SecretStore::new(&storage_path, &master_key, None).unwrap();
             let secret_ref = store.create_secret(tenant, scope, &SecretMaterial::new(b"secret".to_vec())).unwrap();
             secret_id = secret_ref.id.clone();
         }
@@ -84,7 +84,7 @@ mod tests {
         assert!(v2_path.exists());
 
         // Reopen store. It should read active_version=1, and clean up `.json.v2`
-        let store = SecretStore::new(&storage_path, &master_key).unwrap();
+        let store = SecretStore::new(&storage_path, &master_key, None).unwrap();
 
         // v2 file should be deleted by cleanup
         assert!(!v2_path.exists());
@@ -108,14 +108,14 @@ mod tests {
 
         // Block 1: Initial store and secret creation with OLD key
         {
-            let store = SecretStore::new(&storage_path, &old_master_key).unwrap();
+            let store = SecretStore::new(&storage_path, &old_master_key, None).unwrap();
             let secret_ref = store.create_secret(tenant, scope, &SecretMaterial::new(b"secret".to_vec())).unwrap();
             secret_id = secret_ref.id.clone();
         }
 
         // Block 2: Rotate key
         {
-            let mut store = SecretStore::new(&storage_path, &old_master_key).unwrap();
+            let mut store = SecretStore::new(&storage_path, &old_master_key, None).unwrap();
             store.rotate_master_key(&new_master_key).unwrap();
         }
 
@@ -129,7 +129,7 @@ mod tests {
         assert!(v2_path.exists());
 
         // Reopen store with NEW key. It should read active_version=2 and clean up `.json.v1`
-        let store = SecretStore::new(&storage_path, &new_master_key).unwrap();
+        let store = SecretStore::new(&storage_path, &new_master_key, None).unwrap();
 
         // v1 file should be deleted by cleanup
         assert!(!v1_path.exists());
@@ -150,8 +150,7 @@ mod tests {
         let runtime_prerequisites_available = false; // Mocking lack of environment
 
         if !runtime_prerequisites_available {
-            println!("BLOCKED: E2E injection test requires isolated systemd service runner and machine restore capability.");
-            return;
+            panic!("RESULT=BLOCKED: E2E injection test requires isolated systemd service runner and machine restore capability.");
         }
 
         // Future implementation:

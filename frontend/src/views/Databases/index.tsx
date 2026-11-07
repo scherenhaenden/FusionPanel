@@ -1,34 +1,64 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { api } from '../../api';
 
 interface Database {
+  id?: string;
   name: string;
-  owner: string;
-}
-
-interface User {
-  name: string;
+  engine?: string;
+  charset?: string;
+  state?: 'creating' | 'ready' | 'failed';
+  created_at?: string;
 }
 
 interface FormErrors {
   nameError: string;
-  ownerError: string;
+}
+
+interface Credentials {
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password?: string;
 }
 
 const DatabasesView: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [databases, setDatabases] = useState<Database[]>([
-    { name: 'app_db', owner: 'app_user' },
-    { name: 'analytics_db', owner: 'analytics_user' }
-  ]);
-  const [users, setUsers] = useState<User[]>([
-    { name: 'app_user' },
-    { name: 'analytics_user' },
-    { name: 'readonly_user' }
-  ]);
-  const [privileges, setPrivileges] = useState<Record<string, string>>({});
+  const [databases, setDatabases] = useState<Database[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [newDb, setNewDb] = useState<Database>({ name: '', owner: '' });
-  const [errors, setErrors] = useState<FormErrors>({ nameError: '', ownerError: '' });
+  const [capabilities, setCapabilities] = useState<string[]>([]);
+  const [unavailableCaps, setUnavailableCaps] = useState<string[]>([]);
+
+  const [newDb, setNewDb] = useState<Database>({ name: '', engine: 'mariadb' });
+  const [errors, setErrors] = useState<FormErrors>({ nameError: '' });
+
+  const [showCredsModal, setShowCredsModal] = useState(false);
+  const [credentials, setCredentials] = useState<Credentials | null>(null);
+  const [creatingUserFor, setCreatingUserFor] = useState<string | null>(null);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [dbData, capsData] = await Promise.all([
+        api.getDatabases(),
+        api.getCapabilities().catch(() => ({ capabilities: [], unavailable: [] }))
+      ]);
+      setDatabases(dbData || []);
+      setCapabilities(capsData.capabilities || []);
+      setUnavailableCaps(capsData.unavailable || []);
+    } catch (e: any) {
+      setError(e?.response?.data?.error?.message || e.message || 'Failed to load databases');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const validateIdentifier = (id: string, errorKey: keyof FormErrors) => {
     let errorMsg = '';
@@ -46,10 +76,7 @@ const DatabasesView: React.FC = () => {
   };
 
   const isFormValid = useMemo(() => {
-    return newDb.name.length > 0 &&
-           newDb.owner.length > 0 &&
-           !errors.nameError &&
-           !errors.ownerError;
+    return newDb.name.length > 0 && !errors.nameError;
   }, [newDb, errors]);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,124 +85,166 @@ const DatabasesView: React.FC = () => {
     validateIdentifier(val, 'nameError');
   };
 
-  const handleOwnerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setNewDb(prev => ({ ...prev, owner: val }));
-    validateIdentifier(val, 'ownerError');
-  };
-
-  const createDatabase = (e: React.FormEvent) => {
+  const createDatabase = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isFormValid) {
-      setDatabases(prev => [...prev, { ...newDb }]);
-      if (!users.find(u => u.name === newDb.owner)) {
-        setUsers(prev => [...prev, { name: newDb.owner }]);
+      setError(null);
+      try {
+        await api.createDatabase(newDb);
+        await loadData();
+        setShowCreateModal(false);
+        setNewDb({ name: '', engine: 'mariadb' });
+      } catch (e: any) {
+        setError(e?.response?.data?.error?.message || e.message || 'Failed to create database');
       }
-      setShowCreateModal(false);
-      setNewDb({ name: '', owner: '' });
     }
   };
 
-  const triggerDump = (dbName: string) => {
-    console.log(`Triggering dump for ${dbName}`);
-    alert(`Dump download initiated for ${dbName}`);
+  const createUser = async (dbName: string) => {
+    setCreatingUserFor(dbName);
+    setError(null);
+    try {
+      const creds = await api.createDatabaseUser(dbName);
+      setCredentials(creds);
+      setShowCredsModal(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.error?.message || e.message || 'Failed to create user');
+    } finally {
+      setCreatingUserFor(null);
+    }
   };
 
-  const assignPrivilege = (dbName: string, userName: string, privilege: string) => {
-    console.log(`Assigning ${privilege} to ${userName} on ${dbName}`);
-    setPrivileges(prev => ({ ...prev, [`${dbName}-${userName}`]: privilege }));
+  const closeCredsModal = () => {
+    setShowCredsModal(false);
+    setCredentials(null);
+  };
+
+  const isCapAvailable = (cap: string) => {
+    return capabilities.includes(cap) && !unavailableCaps.includes(cap);
+  };
+
+  const isCapUnavailable = (cap: string) => {
+    return unavailableCaps.includes(cap) || (!capabilities.includes(cap));
   };
 
   return (
-    <div style={{ padding: '20px' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h1>Databases Management</h1>
-        <button onClick={() => setShowCreateModal(true)}>Create Database</button>
+    <div className="p-5">
+      <header className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold">Databases</h1>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+        >
+          Create Database
+        </button>
       </header>
 
-      <section style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
-        <div style={{ flex: 1 }}>
-          <h2>Databases</h2>
-          <ul>
+      {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error} <button onClick={loadData} className="underline ml-2">Retry</button></div>}
+
+      {isLoading ? (
+        <div>Loading...</div>
+      ) : (
+        <section>
+          <ul className="space-y-4">
             {databases.map(db => (
-              <li key={db.name} style={{ marginBottom: '10px' }}>
-                {db.name} (Owner: {db.owner}){' '}
-                <button onClick={() => triggerDump(db.name)}>Download Dump</button>
+              <li key={db.id || db.name} className="border p-4 rounded bg-white shadow-sm flex flex-col md:flex-row justify-between md:items-center">
+                <div>
+                  <h3 className="text-lg font-semibold">{db.name}</h3>
+                  <div className="text-sm text-gray-600">
+                    Engine: {db.engine || 'unknown'} | State: <span className={`font-semibold ${db.state === 'ready' ? 'text-green-600' : db.state === 'failed' ? 'text-red-600' : 'text-yellow-600'}`}>{db.state || 'ready'}</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-2 md:mt-0">
+                  <button
+                    onClick={() => createUser(db.name)}
+                    disabled={creatingUserFor === db.name}
+                    className="bg-green-600 hover:bg-green-700 text-white py-1 px-3 rounded text-sm disabled:opacity-50"
+                  >
+                    {creatingUserFor === db.name ? 'Creating...' : 'Create SQL Account'}
+                  </button>
+
+                  <button
+                    disabled={isCapUnavailable('database.backup')}
+                    title={isCapUnavailable('database.backup') ? 'Not available yet' : ''}
+                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 py-1 px-3 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Backup {isCapUnavailable('database.backup') && '(Not available yet)'}
+                  </button>
+
+                  <button
+                    disabled={isCapUnavailable('database.restore')}
+                    title={isCapUnavailable('database.restore') ? 'Not available yet' : ''}
+                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 py-1 px-3 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Restore {isCapUnavailable('database.restore') && '(Not available yet)'}
+                  </button>
+
+                  <button
+                    disabled={isCapUnavailable('database.delete')}
+                    title={isCapUnavailable('database.delete') ? 'Not available yet' : ''}
+                    className="bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Delete {isCapUnavailable('database.delete') && '(Not available yet)'}
+                  </button>
+                </div>
               </li>
             ))}
+            {databases.length === 0 && <li className="text-gray-500">No databases found.</li>}
           </ul>
-        </div>
-
-        <div style={{ flex: 1 }}>
-          <h2>Users</h2>
-          <ul>
-            {users.map(user => (
-              <li key={user.name}>
-                {user.name}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      <section>
-        <h2>Privilege Assignment</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'left' }}>Database \ User</th>
-              {users.map(user => (
-                <th key={user.name} style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'left' }}>{user.name}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {databases.map(db => (
-              <tr key={db.name}>
-                <td style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'left' }}>{db.name}</td>
-                {users.map(user => (
-                  <td key={user.name} style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'left' }}>
-                    <select
-                      value={privileges[`${db.name}-${user.name}`] || ''}
-                      onChange={(e) => assignPrivilege(db.name, user.name, e.target.value)}
-                    >
-                      <option value="">None</option>
-                      <option value="SELECT">SELECT</option>
-                      <option value="INSERT">INSERT</option>
-                      <option value="ALL">ALL PRIVILEGES</option>
-                    </select>
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+        </section>
+      )}
 
       {/* Create Database Modal */}
       {showCreateModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }}>
-          <div style={{ background: 'white', padding: '20px', borderRadius: '4px', minWidth: '300px' }}>
-            <h2>Create New Database</h2>
-            <form onSubmit={createDatabase} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded shadow-lg min-w-[300px]">
+            <h2 className="text-xl font-bold mb-4">Create New Database</h2>
+            <form onSubmit={createDatabase} className="flex flex-col gap-4">
               <div>
-                <label style={{ display: 'block' }}>Database Name:</label>
-                <input type="text" value={newDb.name} onChange={handleNameChange} style={{ width: '100%' }} />
-                {errors.nameError && <span style={{ color: 'red', fontSize: '0.8em', display: 'block' }}>{errors.nameError}</span>}
+                <label htmlFor="dbNameInput" className="block text-sm font-medium mb-1">Database Name:</label>
+                <input
+                  type="text"
+                  value={newDb.name}
+                  onChange={handleNameChange}
+                  id="dbNameInput" className="w-full border rounded p-2"
+                />
+                {errors.nameError && <span className="text-red-500 text-xs mt-1 block">{errors.nameError}</span>}
               </div>
-              <div>
-                <label style={{ display: 'block' }}>Owner (Username):</label>
-                <input type="text" value={newDb.owner} onChange={handleOwnerChange} style={{ width: '100%' }} />
-                {errors.ownerError && <span style={{ color: 'red', fontSize: '0.8em', display: 'block' }}>{errors.ownerError}</span>}
-              </div>
-              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                <button type="submit" disabled={!isFormValid}>Create</button>
-                <button type="button" onClick={() => setShowCreateModal(false)}>Cancel</button>
+              <div className="flex gap-2 justify-end mt-4">
+                <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 border rounded">Cancel</button>
+                <button type="submit" disabled={!isFormValid} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">Create</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Credentials Modal */}
+      {showCredsModal && credentials && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded shadow-lg max-w-md w-full">
+            <h2 className="text-xl font-bold mb-2">Database Credentials</h2>
+            <p className="text-red-600 font-semibold mb-4 text-sm">Warning: This password is shown exactly once. Please copy it now and store it securely.</p>
+
+            <div className="space-y-2 mb-6">
+              <div><span className="font-semibold">Host:</span> {credentials.host}</div>
+              <div><span className="font-semibold">Port:</span> {credentials.port}</div>
+              <div><span className="font-semibold">Database:</span> {credentials.database}</div>
+              <div><span className="font-semibold">Username:</span> {credentials.username}</div>
+              <div className="mt-2 p-3 bg-gray-100 rounded break-all flex justify-between items-center">
+                <span className="font-mono">{credentials.password}</span>
+                <button
+                  onClick={() => navigator.clipboard.writeText(credentials.password || '')}
+                  className="ml-2 text-blue-600 hover:text-blue-800 text-sm font-semibold"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button onClick={closeCredsModal} className="px-4 py-2 bg-blue-600 text-white rounded">Close</button>
+            </div>
           </div>
         </div>
       )}
