@@ -4,6 +4,7 @@ pub mod collector;
 pub mod alert_notifier;
 pub mod rules;
 pub mod incident;
+pub mod governor;
 
 
 #[cfg(test)]
