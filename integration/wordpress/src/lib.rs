@@ -99,13 +99,13 @@ async fn validate_ownership(
     instance_id: Uuid,
 ) -> Result<WordPressInstance, ErrorResponse> {
     let instances = state.instances.lock().await;
-
+    
     if let Some(instance) = instances.iter().find(|i| i.id == instance_id) {
         if instance.tenant_id == tenant_id {
             return Ok(instance.clone());
         }
     }
-
+    
     Err(ErrorResponse {
         error: ErrorDetail {
             code: "not_found", // Return 404 to avoid leaking existence of other tenants' instances
@@ -131,7 +131,7 @@ pub async fn install_handler(
     }
 
     let job_id = Uuid::new_v4();
-
+    
     // Store job as pending
     {
         let mut jobs = state.jobs.lock().await;
@@ -154,9 +154,9 @@ pub async fn install_handler(
                 job.status = "running".to_string();
             }
         }
-
+        
         tokio::time::sleep(Duration::from_millis(50)).await;
-
+        
         // Mark job as completed and create the instance
         {
             let mut jobs = jobs_ref.lock().await;
@@ -164,7 +164,7 @@ pub async fn install_handler(
                 job.status = "completed".to_string();
             }
         }
-
+        
         {
             let mut instances = instances_ref.lock().await;
             instances.push(WordPressInstance {
@@ -369,10 +369,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-
+        
         // Wait for async task to complete
         tokio::time::sleep(Duration::from_millis(150)).await;
-
+        
         // Verify job was recorded and marked completed
         let jobs = state.jobs.lock().await;
         assert_eq!(jobs.len(), 1);
