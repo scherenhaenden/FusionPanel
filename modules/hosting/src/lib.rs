@@ -53,6 +53,7 @@ pub mod config;
 pub mod acme;
 pub mod vhost;
 pub mod upstream;
+pub mod compression;
 
 #[cfg(test)]
 mod user_tests {
