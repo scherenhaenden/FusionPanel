@@ -100,6 +100,23 @@ impl ContainerEngine for DockerCliEngine {
         Ok(())
     }
 
+    async fn restart(&self, id: &ContainerId) -> Result<(), DomainError> {
+        let mut cmd = Command::new("docker");
+        cmd.arg("restart").arg("-t").arg("10").arg(id.as_str());
+
+        let output = timeout(DOCKER_TIMEOUT, cmd.output())
+            .await
+            .map_err(|_| DomainError::EngineError("docker restart timed out".to_string()))?
+            .map_err(|e| DomainError::EngineError(e.to_string()))?;
+
+        if !output.status.success() {
+            let err = String::from_utf8_lossy(&output.stderr);
+            return Err(DomainError::EngineError(format!("docker restart failed: {}", err)));
+        }
+
+        Ok(())
+    }
+
     async fn remove(&self, id: &ContainerId) -> Result<(), DomainError> {
         let mut cmd = Command::new("docker");
         cmd.arg("rm").arg("-f").arg("-v").arg(id.as_str());
