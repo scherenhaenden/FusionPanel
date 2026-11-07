@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use hosting::domain::error::DomainError;
 use hosting::upstream::{
     generate_health_check_directive, generate_upstream_pool, ActiveHealthCheck, MatchBlock,
