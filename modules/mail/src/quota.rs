@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use mail::error::MailError;
+use crate::error::MailError;
 use serde::{Deserialize, Serialize};
 
 /// MailboxQuota specifying max bytes and max message count for a virtual mailbox or domain.

@@ -1,9 +1,7 @@
+#![forbid(unsafe_code)]
+
 use mail::error::MailError;
-
-#[path = "../src/quota.rs"]
-pub mod quota;
-
-use quota::{MailboxQuota, QuotaThresholds, QuotaTracker, QuotaUsage, QuotaWarning};
+use mail::quota::{MailboxQuota, QuotaThresholds, QuotaTracker, QuotaUsage, QuotaWarning};
 
 #[test]
 fn test_compute_status() {
