@@ -20,7 +20,10 @@ impl DkimSelectorLifecycle {
     }
 
     pub fn rotate_keys(&mut self, key_type: DkimKeyType) -> Result<DkimKeyPair, String> {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         // Simple YYYYMM generation logic without external crate
         // Approximate to avoid shelling out `date`
@@ -30,7 +33,11 @@ impl DkimSelectorLifecycle {
         let mut remaining_days = days;
 
         loop {
-            let days_in_year = if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 { 366 } else { 365 };
+            let days_in_year = if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 {
+                366
+            } else {
+                365
+            };
             if remaining_days >= days_in_year {
                 remaining_days -= days_in_year;
                 year += 1;
@@ -41,8 +48,21 @@ impl DkimSelectorLifecycle {
 
         let days_in_month = [
             31,
-            if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 { 29 } else { 28 },
-            31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+            if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 {
+                29
+            } else {
+                28
+            },
+            31,
+            30,
+            31,
+            30,
+            31,
+            31,
+            30,
+            31,
+            30,
+            31,
         ];
 
         let mut month = 0;
@@ -71,7 +91,11 @@ impl DkimSelectorLifecycle {
         Ok(key_pair)
     }
 
-    pub fn get_all_txt_records(&self, current_key_pair: &DkimKeyPair, old_key_pairs: &[DkimKeyPair]) -> Vec<DnsRecord> {
+    pub fn get_all_txt_records(
+        &self,
+        current_key_pair: &DkimKeyPair,
+        old_key_pairs: &[DkimKeyPair],
+    ) -> Vec<DnsRecord> {
         let mut records = Vec::new();
         records.push(current_key_pair.txt_record.clone());
         for kp in old_key_pairs {

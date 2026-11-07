@@ -25,7 +25,7 @@ impl<'a> SpfFlattener<'a> {
         let mut lookups = 0;
         let mut final_qualifier = "-all".to_string();
 
-        self.flatten_recursive(domain, &mut ips_v4, &mut ips_v6, &mut visited, &mut lookups, &mut final_qualifier)?;
+        self.flatten_recursive(domain, domain, &mut ips_v4, &mut ips_v6, &mut visited, &mut lookups, &mut final_qualifier)?;
 
         let mut parts = vec!["v=spf1".to_string()];
 
@@ -58,6 +58,7 @@ impl<'a> SpfFlattener<'a> {
     fn flatten_recursive(
         &self,
         domain: &str,
+        root_domain: &str,
         ips_v4: &mut HashSet<String>,
         ips_v6: &mut HashSet<String>,
         visited: &mut HashSet<String>,
@@ -88,7 +89,7 @@ impl<'a> SpfFlattener<'a> {
 
                 // capture qualifier for the top domain
                 if mechanism == "all" {
-                    if domain == *visited.iter().next().unwrap() {
+                    if domain == root_domain {
                         *final_qualifier = term.to_string();
                     }
                     continue;
@@ -115,7 +116,7 @@ impl<'a> SpfFlattener<'a> {
                         ips_v6.insert(arg.to_string());
                     }
                     "include" => {
-                        self.flatten_recursive(arg, ips_v4, ips_v6, visited, lookups, final_qualifier)?;
+                        self.flatten_recursive(arg, root_domain, ips_v4, ips_v6, visited, lookups, final_qualifier)?;
                     }
                     "a" => {
                         let target = if arg.is_empty() { domain } else { arg };
@@ -221,7 +222,7 @@ impl<'a> SpfFlattener<'a> {
             }
 
             if has_redirect {
-                self.flatten_recursive(redirect_target, ips_v4, ips_v6, visited, lookups, final_qualifier)?;
+                self.flatten_recursive(redirect_target, root_domain, ips_v4, ips_v6, visited, lookups, final_qualifier)?;
             }
         }
 

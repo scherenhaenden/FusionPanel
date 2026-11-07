@@ -70,7 +70,8 @@ pub fn is_subdomain_or_exact(child: &str, parent: &str) -> bool {
     if child.len() > parent.len() {
         let prefix_len = child.len() - parent.len();
         if child.as_bytes()[prefix_len - 1] == b'.'
-            && child[prefix_len..].eq_ignore_ascii_case(parent) {
+            && child[prefix_len..].eq_ignore_ascii_case(parent)
+        {
             return true;
         }
     }
@@ -102,8 +103,16 @@ pub fn evaluate_dmarc(
         && check_alignment(header_from, &dkim.domain, &config.dkim_alignment);
 
     let pass = spf_aligned || dkim_aligned;
-    let result = if pass { DmarcResult::Pass } else { DmarcResult::Fail };
-    let applied_policy = if pass { DmarcPolicy::None } else { config.policy.clone() };
+    let result = if pass {
+        DmarcResult::Pass
+    } else {
+        DmarcResult::Fail
+    };
+    let applied_policy = if pass {
+        DmarcPolicy::None
+    } else {
+        config.policy.clone()
+    };
 
     DmarcEvaluation {
         result,
