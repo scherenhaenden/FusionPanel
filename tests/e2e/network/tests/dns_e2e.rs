@@ -15,7 +15,7 @@ fn require_binary(name: &str) {
         .arg(name)
         .output()
         .expect("Failed to execute `which`");
-
+    
     if !output.status.success() {
         panic!("RESULT=BLOCKED: Required binary `{}` is missing", name);
     }
@@ -58,12 +58,12 @@ fn start_named(conf: &Path) -> Child {
         .spawn()
         .expect("Failed to start named");
     thread::sleep(Duration::from_secs(1));
-
+    
     // Check if it immediately exited
     if let Ok(Some(status)) = child.try_wait() {
         panic!("named exited immediately with status: {}", status);
     }
-
+    
     child
 }
 
@@ -88,10 +88,10 @@ fn test_authoritative_dns_record_lifecycle() {
     require_binary("dnssec-keygen");
     require_binary("named-checkzone");
     require_binary("dig");
-
+    
     let test_dir = setup_workspace_tmp();
     let port = find_free_port();
-
+    
     let named_conf_path = test_dir.join("named.conf");
     let named_conf = format!(r#"
 options {{
@@ -109,7 +109,7 @@ zone "example.com" IN {{
 }};
 "#, dir = test_dir.display(), port = port);
     fs::write(&named_conf_path, named_conf).unwrap();
-
+    
     let zone_file = test_dir.join("example.com.zone");
     let zone_content = r#"
 $ORIGIN example.com.
@@ -131,10 +131,10 @@ mx  IN  A   192.0.2.3
 default._domainkey IN TXT "v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQD"
 "#;
     fs::write(&zone_file, zone_content).unwrap();
-
+    
     let child = start_named(&named_conf_path);
     let _guard = NamedGuard { child, dir: test_dir.clone() };
-
+    
     // Verify records exist initially
     assert!(query_record(port, "example.com", "SOA").contains("2023101001"));
     assert!(query_record(port, "www.example.com", "A").contains("192.0.2.2"));
@@ -143,7 +143,7 @@ default._domainkey IN TXT "v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQK
     assert!(query_record(port, "mail.example.com", "MX").contains("10 mx.example.com."));
     assert!(query_record(port, "example.com", "TXT").contains("v=spf1 mx -all"));
     assert!(query_record(port, "default._domainkey.example.com", "TXT").contains("v=DKIM1"));
-
+    
     // Update AAAA
     let nsupdate_script = format!(r#"
 server 127.0.0.1 {port}
@@ -153,16 +153,16 @@ update add www.example.com 300 IN AAAA 2001:db8::2
 show
 send
 "#, port = port);
-
+    
     let update_file = test_dir.join("update.txt");
     fs::write(&update_file, nsupdate_script).unwrap();
-
+    
     let update_status = Command::new("nsupdate")
         .arg(&update_file)
         .status()
         .expect("Failed to run nsupdate");
     assert!(update_status.success(), "nsupdate failed");
-
+    
     // Check update
     assert!(query_record(port, "www.example.com", "AAAA").contains("2001:db8::2"));
 }
@@ -175,10 +175,10 @@ fn test_dns_serial_number_increment_and_dnssec_validation() {
     require_binary("dnssec-keygen");
     require_binary("named-checkzone");
     require_binary("dig");
-
+    
     let test_dir = setup_workspace_tmp();
     let port = find_free_port();
-
+    
     let named_conf_path = test_dir.join("named.conf");
     let named_conf = format!(r#"
 options {{
@@ -199,7 +199,7 @@ zone "example.com" IN {{
 }};
 "#, dir = test_dir.display(), port = port);
     fs::write(&named_conf_path, named_conf).unwrap();
-
+    
     let zone_file = test_dir.join("example.com.zone");
     let zone_content = r#"
 $ORIGIN example.com.
@@ -214,14 +214,14 @@ $TTL 86400
 ns1 IN  A   192.0.2.1
 "#;
     fs::write(&zone_file, zone_content).unwrap();
-
+    
     let child = start_named(&named_conf_path);
     let _guard = NamedGuard { child, dir: test_dir.clone() };
-
+    
     // Check initial serial
     let soa_initial = query_record(port, "example.com", "SOA");
     assert!(soa_initial.contains("2023101001"), "dig failed to return initial SOA record serial");
-
+    
     // Perform update
     let nsupdate_script = format!(r#"
 server 127.0.0.1 {port}
@@ -232,13 +232,13 @@ send
 "#, port = port);
     let update_file = test_dir.join("update.txt");
     fs::write(&update_file, nsupdate_script).unwrap();
-
+    
     let update_status = Command::new("nsupdate")
         .arg(&update_file)
         .status()
         .expect("Failed to run nsupdate");
     assert!(update_status.success(), "nsupdate failed to increment serial");
-
+    
     // Poll for serial increment
     let mut incremented = false;
     for _ in 0..10 {
@@ -254,9 +254,9 @@ send
         }
         thread::sleep(Duration::from_millis(500));
     }
-
+    
     assert!(incremented, "Serial did not increment after update");
-
+    
     // Test DNSSEC validation - get RRSIG
     let mut signed = false;
     for _ in 0..10 {
@@ -269,7 +269,7 @@ send
             .arg("+dnssec")
             .output()
             .unwrap();
-
+            
         let dnssec_stdout = String::from_utf8_lossy(&dnssec_output.stdout);
         if dnssec_stdout.contains("RRSIG") {
             signed = true;
@@ -288,15 +288,15 @@ fn test_dynamic_dns_updates_via_tsig() {
     require_binary("dnssec-keygen");
     require_binary("named-checkzone");
     require_binary("dig");
-
+    
     let test_dir = setup_workspace_tmp();
     let port = find_free_port();
-
+    
     let named_conf_path = test_dir.join("named.conf");
     let named_conf = format!(r#"
 key "tsig-key" {{
     algorithm hmac-sha256;
-    secret "C/6fQk3l1T8w2V9h/H8w+Q==";
+    secret "C/6fQk3l1T8w2V9h/H8w+Q=="; 
 }};
 
 options {{
@@ -314,7 +314,7 @@ zone "example.com" IN {{
 }};
 "#, dir = test_dir.display(), port = port);
     fs::write(&named_conf_path, named_conf).unwrap();
-
+    
     let zone_file = test_dir.join("example.com.zone");
     let zone_content = r#"
 $ORIGIN example.com.
@@ -329,10 +329,10 @@ $TTL 86400
 ns1 IN  A   192.0.2.1
 "#;
     fs::write(&zone_file, zone_content).unwrap();
-
+    
     let child = start_named(&named_conf_path);
     let _guard = NamedGuard { child, dir: test_dir.clone() };
-
+    
     let tsig_key_file = test_dir.join("tsig.key");
     let tsig_key_content = r#"
 key "tsig-key" {
@@ -341,7 +341,7 @@ key "tsig-key" {
 };
 "#;
     fs::write(&tsig_key_file, tsig_key_content).unwrap();
-
+    
     let nsupdate_script = format!(r#"
 server 127.0.0.1 {port}
 zone example.com
@@ -349,19 +349,19 @@ update add dyn.example.com 300 IN A 192.0.2.100
 show
 send
 "#, port = port);
-
+    
     let update_file = test_dir.join("update.txt");
     fs::write(&update_file, nsupdate_script).unwrap();
-
+    
     let update_status = Command::new("nsupdate")
         .arg("-k")
         .arg(&tsig_key_file)
         .arg(&update_file)
         .status()
         .expect("Failed to run nsupdate");
-
+        
     assert!(update_status.success(), "nsupdate failed");
-
+    
     let stdout = query_record(port, "dyn.example.com", "A");
     assert!(stdout.contains("192.0.2.100"), "dig failed to return TSIG updated A record");
 }
