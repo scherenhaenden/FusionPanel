@@ -46,7 +46,7 @@ mod tests {
     #[test]
     fn test_decommission_attestation_missing_evidence() {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        
+
         let attestation = DecommissionAttestation::new(false, true, true, true, now);
         assert_eq!(attempt_decommission(&attestation), Err("Target state is not independently verified"));
 
@@ -59,7 +59,7 @@ mod tests {
         let attestation = DecommissionAttestation::new(true, true, true, false, now);
         assert_eq!(attempt_decommission(&attestation), Err("Post-cutover changes are not reconciled"));
     }
-    
+
     #[test]
     fn test_real_disposable_file_fixtures_for_ownership() {
         // Use tempfile for RAII cleanup
@@ -76,7 +76,7 @@ mod tests {
         if OwnershipGuard::can_delete(&panel_resource).is_ok() {
             std::fs::remove_dir_all(&panel_dir).unwrap();
         }
-        
+
         // Assert panel was deleted
         assert!(!panel_dir.exists());
 
@@ -105,7 +105,7 @@ mod tests {
                 audit_trail: "TICKET-999".to_string(),
                 migration_path: "Q3 Plan".to_string(),
             });
-        
+
         let config = policy.generate_nginx_config();
         assert!(config.contains("proxy_ssl_verify off;"));
         assert!(config.contains("# WARNING: Insecure compatibility mode enabled"));
@@ -114,11 +114,10 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing full OS disposable lab (T3) for OS source retirement verification")]
     fn test_full_os_source_retirement_blocked_without_lab() {
         let is_t3_lab_present = std::env::var("FUSIONPANEL_T3_LAB_PRESENT").is_ok();
         if !is_t3_lab_present {
-            // Must explicitly panic to fail the test and report BLOCKED
+            // Memory Note: "When a test cannot execute due to missing prerequisites... it must explicitly panic or fail with a RESULT=BLOCKED message rather than silently passing or just printing the message."
             panic!("RESULT=BLOCKED: Missing full OS disposable lab (T3) for OS source retirement verification");
         }
     }
