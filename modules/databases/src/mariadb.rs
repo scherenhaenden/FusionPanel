@@ -52,6 +52,7 @@ impl DatabaseAdapter for MariaDbAdapter {
     }
 
     async fn database_exists(&self, name: &DbName) -> Result<bool> {
+        validate_identifier(&name.0)?;
         let mut cmd = self.build_cmd("mysql");
         cmd.arg("-N").arg("-B").arg("-e").arg(format!(
             "SELECT 1 FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = '{}';",
@@ -99,6 +100,7 @@ impl DatabaseAdapter for MariaDbAdapter {
     }
 
     async fn user_exists(&self, username: &DbUser) -> Result<bool> {
+        validate_identifier(&username.0)?;
         let mut cmd = self.build_cmd("mysql");
         cmd.arg("-N").arg("-B").arg("-e").arg(format!(
             "SELECT 1 FROM mysql.user WHERE User = '{}';",
