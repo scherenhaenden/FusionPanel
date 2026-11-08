@@ -58,6 +58,7 @@ pub mod http2_push;
 pub mod acme_cleanup;
 pub mod php_tuning;
 pub mod upstream;
+pub mod upstream_balancer;
 pub mod vhost;
 pub mod php_slowlog;
 
