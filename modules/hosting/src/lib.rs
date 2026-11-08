@@ -99,3 +99,4 @@ mod user_tests {
     }
 }
 pub mod nginx;
+pub mod fastcgi_cache;
