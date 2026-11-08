@@ -209,7 +209,7 @@ async fn run_cli(
                 )?;
 
                 let binding = RoleBinding {
-                    user_id: user.id().clone(),
+                    user_id: user.id(),
                     role: Role::super_admin(),
                     scope: Scope::Tenant { tenant_id },
                 };
