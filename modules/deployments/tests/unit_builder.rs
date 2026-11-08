@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use deployments::builder::executor::{ExecutorError, StepConfig, StepExecutor};
 use std::collections::HashMap;
 use std::env;

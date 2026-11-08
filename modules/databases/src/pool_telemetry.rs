@@ -88,7 +88,9 @@ impl PoolTelemetry {
     }
 
     pub fn check_pool_exhaustion(&self) -> Option<String> {
-        if self.stats.active_connections >= self.stats.max_connections && self.stats.max_connections > 0 {
+        if self.stats.active_connections >= self.stats.max_connections
+            && self.stats.max_connections > 0
+        {
             Some(format!(
                 "WARNING: Database connection pool exhausted. Active connections ({}) reached or exceeded max ({}).",
                 self.stats.active_connections, self.stats.max_connections

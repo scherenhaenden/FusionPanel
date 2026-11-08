@@ -20,7 +20,7 @@ impl MetricCollector {
         if !std::path::Path::new("/proc/stat").exists() {
             return Err("BLOCKED: /proc/stat is not available or restricted".to_string());
         }
-        
+
         let mut sys = System::new_all();
         sys.refresh_all();
         Ok(Self { sys })

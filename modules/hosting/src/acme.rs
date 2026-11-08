@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 
-use std::path::{Path, PathBuf};
 use std::fs::{self, File};
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 use thiserror::Error;
@@ -54,7 +54,11 @@ impl AcmeResponder {
             return Err(AcmeError::InvalidToken);
         }
 
-        let challenge_path = self.webroot.join(".well-known").join("acme-challenge").join(token);
+        let challenge_path = self
+            .webroot
+            .join(".well-known")
+            .join("acme-challenge")
+            .join(token);
         if !challenge_path.exists() {
             return Ok(false);
         }
@@ -69,7 +73,11 @@ impl AcmeResponder {
             return Err(AcmeError::InvalidToken);
         }
 
-        let challenge_path = self.webroot.join(".well-known").join("acme-challenge").join(token);
+        let challenge_path = self
+            .webroot
+            .join(".well-known")
+            .join("acme-challenge")
+            .join(token);
         if challenge_path.exists() {
             fs::remove_file(challenge_path)?;
         }
@@ -78,7 +86,10 @@ impl AcmeResponder {
 }
 
 fn is_valid_token(token: &str) -> bool {
-    !token.is_empty() && token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    !token.is_empty()
+        && token
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 pub struct CertMonitor {

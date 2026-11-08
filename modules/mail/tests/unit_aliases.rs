@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use mail::aliases::{AliasError, AliasRouter};
 
 #[test]

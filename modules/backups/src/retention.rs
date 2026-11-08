@@ -1,9 +1,9 @@
 use crate::error::BackupError;
 use crate::models::RetentionPolicy;
-use std::fs;
-use std::path::{Path, PathBuf};
 use flate2::read::GzDecoder;
+use std::fs;
 use std::fs::File;
+use std::path::{Path, PathBuf};
 use tar::Archive;
 use zstd::stream::Decoder as ZstdDecoder;
 
@@ -71,7 +71,8 @@ pub fn apply_retention_policy<P: AsRef<Path>>(
                 let manifest: crate::models::Manifest = serde_json::from_slice(&manifest_data)?;
                 manifest.validate()?;
                 Ok(true)
-            })().unwrap_or(false);
+            })()
+            .unwrap_or(false);
 
             if is_valid_backup {
                 let metadata = fs::metadata(&path)?;

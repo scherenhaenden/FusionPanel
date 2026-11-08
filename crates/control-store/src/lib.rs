@@ -149,7 +149,10 @@ impl ControlStore {
         })
     }
 
-    pub fn list_tenant_resources(&self, tenant_id: Uuid) -> Result<Vec<ResourceRecord>, StoreError> {
+    pub fn list_tenant_resources(
+        &self,
+        tenant_id: Uuid,
+    ) -> Result<Vec<ResourceRecord>, StoreError> {
         let mut stmt = self.conn.prepare(
             r#"
             SELECT resource_id, ownership_mode, revision, desired_state, observed_state
@@ -171,7 +174,8 @@ impl ControlStore {
         let mut resources = Vec::new();
         for row_result in rows {
             let row = row_result?;
-            let resource_id = Uuid::parse_str(&row.0).map_err(|e| StoreError::Parse(e.to_string()))?;
+            let resource_id =
+                Uuid::parse_str(&row.0).map_err(|e| StoreError::Parse(e.to_string()))?;
             let ownership_mode = serde_json::from_str(&row.1)?;
             let desired_state = serde_json::from_str(&row.3)?;
             let observed_state = row.4.map(|s| serde_json::from_str(&s)).transpose()?;
@@ -195,7 +199,9 @@ impl ControlStore {
         expected_revision: u64,
         new_state: serde_json::Value,
     ) -> Result<u64, StoreError> {
-        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 
         let current_revision: u64 = tx
             .query_row(
@@ -235,7 +241,9 @@ impl ControlStore {
         expected_revision: u64,
         new_observed_state: serde_json::Value,
     ) -> Result<u64, StoreError> {
-        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 
         let current_revision: u64 = tx
             .query_row(
@@ -320,7 +328,9 @@ impl ControlStore {
         expected_revision: u64,
         new_state: serde_json::Value,
     ) -> Result<u64, StoreError> {
-        let tx = self.conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 
         let current_revision: u64 = tx
             .query_row(
@@ -347,7 +357,12 @@ impl ControlStore {
             SET revision = ?1, desired_state = ?2
             WHERE resource_id = ?3 AND tenant_id = ?4
             "#,
-            params![new_revision, new_state_str, resource_id.to_string(), tenant_id.to_string()],
+            params![
+                new_revision,
+                new_state_str,
+                resource_id.to_string(),
+                tenant_id.to_string()
+            ],
         )?;
 
         tx.commit()?;
@@ -379,8 +394,8 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::SystemTime;
     use std::thread;
+    use std::time::SystemTime;
 
     static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -390,7 +405,10 @@ mod tests {
 
     impl TempDir {
         fn new() -> Self {
-            let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos();
+            let timestamp = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
             let count = TEMP_COUNTER.fetch_add(1, Ordering::SeqCst);
             let target_dir = std::env::current_dir().unwrap().join("target");
             let _ = fs::create_dir_all(&target_dir);
@@ -424,7 +442,14 @@ mod tests {
 
         {
             let mut store = ControlStore::new(&db_path).unwrap();
-            store.create_resource(tenant_id, resource_id, OwnershipMode::TenantOwned, desired.clone()).unwrap();
+            store
+                .create_resource(
+                    tenant_id,
+                    resource_id,
+                    OwnershipMode::TenantOwned,
+                    desired.clone(),
+                )
+                .unwrap();
         }
 
         {
@@ -442,14 +467,25 @@ mod tests {
         let tenant_id = Uuid::new_v4();
         let resource_id = Uuid::new_v4();
 
-        store.create_resource(tenant_id, resource_id, OwnershipMode::PlatformManaged, json!({})).unwrap();
+        store
+            .create_resource(
+                tenant_id,
+                resource_id,
+                OwnershipMode::PlatformManaged,
+                json!({}),
+            )
+            .unwrap();
 
         // Update with correct revision
-        let new_rev = store.update_desired_state(resource_id, 1, json!({"status": "pending"})).unwrap();
+        let new_rev = store
+            .update_desired_state(resource_id, 1, json!({"status": "pending"}))
+            .unwrap();
         assert_eq!(new_rev, 2);
 
         // Update with wrong revision
-        let err = store.update_desired_state(resource_id, 1, json!({"status": "active"})).unwrap_err();
+        let err = store
+            .update_desired_state(resource_id, 1, json!({"status": "active"}))
+            .unwrap_err();
         match err {
             StoreError::Conflict { expected, actual } => {
                 assert_eq!(expected, 1);
@@ -469,9 +505,15 @@ mod tests {
         let r2 = Uuid::new_v4();
         let r3 = Uuid::new_v4();
 
-        store.create_resource(tenant1, r1, OwnershipMode::TenantOwned, json!({})).unwrap();
-        store.create_resource(tenant1, r2, OwnershipMode::PlatformManaged, json!({})).unwrap();
-        store.create_resource(tenant2, r3, OwnershipMode::ExternallyManaged, json!({})).unwrap();
+        store
+            .create_resource(tenant1, r1, OwnershipMode::TenantOwned, json!({}))
+            .unwrap();
+        store
+            .create_resource(tenant1, r2, OwnershipMode::PlatformManaged, json!({}))
+            .unwrap();
+        store
+            .create_resource(tenant2, r3, OwnershipMode::ExternallyManaged, json!({}))
+            .unwrap();
 
         let t1_resources = store.list_tenant_resources(tenant1).unwrap();
         assert_eq!(t1_resources.len(), 2);
@@ -492,7 +534,14 @@ mod tests {
 
         {
             let mut store = ControlStore::new(&db_path).unwrap();
-            store.create_resource(tenant_id, resource_id, OwnershipMode::TenantOwned, json!({})).unwrap();
+            store
+                .create_resource(
+                    tenant_id,
+                    resource_id,
+                    OwnershipMode::TenantOwned,
+                    json!({}),
+                )
+                .unwrap();
         }
 
         let path1 = db_path.clone();
@@ -505,11 +554,13 @@ mod tests {
                     Ok(_) => break,
                     Err(StoreError::Conflict { .. }) => {
                         record = store.get_resource(resource_id).unwrap();
-                    },
-                    Err(StoreError::Database(e)) if e.to_string().contains("database is locked") => {
+                    }
+                    Err(StoreError::Database(e))
+                        if e.to_string().contains("database is locked") =>
+                    {
                         thread::sleep(std::time::Duration::from_millis(50));
                         retries += 1;
-                    },
+                    }
                     Err(e) => panic!("Unexpected error: {:?}", e),
                 }
             }
@@ -525,11 +576,13 @@ mod tests {
                     Ok(_) => break,
                     Err(StoreError::Conflict { .. }) => {
                         record = store.get_resource(resource_id).unwrap();
-                    },
-                    Err(StoreError::Database(e)) if e.to_string().contains("database is locked") => {
+                    }
+                    Err(StoreError::Database(e))
+                        if e.to_string().contains("database is locked") =>
+                    {
                         thread::sleep(std::time::Duration::from_millis(50));
                         retries += 1;
-                    },
+                    }
                     Err(e) => panic!("Unexpected error: {:?}", e),
                 }
             }
@@ -560,7 +613,9 @@ mod tests {
         {
             let store = ControlStore::new(&db_path).unwrap();
             let conn = store.conn;
-            let user_version: u32 = conn.query_row("PRAGMA user_version", [], |row| row.get(0)).unwrap();
+            let user_version: u32 = conn
+                .query_row("PRAGMA user_version", [], |row| row.get(0))
+                .unwrap();
             assert_eq!(user_version, 1);
         }
     }
@@ -572,22 +627,35 @@ mod tests {
         let tenant_b = Uuid::new_v4();
         let resource_id = Uuid::new_v4();
 
-        store.create_resource(tenant_a, resource_id, OwnershipMode::TenantOwned, json!({"config": "secret_a"})).unwrap();
+        store
+            .create_resource(
+                tenant_a,
+                resource_id,
+                OwnershipMode::TenantOwned,
+                json!({"config": "secret_a"}),
+            )
+            .unwrap();
 
         // Tenant A can access and update
         let res_a = store.get_tenant_resource(tenant_a, resource_id).unwrap();
         assert_eq!(res_a.desired_state, json!({"config": "secret_a"}));
 
         // Tenant B CANNOT read resource_id
-        let err_read = store.get_tenant_resource(tenant_b, resource_id).unwrap_err();
+        let err_read = store
+            .get_tenant_resource(tenant_b, resource_id)
+            .unwrap_err();
         assert!(matches!(err_read, StoreError::NotFound(_)));
 
         // Tenant B CANNOT update resource_id
-        let err_update = store.update_tenant_desired_state(tenant_b, resource_id, 1, json!({"config": "hacked"})).unwrap_err();
+        let err_update = store
+            .update_tenant_desired_state(tenant_b, resource_id, 1, json!({"config": "hacked"}))
+            .unwrap_err();
         assert!(matches!(err_update, StoreError::NotFound(_)));
 
         // Tenant B CANNOT delete resource_id
-        let err_delete = store.delete_tenant_resource(tenant_b, resource_id).unwrap_err();
+        let err_delete = store
+            .delete_tenant_resource(tenant_b, resource_id)
+            .unwrap_err();
         assert!(matches!(err_delete, StoreError::NotFound(_)));
 
         // State for Tenant A is completely untouched

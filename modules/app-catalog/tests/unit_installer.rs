@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use app_catalog::installer::CatalogInstaller;
 use std::collections::HashMap;
 

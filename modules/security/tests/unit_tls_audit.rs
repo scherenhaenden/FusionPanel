@@ -53,21 +53,29 @@ fn test_weak_ciphers() {
     assert!(!audit.is_modern);
     assert!(!audit.is_intermediate);
     assert!(audit.has_weak_ciphers);
-    assert_eq!(audit.weak_ciphers, vec!["DES-CBC3-SHA".to_string(), "RC4-SHA".to_string()]);
+    assert_eq!(
+        audit.weak_ciphers,
+        vec!["DES-CBC3-SHA".to_string(), "RC4-SHA".to_string()]
+    );
     assert!(audit.deprecated_protocols.is_empty());
 }
 
 #[test]
 fn test_deprecated_protocols() {
     let config = TlsConfig::new(
-        vec![TlsProtocol::Tls1_0, TlsProtocol::Tls1_1, TlsProtocol::Tls1_2],
         vec![
-            "ECDHE-RSA-AES128-GCM-SHA256".to_string(),
+            TlsProtocol::Tls1_0,
+            TlsProtocol::Tls1_1,
+            TlsProtocol::Tls1_2,
         ],
+        vec!["ECDHE-RSA-AES128-GCM-SHA256".to_string()],
     );
     let audit = config.audit();
     assert!(!audit.is_modern);
     assert!(!audit.is_intermediate);
     assert!(!audit.has_weak_ciphers);
-    assert_eq!(audit.deprecated_protocols, vec![TlsProtocol::Tls1_0, TlsProtocol::Tls1_1]);
+    assert_eq!(
+        audit.deprecated_protocols,
+        vec![TlsProtocol::Tls1_0, TlsProtocol::Tls1_1]
+    );
 }

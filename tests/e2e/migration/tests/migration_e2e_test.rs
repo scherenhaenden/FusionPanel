@@ -15,12 +15,19 @@ fn test_migration_discovery_and_planning_e2e() {
 
     if !fixture_path.exists() {
         // Output format required by python test runner to detect blocked tests
-        println!("BLOCKED: Missing required real SQLite database fixture for migration test at {}", fixture_path.display());
-        panic!("BLOCKED: Missing required real SQLite database fixture for migration test at {}", fixture_path.display());
+        println!(
+            "BLOCKED: Missing required real SQLite database fixture for migration test at {}",
+            fixture_path.display()
+        );
+        panic!(
+            "BLOCKED: Missing required real SQLite database fixture for migration test at {}",
+            fixture_path.display()
+        );
     }
 
     // 1. MIG-01 & MIG-02: CloudPanel import and SQLite discovery
-    let inventory = CloudPanelDiscovery::discover(&fixture_path).expect("Failed to discover inventory from real fixture");
+    let inventory = CloudPanelDiscovery::discover(&fixture_path)
+        .expect("Failed to discover inventory from real fixture");
 
     // We can't make strong assertions on the *content* because it's a real user fixture,
     // but we can assert that it parsed successfully and has the right type.
@@ -45,11 +52,15 @@ fn test_migration_discovery_and_planning_e2e() {
 
     // 4. MIG-12: Downtime control (Ensure decommission fails for empty inventory)
     let empty_inventory = MigrationInventory::new("CloudPanel".to_string(), "2.4.0".to_string());
-    let empty_review_plan = Planner::create_review_plan(&empty_inventory, false, Some(&ReviewEvidence {
-        execution_completed: true,
-        target_verified: true,
-        restore_verified: true,
-        handoff_completed: true,
-    }));
+    let empty_review_plan = Planner::create_review_plan(
+        &empty_inventory,
+        false,
+        Some(&ReviewEvidence {
+            execution_completed: true,
+            target_verified: true,
+            restore_verified: true,
+            handoff_completed: true,
+        }),
+    );
     assert_eq!(empty_review_plan.decommission_allowed, false); // Fails due to empty inventory
 }

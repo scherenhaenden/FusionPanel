@@ -39,6 +39,8 @@ impl PartialEq for AcmeError {
     }
 }
 
+pub type AcmeResponse = (u16, Vec<(String, String)>, String);
+
 pub trait AcmeTransport {
     fn request(
         &self,
@@ -46,7 +48,7 @@ pub trait AcmeTransport {
         url: &str,
         headers: &[(&str, &str)],
         body: Option<&str>,
-    ) -> Result<(u16, Vec<(String, String)>, String), AcmeError>;
+    ) -> Result<AcmeResponse, AcmeError>;
 }
 
 pub struct AcmeClient<T: AcmeTransport> {

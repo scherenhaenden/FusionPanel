@@ -1,10 +1,10 @@
 #![forbid(unsafe_code)]
 
+use hosting::acme::{AcmeResponder, CertMonitor};
 use std::fs;
+use std::process::Command;
 use std::time::Duration;
 use tempfile::TempDir;
-use hosting::acme::{AcmeResponder, CertMonitor};
-use std::process::Command;
 
 #[test]
 fn test_generate_and_validate_challenge() {
@@ -21,7 +21,9 @@ fn test_generate_and_validate_challenge() {
 
     // Validate
     assert!(responder.validate_challenge(token, content).unwrap());
-    assert!(!responder.validate_challenge(token, "wrong_content").unwrap());
+    assert!(!responder
+        .validate_challenge(token, "wrong_content")
+        .unwrap());
 
     // Clean up
     responder.remove_challenge(token).unwrap();
@@ -75,7 +77,9 @@ fn test_cert_monitor_needs_renewal() {
     assert!(!needs_renewal_soon);
 
     // Certificate is valid for 1 day, so it WILL need renewal in 2 days
-    let needs_renewal_later = monitor.needs_renewal(Duration::from_secs(2 * 24 * 3600)).unwrap();
+    let needs_renewal_later = monitor
+        .needs_renewal(Duration::from_secs(2 * 24 * 3600))
+        .unwrap();
     assert!(needs_renewal_later);
 }
 

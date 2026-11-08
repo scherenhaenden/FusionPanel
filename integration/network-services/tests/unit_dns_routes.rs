@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 #[path = "../src/dns_routes.rs"]
 mod dns_routes;
 

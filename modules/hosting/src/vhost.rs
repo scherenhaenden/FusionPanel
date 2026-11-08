@@ -23,21 +23,31 @@ pub struct RealSystemEnvironment;
 impl SystemEnvironment for RealSystemEnvironment {
     fn write_file(&self, path: &Path, content: &str) -> Result<()> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| DomainError::OperationFailed(format!("Failed to create dir: {}", e)))?;
+            std::fs::create_dir_all(parent).map_err(|e| {
+                DomainError::OperationFailed(format!("Failed to create dir: {}", e))
+            })?;
         }
-        std::fs::write(path, content).map_err(|e| DomainError::OperationFailed(format!("Failed to write file {:?}: {}", path, e)))
+        std::fs::write(path, content).map_err(|e| {
+            DomainError::OperationFailed(format!("Failed to write file {:?}: {}", path, e))
+        })
     }
 
     fn remove_file(&self, path: &Path) -> Result<()> {
-        std::fs::remove_file(path).map_err(|e| DomainError::OperationFailed(format!("Failed to remove file {:?}: {}", path, e)))
+        std::fs::remove_file(path).map_err(|e| {
+            DomainError::OperationFailed(format!("Failed to remove file {:?}: {}", path, e))
+        })
     }
 
     fn symlink(&self, src: &Path, dst: &Path) -> Result<()> {
-        std::os::unix::fs::symlink(src, dst).map_err(|e| DomainError::OperationFailed(format!("Failed to symlink {:?} to {:?}: {}", src, dst, e)))
+        std::os::unix::fs::symlink(src, dst).map_err(|e| {
+            DomainError::OperationFailed(format!("Failed to symlink {:?} to {:?}: {}", src, dst, e))
+        })
     }
 
     fn read_link(&self, path: &Path) -> Result<PathBuf> {
-        std::fs::read_link(path).map_err(|e| DomainError::OperationFailed(format!("Failed to read link {:?}: {}", path, e)))
+        std::fs::read_link(path).map_err(|e| {
+            DomainError::OperationFailed(format!("Failed to read link {:?}: {}", path, e))
+        })
     }
 
     fn file_exists(&self, path: &Path) -> bool {
@@ -45,15 +55,16 @@ impl SystemEnvironment for RealSystemEnvironment {
     }
 
     fn test_nginx_config(&self) -> Result<()> {
-        let status = Command::new("nginx")
-            .arg("-t")
-            .status()
-            .map_err(|e| DomainError::OperationFailed(format!("Failed to execute nginx -t: {}", e)))?;
+        let status = Command::new("nginx").arg("-t").status().map_err(|e| {
+            DomainError::OperationFailed(format!("Failed to execute nginx -t: {}", e))
+        })?;
 
         if status.success() {
             Ok(())
         } else {
-            Err(DomainError::OperationFailed("Nginx configuration test failed".into()))
+            Err(DomainError::OperationFailed(
+                "Nginx configuration test failed".into(),
+            ))
         }
     }
 
@@ -62,7 +73,9 @@ impl SystemEnvironment for RealSystemEnvironment {
             .arg("-s")
             .arg("reload")
             .status()
-            .map_err(|e| DomainError::OperationFailed(format!("Failed to execute nginx -s reload: {}", e)))?;
+            .map_err(|e| {
+                DomainError::OperationFailed(format!("Failed to execute nginx -s reload: {}", e))
+            })?;
 
         if status.success() {
             Ok(())
@@ -75,12 +88,19 @@ impl SystemEnvironment for RealSystemEnvironment {
         let status = Command::new(format!("php-fpm{}", version))
             .arg("-t")
             .status()
-            .map_err(|e| DomainError::OperationFailed(format!("Failed to execute php-fpm{} -t: {}", version, e)))?;
+            .map_err(|e| {
+                DomainError::OperationFailed(format!(
+                    "Failed to execute php-fpm{} -t: {}",
+                    version, e
+                ))
+            })?;
 
         if status.success() {
             Ok(())
         } else {
-            Err(DomainError::OperationFailed("PHP-FPM configuration test failed".into()))
+            Err(DomainError::OperationFailed(
+                "PHP-FPM configuration test failed".into(),
+            ))
         }
     }
 
@@ -89,7 +109,9 @@ impl SystemEnvironment for RealSystemEnvironment {
             .arg("reload")
             .arg(format!("php{}-fpm", version))
             .status()
-            .map_err(|e| DomainError::OperationFailed(format!("Failed to reload php-fpm{}: {}", version, e)))?;
+            .map_err(|e| {
+                DomainError::OperationFailed(format!("Failed to reload php-fpm{}: {}", version, e))
+            })?;
 
         if status.success() {
             Ok(())
@@ -136,13 +158,18 @@ impl VhostOrchestrator {
             let php_config_content = crate::config::php_fpm::generate_php_fpm_config(site)?;
             let version = php_spec.version.as_str();
             // e.g. /etc/php/8.2/fpm/pool.d
-            let pool_dir = self.php_fpm_pool_base.join(version).join("fpm").join("pool.d");
+            let pool_dir = self
+                .php_fpm_pool_base
+                .join(version)
+                .join("fpm")
+                .join("pool.d");
             let pool_path = pool_dir.join(format!("{}.conf", php_spec.pool_name.as_str()));
             php_info = Some((version.to_string(), pool_path, php_config_content));
         }
 
         // 2. Write configs to disk
-        self.env.write_file(&available_path, &nginx_config_content)?;
+        self.env
+            .write_file(&available_path, &nginx_config_content)?;
 
         if let Some((_, ref pool_path, ref content)) = php_info {
             self.env.write_file(pool_path, content)?;
@@ -176,7 +203,7 @@ impl VhostOrchestrator {
             }
 
             return Err(DomainError::OperationFailed(
-                "Configuration test failed, rolled back site config".into()
+                "Configuration test failed, rolled back site config".into(),
             ));
         }
 
@@ -203,7 +230,7 @@ impl VhostOrchestrator {
                 self.env.reload_nginx()?;
             } else {
                 return Err(DomainError::OperationFailed(
-                    "Nginx test failed after disabling site".into()
+                    "Nginx test failed after disabling site".into(),
                 ));
             }
         }
@@ -224,7 +251,11 @@ impl VhostOrchestrator {
 
         if let HostingSpec::Php(php_spec) = &site.spec {
             let version = php_spec.version.as_str();
-            let pool_dir = self.php_fpm_pool_base.join(version).join("fpm").join("pool.d");
+            let pool_dir = self
+                .php_fpm_pool_base
+                .join(version)
+                .join("fpm")
+                .join("pool.d");
             let pool_path = pool_dir.join(format!("{}.conf", php_spec.pool_name.as_str()));
 
             if self.env.file_exists(&pool_path) {

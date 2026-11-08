@@ -155,7 +155,6 @@ async fn test_session_invalidation() {
     assert_eq!(response_refresh2.status(), StatusCode::UNAUTHORIZED);
 }
 
-
 #[tokio::test]
 async fn test_frontend_contract_routes() {
     let store = setup_store();

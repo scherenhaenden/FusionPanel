@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 
+use identity::SqliteIdentityStore;
 use std::process::Command;
 use tempfile::tempdir;
-use identity::SqliteIdentityStore;
 
 #[test]
 fn test_bootstrap_operator() {

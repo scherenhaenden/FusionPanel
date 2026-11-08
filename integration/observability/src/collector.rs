@@ -109,7 +109,7 @@ impl CollectorWorker {
                             let delivery = WebhookDelivery {
                                 url: webhook_url.clone(),
                             };
-                            let _ = tokio::spawn(async move {
+                            drop(tokio::spawn(async move {
                                 let _ = tokio::task::spawn_blocking(move || {
                                     let mut attempts = 0;
                                     let max_attempts = 3;
@@ -122,7 +122,7 @@ impl CollectorWorker {
                                     }
                                 })
                                 .await;
-                            });
+                            }));
                         }
                     }
 

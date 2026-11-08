@@ -14,7 +14,11 @@ impl SystemGovernor {
     pub fn new(cpu_weight: f32, mem_weight: f32) -> Result<Self, String> {
         let mut sys = System::new_all();
         sys.refresh_all();
-        Ok(Self { sys, cpu_weight, mem_weight })
+        Ok(Self {
+            sys,
+            cpu_weight,
+            mem_weight,
+        })
     }
 
     /// Refresh the internal system state
@@ -60,7 +64,10 @@ impl SystemGovernor {
     /// Returns a list of process IDs that consume significant resources
     /// or match known low-priority patterns (e.g., background workers, batch processors).
     /// For this simple governor, we just return processes with high memory footprint.
-    pub fn identify_throttle_candidates(&mut self, min_memory_bytes: u64) -> Result<Vec<u32>, String> {
+    pub fn identify_throttle_candidates(
+        &mut self,
+        min_memory_bytes: u64,
+    ) -> Result<Vec<u32>, String> {
         self.refresh()?;
         let mut candidates = Vec::new();
 

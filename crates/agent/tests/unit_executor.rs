@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 #[path = "../src/executor.rs"]
 mod executor;
 

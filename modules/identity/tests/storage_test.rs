@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use chrono::{Duration, Utc};
 use identity::{
     AccessControl, IdentityError, PasswordManager, Permission, Role, RoleBinding, Scope, Session,

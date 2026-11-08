@@ -1,9 +1,9 @@
 #![forbid(unsafe_code)]
 
+use ipnet::IpNet;
 use std::collections::{HashMap, VecDeque};
 use std::net::IpAddr;
 use std::time::{Duration, Instant};
-use ipnet::IpNet;
 
 pub struct SlidingWindow {
     window_size: Duration,
@@ -21,7 +21,7 @@ impl SlidingWindow {
     }
 
     pub fn check_and_add(&mut self, key: &str, now: Instant) -> bool {
-        let entry = self.requests.entry(key.to_string()).or_insert_with(VecDeque::new);
+        let entry = self.requests.entry(key.to_string()).or_default();
 
         // Remove old entries
         while let Some(&oldest) = entry.front() {
@@ -70,7 +70,10 @@ impl BruteForceGuard {
         if let Some(&(count, last_failure)) = self.failures.get(&ip) {
             if count > self.threshold {
                 let multiplier = (count - self.threshold) as u32;
-                let delay = self.base_delay.checked_mul(multiplier).unwrap_or(self.base_delay);
+                let delay = self
+                    .base_delay
+                    .checked_mul(multiplier)
+                    .unwrap_or(self.base_delay);
                 if now.saturating_duration_since(last_failure) < delay {
                     return true;
                 }

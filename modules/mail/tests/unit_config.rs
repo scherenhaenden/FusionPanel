@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use mail::config::dovecot::{
     render_dovecot_passdb_dict, render_dovecot_sql_conf, DovecotSqlConfig,
 };

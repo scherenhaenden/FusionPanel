@@ -1,12 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, Error as IoError, Write};
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::PathBuf;
 use thiserror::Error;
 use uuid::Uuid;
-use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Write, Error as IoError};
-use std::path::PathBuf;
-use std::os::unix::fs::OpenOptionsExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AuditEvent {
@@ -169,8 +169,8 @@ impl AuditLog {
 mod tests {
     use super::*;
     use chrono::Utc;
-    use uuid::Uuid;
     use tempfile::NamedTempFile;
+    use uuid::Uuid;
 
     fn create_test_event(action: &str) -> AuditEvent {
         AuditEvent {

@@ -109,9 +109,10 @@ impl MountPoint {
 
         for p in sensitive_paths {
             if host_path == *p || host_path.starts_with(&format!("{}/", p)) {
-                return Err(DomainError::InvalidMountPoint(
-                    format!("Mounting sensitive path {} is not allowed", p),
-                ));
+                return Err(DomainError::InvalidMountPoint(format!(
+                    "Mounting sensitive path {} is not allowed",
+                    p
+                )));
             }
         }
 
@@ -122,9 +123,10 @@ impl MountPoint {
                 let canonical_str = canonical.to_string_lossy();
                 for p in sensitive_paths {
                     if canonical_str == *p || canonical_str.starts_with(&format!("{}/", p)) {
-                        return Err(DomainError::InvalidMountPoint(
-                            format!("Mounting sensitive symlink target {} is not allowed", canonical_str),
-                        ));
+                        return Err(DomainError::InvalidMountPoint(format!(
+                            "Mounting sensitive symlink target {} is not allowed",
+                            canonical_str
+                        )));
                     }
                 }
             }
@@ -135,10 +137,14 @@ impl MountPoint {
                     if let Ok(canonical) = parent.canonicalize() {
                         let canonical_str = canonical.to_string_lossy();
                         for p in sensitive_paths {
-                            if p != "/" && (canonical_str == p || canonical_str.starts_with(&format!("{}/", p))) {
-                                return Err(DomainError::InvalidMountPoint(
-                                    format!("Mounting through sensitive symlink ancestor {} is not allowed", canonical_str),
-                                ));
+                            if p != "/"
+                                && (canonical_str == p
+                                    || canonical_str.starts_with(&format!("{}/", p)))
+                            {
+                                return Err(DomainError::InvalidMountPoint(format!(
+                                    "Mounting through sensitive symlink ancestor {} is not allowed",
+                                    canonical_str
+                                )));
                             }
                         }
                     }

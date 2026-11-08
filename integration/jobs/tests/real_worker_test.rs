@@ -6,8 +6,8 @@ use tokio::fs;
 
 use fusionpanel_agent_protocol::{Operation, SystemInfoPayload};
 use fusionpanel_jobs::{JobState, JobStore};
-use integration_jobs::{OperationService, Worker};
 use integration_jobs::agent_subprocess::SubprocessAgentClient;
+use integration_jobs::{OperationService, Worker};
 
 #[tokio::test]
 #[cfg(unix)]

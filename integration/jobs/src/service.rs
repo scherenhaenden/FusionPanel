@@ -43,7 +43,11 @@ impl OperationService {
     /// Cancel an operation if it is queued or running.
     pub fn cancel_operation(&self, id: &JobId) -> Result<(), OperationServiceError> {
         let mut store = self.store.lock().unwrap();
-        store.transition(id, JobState::Cancelled, Some("Cancelled by user".to_string()))?;
+        store.transition(
+            id,
+            JobState::Cancelled,
+            Some("Cancelled by user".to_string()),
+        )?;
         Ok(())
     }
 

@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use agent::files::FileManager;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

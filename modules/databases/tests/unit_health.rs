@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use databases::adapter::{DatabaseConfig, DatabaseEngine, ConnectionStrategy, SecretString};
+use databases::adapter::{ConnectionStrategy, DatabaseConfig, DatabaseEngine, SecretString};
 use databases::health::{DatabaseHealthChecker, HealthStatus};
 
 use std::time::Duration;
@@ -29,7 +29,9 @@ async fn test_connection_refused() {
     // Since `psql` might not be installed in the test env, it could be "No such file or directory"
     // instead of "Command failed", so check for both cases.
     let err = status.error.unwrap();
-    assert!(err.contains("Command failed") || err.contains("No such file") || err.contains("not found"));
+    assert!(
+        err.contains("Command failed") || err.contains("No such file") || err.contains("not found")
+    );
 }
 
 #[tokio::test]

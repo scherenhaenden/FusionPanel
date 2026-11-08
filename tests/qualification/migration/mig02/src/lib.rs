@@ -35,7 +35,10 @@ pub fn discover_cloudpanel_sqlite(conn: &Connection) -> Result<(), DiscoveryErro
         let mut stmt = conn.prepare(&sql)?;
         let mut rows = stmt.query([])?;
         if rows.next()?.is_none() {
-            return Err(DiscoveryError::UnsupportedVersion(format!("Missing table: {}", table)));
+            return Err(DiscoveryError::UnsupportedVersion(format!(
+                "Missing table: {}",
+                table
+            )));
         }
     }
 
@@ -50,7 +53,9 @@ pub fn discover_cloudpanel_sqlite(conn: &Connection) -> Result<(), DiscoveryErro
         }
     }
     if !has_domain {
-        return Err(DiscoveryError::UnsupportedVersion("Missing column 'domain_name' in 'site'".to_string()));
+        return Err(DiscoveryError::UnsupportedVersion(
+            "Missing column 'domain_name' in 'site'".to_string(),
+        ));
     }
 
     // Check specific columns in database
@@ -67,10 +72,14 @@ pub fn discover_cloudpanel_sqlite(conn: &Connection) -> Result<(), DiscoveryErro
         }
     }
     if !has_db_name {
-        return Err(DiscoveryError::UnsupportedVersion("Missing column 'database_name' in 'database'".to_string()));
+        return Err(DiscoveryError::UnsupportedVersion(
+            "Missing column 'database_name' in 'database'".to_string(),
+        ));
     }
     if !has_site_id {
-        return Err(DiscoveryError::UnsupportedVersion("Missing column 'site_id' in 'database'".to_string()));
+        return Err(DiscoveryError::UnsupportedVersion(
+            "Missing column 'site_id' in 'database'".to_string(),
+        ));
     }
 
     // Check specific columns in php_settings
@@ -87,14 +96,20 @@ pub fn discover_cloudpanel_sqlite(conn: &Connection) -> Result<(), DiscoveryErro
         }
     }
     if !has_setting_site_id {
-        return Err(DiscoveryError::UnsupportedVersion("Missing column 'site_id' in 'php_settings'".to_string()));
+        return Err(DiscoveryError::UnsupportedVersion(
+            "Missing column 'site_id' in 'php_settings'".to_string(),
+        ));
     }
     if !has_setting_name {
-        return Err(DiscoveryError::UnsupportedVersion("Missing column 'setting_name' in 'php_settings'".to_string()));
+        return Err(DiscoveryError::UnsupportedVersion(
+            "Missing column 'setting_name' in 'php_settings'".to_string(),
+        ));
     }
 
     // Check for multiple databases per site
-    let mut stmt = conn.prepare("SELECT site_id, COUNT(*) FROM \"database\" GROUP BY site_id HAVING COUNT(*) > 1")?;
+    let mut stmt = conn.prepare(
+        "SELECT site_id, COUNT(*) FROM \"database\" GROUP BY site_id HAVING COUNT(*) > 1",
+    )?;
     let mut rows = stmt.query([])?;
     if rows.next()?.is_some() {
         return Err(DiscoveryError::MultipleDatabasesPerSite);
@@ -165,13 +180,18 @@ mod tests {
     #[test]
     fn test_missing_table_returns_unsupported_version() -> SqliteResult<()> {
         let conn = Connection::open_in_memory()?;
-        conn.execute("CREATE TABLE site (id INTEGER PRIMARY KEY, domain_name TEXT)", [])?;
+        conn.execute(
+            "CREATE TABLE site (id INTEGER PRIMARY KEY, domain_name TEXT)",
+            [],
+        )?;
         conn.execute("CREATE TABLE php_settings (id INTEGER PRIMARY KEY, site_id INTEGER, setting_name TEXT, setting_value TEXT)", [])?;
         conn.execute("CREATE TABLE \"database\" (id INTEGER PRIMARY KEY, site_id INTEGER, database_name TEXT)", [])?;
         // Missing database_user table
 
         let result = discover_cloudpanel_sqlite(&conn);
-        assert!(matches!(result, Err(DiscoveryError::UnsupportedVersion(msg)) if msg.contains("database_user")));
+        assert!(
+            matches!(result, Err(DiscoveryError::UnsupportedVersion(msg)) if msg.contains("database_user"))
+        );
         Ok(())
     }
 
@@ -185,20 +205,27 @@ mod tests {
         conn.execute("CREATE TABLE database_user (id INTEGER PRIMARY KEY, database_id INTEGER, username TEXT)", [])?;
 
         let result = discover_cloudpanel_sqlite(&conn);
-        assert!(matches!(result, Err(DiscoveryError::UnsupportedVersion(msg)) if msg.contains("domain_name")));
+        assert!(
+            matches!(result, Err(DiscoveryError::UnsupportedVersion(msg)) if msg.contains("domain_name"))
+        );
         Ok(())
     }
 
     #[test]
     fn test_renamed_column_returns_unsupported_version() -> SqliteResult<()> {
         let conn = Connection::open_in_memory()?;
-        conn.execute("CREATE TABLE site (id INTEGER PRIMARY KEY, domain TEXT)", [])?;
+        conn.execute(
+            "CREATE TABLE site (id INTEGER PRIMARY KEY, domain TEXT)",
+            [],
+        )?;
         conn.execute("CREATE TABLE php_settings (id INTEGER PRIMARY KEY, site_id INTEGER, setting_name TEXT, setting_value TEXT)", [])?;
         conn.execute("CREATE TABLE \"database\" (id INTEGER PRIMARY KEY, site_id INTEGER, database_name TEXT)", [])?;
         conn.execute("CREATE TABLE database_user (id INTEGER PRIMARY KEY, database_id INTEGER, username TEXT)", [])?;
 
         let result = discover_cloudpanel_sqlite(&conn);
-        assert!(matches!(result, Err(DiscoveryError::UnsupportedVersion(msg)) if msg.contains("domain_name")));
+        assert!(
+            matches!(result, Err(DiscoveryError::UnsupportedVersion(msg)) if msg.contains("domain_name"))
+        );
         Ok(())
     }
 
@@ -209,7 +236,10 @@ mod tests {
         setup_valid_schema(&conn)?;
 
         // Insert a dangling foreign key (site_id 999 does not exist)
-        conn.execute("INSERT INTO \"database\" (id, site_id, database_name) VALUES (1, 999, 'test_db')", [])?;
+        conn.execute(
+            "INSERT INTO \"database\" (id, site_id, database_name) VALUES (1, 999, 'test_db')",
+            [],
+        )?;
 
         let result = discover_cloudpanel_sqlite(&conn);
         assert!(matches!(result, Err(DiscoveryError::DanglingForeignKeys)));
@@ -221,12 +251,24 @@ mod tests {
         let conn = Connection::open_in_memory()?;
         setup_valid_schema(&conn)?;
 
-        conn.execute("INSERT INTO site (id, domain_name) VALUES (1, 'example.com')", [])?;
-        conn.execute("INSERT INTO \"database\" (id, site_id, database_name) VALUES (1, 1, 'db1')", [])?;
-        conn.execute("INSERT INTO \"database\" (id, site_id, database_name) VALUES (2, 1, 'db2')", [])?;
+        conn.execute(
+            "INSERT INTO site (id, domain_name) VALUES (1, 'example.com')",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO \"database\" (id, site_id, database_name) VALUES (1, 1, 'db1')",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO \"database\" (id, site_id, database_name) VALUES (2, 1, 'db2')",
+            [],
+        )?;
 
         let result = discover_cloudpanel_sqlite(&conn);
-        assert!(matches!(result, Err(DiscoveryError::MultipleDatabasesPerSite)));
+        assert!(matches!(
+            result,
+            Err(DiscoveryError::MultipleDatabasesPerSite)
+        ));
         Ok(())
     }
 
@@ -235,7 +277,10 @@ mod tests {
         let conn = Connection::open_in_memory()?;
         setup_valid_schema(&conn)?;
 
-        conn.execute("INSERT INTO site (id, domain_name) VALUES (1, 'example.com')", [])?;
+        conn.execute(
+            "INSERT INTO site (id, domain_name) VALUES (1, 'example.com')",
+            [],
+        )?;
         conn.execute("INSERT INTO php_settings (id, site_id, setting_name, setting_value) VALUES (1, 1, 'memory_limit', '128M')", [])?;
         conn.execute("INSERT INTO php_settings (id, site_id, setting_name, setting_value) VALUES (2, 1, 'memory_limit', '256M')", [])?;
 

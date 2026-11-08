@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use administration::tenants::models::{AccountStatus, Organization, PlanTier};
 
 #[test]

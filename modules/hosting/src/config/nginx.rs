@@ -58,17 +58,26 @@ pub fn generate_nginx_config(site: &SiteConfig) -> Result<String> {
                     }
                     UpstreamTlsTrust::InternalCa { ca_cert_path } => {
                         proxy_config.push_str("        proxy_ssl_verify on;\n");
-                        proxy_config.push_str(&format!("        proxy_ssl_trusted_certificate {};\n", ca_cert_path));
+                        proxy_config.push_str(&format!(
+                            "        proxy_ssl_trusted_certificate {};\n",
+                            ca_cert_path
+                        ));
                     }
                     UpstreamTlsTrust::InsecureCompatibility { audit_reason } => {
                         proxy_config.push_str("        proxy_ssl_verify off;\n");
-                        proxy_config.push_str(&format!("        # Insecure compatibility enabled. Reason: {}\n", audit_reason));
+                        proxy_config.push_str(&format!(
+                            "        # Insecure compatibility enabled. Reason: {}\n",
+                            audit_reason
+                        ));
                     }
                 }
 
                 if let Some(expected_name) = &tls.expected_server_name {
                     proxy_config.push_str("        proxy_ssl_server_name on;\n");
-                    proxy_config.push_str(&format!("        proxy_ssl_name {};\n", expected_name.as_str()));
+                    proxy_config.push_str(&format!(
+                        "        proxy_ssl_name {};\n",
+                        expected_name.as_str()
+                    ));
                 } else {
                     proxy_config.push_str("        proxy_ssl_server_name off;\n");
                 }

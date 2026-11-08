@@ -48,13 +48,11 @@ fn test_format_metrics_with_containers_and_dbs() {
         },
     ];
 
-    let databases = vec![
-        DatabaseMetrics {
-            db_name: "db1".to_string(),
-            active_connections: 10,
-            query_latency_ms: 15.5,
-        }
-    ];
+    let databases = vec![DatabaseMetrics {
+        db_name: "db1".to_string(),
+        active_connections: 10,
+        query_latency_ms: 15.5,
+    }];
 
     let output = format_metrics(&host, &containers, &databases);
 

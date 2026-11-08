@@ -367,7 +367,11 @@ fn test_host_02_static_sites() {
     std::fs::create_dir_all(&logs_dir).unwrap();
     std::fs::create_dir_all(&web_root).unwrap();
 
-    std::fs::write(web_root.join("index.html"), "<html><body>Static OK</body></html>").unwrap();
+    std::fs::write(
+        web_root.join("index.html"),
+        "<html><body>Static OK</body></html>",
+    )
+    .unwrap();
 
     let config = format!(
         r#"
@@ -501,7 +505,7 @@ fn test_host_12_cron_jobs() {
 fn test_host_13_disk_quotas() {
     block_if_missing("setquota");
     block_if_missing("quotaon");
-    
+
     // We cannot reliably set disk quotas inside unprivileged docker or without a specific VM
     // The instruction says "Missing Docker/VM/CA never produces a green skip. Missing prerequisites are BLOCKED with nonzero qualification"
     // So we can mock it by having a "BLOCKED: Requires real VM with quota enabled" panic.
@@ -596,7 +600,10 @@ fn test_host_15_atomic_provisioning_with_compensation() {
         .output()
         .unwrap();
 
-    assert!(!check_output.status.success(), "Invalid config should fail test");
+    assert!(
+        !check_output.status.success(),
+        "Invalid config should fail test"
+    );
 
     // Compensation: restore from backup
     std::fs::copy(&backup_conf, &nginx_conf).unwrap();
@@ -610,7 +617,10 @@ fn test_host_15_atomic_provisioning_with_compensation() {
         .output()
         .unwrap();
 
-    assert!(reload_output.status.success(), "Reload should succeed with restored config");
+    assert!(
+        reload_output.status.success(),
+        "Reload should succeed with restored config"
+    );
 
     let resp2 = client.get("http://atomic.local:18087/").send().unwrap();
     assert_eq!(resp2.status(), 200);

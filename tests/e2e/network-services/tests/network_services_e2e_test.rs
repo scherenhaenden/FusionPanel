@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};

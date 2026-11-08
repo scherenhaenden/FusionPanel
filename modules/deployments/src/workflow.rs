@@ -213,7 +213,10 @@ impl DeploymentRecord {
             )));
         }
 
-        if self.current_state.is_terminal() && !(self.current_state == DeploymentState::Active && next_state == DeploymentState::RolledBack) {
+        if self.current_state.is_terminal()
+            && !(self.current_state == DeploymentState::Active
+                && next_state == DeploymentState::RolledBack)
+        {
             return Err(DeploymentError::Conflict(format!(
                 "deployment is in a terminal state ({:?}) and cannot transition to {:?}",
                 self.current_state, next_state

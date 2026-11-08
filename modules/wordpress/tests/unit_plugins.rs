@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::cell::RefCell;
 use wordpress::plugins::{validate_slug, PluginManager, ThemeManager, WpCliError, WpCliExecutor};
 

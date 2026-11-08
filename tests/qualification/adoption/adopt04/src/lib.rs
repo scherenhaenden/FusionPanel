@@ -78,10 +78,24 @@ impl Registry {
         }
     }
 
-    pub fn export_site(&self, site_id: &str, simulate_failure_db_id: Option<&str>) -> Result<SiteExport, String> {
-        let site = self.sites.iter().find(|s| s.id == site_id).ok_or("Site not found")?.clone();
+    pub fn export_site(
+        &self,
+        site_id: &str,
+        simulate_failure_db_id: Option<&str>,
+    ) -> Result<SiteExport, String> {
+        let site = self
+            .sites
+            .iter()
+            .find(|s| s.id == site_id)
+            .ok_or("Site not found")?
+            .clone();
 
-        let site_databases: Vec<_> = self.databases.iter().filter(|d| d.owner_site_id == site_id).cloned().collect();
+        let site_databases: Vec<_> = self
+            .databases
+            .iter()
+            .filter(|d| d.owner_site_id == site_id)
+            .cloned()
+            .collect();
         let mut database_exports = Vec::new();
 
         for db in site_databases {
@@ -91,10 +105,30 @@ impl Registry {
                 }
             }
 
-            let users: Vec<_> = self.users.iter().filter(|u| u.db_id == db.id).cloned().collect();
-            let grants: Vec<_> = self.grants.iter().filter(|g| g.db_id == db.id).cloned().collect();
-            let secrets: Vec<_> = self.secrets.iter().filter(|s| s.db_id == db.id).cloned().collect();
-            let connections: Vec<_> = self.connections.iter().filter(|c| c.db_id == db.id && c.site_id == site_id).cloned().collect();
+            let users: Vec<_> = self
+                .users
+                .iter()
+                .filter(|u| u.db_id == db.id)
+                .cloned()
+                .collect();
+            let grants: Vec<_> = self
+                .grants
+                .iter()
+                .filter(|g| g.db_id == db.id)
+                .cloned()
+                .collect();
+            let secrets: Vec<_> = self
+                .secrets
+                .iter()
+                .filter(|s| s.db_id == db.id)
+                .cloned()
+                .collect();
+            let connections: Vec<_> = self
+                .connections
+                .iter()
+                .filter(|c| c.db_id == db.id && c.site_id == site_id)
+                .cloned()
+                .collect();
 
             database_exports.push(DatabaseExport {
                 database: db,
@@ -138,22 +172,67 @@ mod tests {
     fn test_preservation_of_multiple_databases() {
         let mut registry = Registry::new();
 
-        let site = Site { id: "site-1".to_string(), name: "example.com".to_string() };
+        let site = Site {
+            id: "site-1".to_string(),
+            name: "example.com".to_string(),
+        };
         registry.sites.push(site.clone());
 
-        let db1 = Database { id: "db-1".to_string(), name: "db_one".to_string(), owner_site_id: "site-1".to_string() };
+        let db1 = Database {
+            id: "db-1".to_string(),
+            name: "db_one".to_string(),
+            owner_site_id: "site-1".to_string(),
+        };
         registry.databases.push(db1.clone());
-        registry.users.push(DatabaseUser { id: "u-1".to_string(), db_id: "db-1".to_string(), username: "user_one".to_string() });
-        registry.grants.push(DatabaseGrant { id: "g-1".to_string(), user_id: "u-1".to_string(), db_id: "db-1".to_string(), privileges: vec!["ALL".to_string()] });
-        registry.secrets.push(SecretReference { id: "sec-1".to_string(), db_id: "db-1".to_string(), secret_id: "vault-123".to_string() });
-        registry.connections.push(ApplicationConnection { id: "conn-1".to_string(), db_id: "db-1".to_string(), site_id: "site-1".to_string() });
+        registry.users.push(DatabaseUser {
+            id: "u-1".to_string(),
+            db_id: "db-1".to_string(),
+            username: "user_one".to_string(),
+        });
+        registry.grants.push(DatabaseGrant {
+            id: "g-1".to_string(),
+            user_id: "u-1".to_string(),
+            db_id: "db-1".to_string(),
+            privileges: vec!["ALL".to_string()],
+        });
+        registry.secrets.push(SecretReference {
+            id: "sec-1".to_string(),
+            db_id: "db-1".to_string(),
+            secret_id: "vault-123".to_string(),
+        });
+        registry.connections.push(ApplicationConnection {
+            id: "conn-1".to_string(),
+            db_id: "db-1".to_string(),
+            site_id: "site-1".to_string(),
+        });
 
-        let db2 = Database { id: "db-2".to_string(), name: "db_two".to_string(), owner_site_id: "site-1".to_string() };
+        let db2 = Database {
+            id: "db-2".to_string(),
+            name: "db_two".to_string(),
+            owner_site_id: "site-1".to_string(),
+        };
         registry.databases.push(db2.clone());
-        registry.users.push(DatabaseUser { id: "u-2".to_string(), db_id: "db-2".to_string(), username: "user_two".to_string() });
-        registry.grants.push(DatabaseGrant { id: "g-2".to_string(), user_id: "u-2".to_string(), db_id: "db-2".to_string(), privileges: vec!["READ".to_string()] });
-        registry.secrets.push(SecretReference { id: "sec-2".to_string(), db_id: "db-2".to_string(), secret_id: "vault-456".to_string() });
-        registry.connections.push(ApplicationConnection { id: "conn-2".to_string(), db_id: "db-2".to_string(), site_id: "site-1".to_string() });
+        registry.users.push(DatabaseUser {
+            id: "u-2".to_string(),
+            db_id: "db-2".to_string(),
+            username: "user_two".to_string(),
+        });
+        registry.grants.push(DatabaseGrant {
+            id: "g-2".to_string(),
+            user_id: "u-2".to_string(),
+            db_id: "db-2".to_string(),
+            privileges: vec!["READ".to_string()],
+        });
+        registry.secrets.push(SecretReference {
+            id: "sec-2".to_string(),
+            db_id: "db-2".to_string(),
+            secret_id: "vault-456".to_string(),
+        });
+        registry.connections.push(ApplicationConnection {
+            id: "conn-2".to_string(),
+            db_id: "db-2".to_string(),
+            site_id: "site-1".to_string(),
+        });
 
         let export = registry.export_site("site-1", None).unwrap();
 
@@ -174,32 +253,70 @@ mod tests {
     fn test_enumeration_handles_all_source_associations() {
         let mut registry = Registry::new();
 
-        registry.sites.push(Site { id: "site-1".to_string(), name: "example.com".to_string() });
+        registry.sites.push(Site {
+            id: "site-1".to_string(),
+            name: "example.com".to_string(),
+        });
 
-        registry.databases.push(Database { id: "db-1".to_string(), name: "custom_db_alpha".to_string(), owner_site_id: "site-1".to_string() });
-        registry.databases.push(Database { id: "db-2".to_string(), name: "custom_db_beta".to_string(), owner_site_id: "site-1".to_string() });
-        registry.databases.push(Database { id: "db-3".to_string(), name: "custom_db_gamma".to_string(), owner_site_id: "site-1".to_string() });
+        registry.databases.push(Database {
+            id: "db-1".to_string(),
+            name: "custom_db_alpha".to_string(),
+            owner_site_id: "site-1".to_string(),
+        });
+        registry.databases.push(Database {
+            id: "db-2".to_string(),
+            name: "custom_db_beta".to_string(),
+            owner_site_id: "site-1".to_string(),
+        });
+        registry.databases.push(Database {
+            id: "db-3".to_string(),
+            name: "custom_db_gamma".to_string(),
+            owner_site_id: "site-1".to_string(),
+        });
 
         let export = registry.export_site("site-1", None).unwrap();
 
         assert_eq!(export.databases.len(), 3);
-        assert!(export.databases.iter().any(|d| d.database.name == "custom_db_alpha"));
-        assert!(export.databases.iter().any(|d| d.database.name == "custom_db_beta"));
-        assert!(export.databases.iter().any(|d| d.database.name == "custom_db_gamma"));
+        assert!(export
+            .databases
+            .iter()
+            .any(|d| d.database.name == "custom_db_alpha"));
+        assert!(export
+            .databases
+            .iter()
+            .any(|d| d.database.name == "custom_db_beta"));
+        assert!(export
+            .databases
+            .iter()
+            .any(|d| d.database.name == "custom_db_gamma"));
     }
 
     #[test]
     fn test_failure_verification_when_db_export_omitted_or_fails() {
         let mut registry = Registry::new();
 
-        registry.sites.push(Site { id: "site-1".to_string(), name: "example.com".to_string() });
+        registry.sites.push(Site {
+            id: "site-1".to_string(),
+            name: "example.com".to_string(),
+        });
 
-        registry.databases.push(Database { id: "db-1".to_string(), name: "db_one".to_string(), owner_site_id: "site-1".to_string() });
-        registry.databases.push(Database { id: "db-2".to_string(), name: "db_two".to_string(), owner_site_id: "site-1".to_string() });
+        registry.databases.push(Database {
+            id: "db-1".to_string(),
+            name: "db_one".to_string(),
+            owner_site_id: "site-1".to_string(),
+        });
+        registry.databases.push(Database {
+            id: "db-2".to_string(),
+            name: "db_two".to_string(),
+            owner_site_id: "site-1".to_string(),
+        });
 
         let export_result = registry.export_site("site-1", Some("db-2"));
 
         assert!(export_result.is_err());
-        assert_eq!(export_result.unwrap_err(), "Export failed or omitted for database: db-2");
+        assert_eq!(
+            export_result.unwrap_err(),
+            "Export failed or omitted for database: db-2"
+        );
     }
 }

@@ -1,27 +1,26 @@
-use axum::{
-    extract::{State, Path},
-    routing::{get, post},
-    Json, Router,
-    http::{StatusCode, header::AUTHORIZATION},
-    response::Response,
-    middleware::{self, Next},
-    extract::Request,
-};
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use uuid::Uuid;
 use administration::{
-    quotas::{QuotaEngine, ResourceQuotas, QuotaError},
-    audit::{AuditLog, AuditEvent, AuditRecord},
+    audit::{AuditEvent, AuditLog, AuditRecord},
+    quotas::{QuotaEngine, QuotaError, ResourceQuotas},
     teams::invitation::{Invitation, InvitationError, Role},
 };
-use tokio::sync::Mutex;
+use axum::{
+    extract::Request,
+    extract::{Path, State},
+    http::{header::AUTHORIZATION, StatusCode},
+    middleware::{self, Next},
+    response::Response,
+    routing::{get, post},
+    Json, Router,
+};
+use serde::{Deserialize, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
 use std::os::unix::fs::OpenOptionsExt;
+use std::path::PathBuf;
+use std::sync::Arc;
 use subtle::ConstantTimeEq;
-
+use tokio::sync::Mutex;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Operator {
@@ -58,7 +57,7 @@ impl DurableInvitations {
         let mut invitations = std::collections::HashMap::new();
         if path.exists() {
             if let Ok(file) = File::open(&path) {
-                for line in BufReader::new(file).lines().filter_map(Result::ok) {
+                for line in BufReader::new(file).lines().map_while(Result::ok) {
                     if let Ok(entry) = serde_json::from_str::<InvitationJournalEntry>(&line) {
                         match entry {
                             InvitationJournalEntry::Upsert(inv) => {
@@ -189,7 +188,10 @@ pub fn router(state: AppState) -> Router {
         .route("/invitations", post(create_invitation))
         .route("/invitations/{id}/accept", post(accept_invitation))
         .route("/invitations/{id}/revoke", post(revoke_invitation))
-        .route_layer(middleware::from_fn_with_state(state.clone(), require_system_admin))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_system_admin,
+        ))
         // Public health
         .route("/health", get(|| async { "OK" }))
         .with_state(state)
@@ -206,7 +208,12 @@ async fn reserve_quota(
                 QuotaError::LimitExceeded => StatusCode::PAYLOAD_TOO_LARGE,
                 QuotaError::LimitsNotConfigured => StatusCode::NOT_FOUND,
             };
-            Err((status, Json(ErrorResponse { error: e.to_string() })))
+            Err((
+                status,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            ))
         }
     }
 }
@@ -241,13 +248,17 @@ pub struct VerifyResponse {
     error: Option<String>,
 }
 
-async fn verify_audit(
-    State(state): State<AppState>,
-) -> Json<VerifyResponse> {
+async fn verify_audit(State(state): State<AppState>) -> Json<VerifyResponse> {
     let audit = state.audit.lock().await;
     match audit.verify() {
-        Ok(_) => Json(VerifyResponse { valid: true, error: None }),
-        Err(e) => Json(VerifyResponse { valid: false, error: Some(e.to_string()) }),
+        Ok(_) => Json(VerifyResponse {
+            valid: true,
+            error: None,
+        }),
+        Err(e) => Json(VerifyResponse {
+            valid: false,
+            error: Some(e.to_string()),
+        }),
     }
 }
 
@@ -306,7 +317,7 @@ async fn accept_invitation(
                     ));
                 }
                 Ok(Json(role))
-            },
+            }
             Err(e) => {
                 let status = match e {
                     InvitationError::InvalidToken => StatusCode::UNAUTHORIZED,
@@ -314,18 +325,25 @@ async fn accept_invitation(
                     InvitationError::AlreadyAccepted => StatusCode::CONFLICT,
                     InvitationError::InvalidRole => StatusCode::BAD_REQUEST,
                 };
-                Err((status, Json(ErrorResponse { error: e.to_string() })))
+                Err((
+                    status,
+                    Json(ErrorResponse {
+                        error: e.to_string(),
+                    }),
+                ))
             }
         }
     } else {
-        Err((StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Invitation not found".to_string() })))
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "Invitation not found".to_string(),
+            }),
+        ))
     }
 }
 
-async fn revoke_invitation(
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
-) -> StatusCode {
+async fn revoke_invitation(State(state): State<AppState>, Path(id): Path<Uuid>) -> StatusCode {
     let mut invites = state.invitations.lock().await;
     match invites.remove(&id) {
         Ok(Some(_)) => StatusCode::OK,
@@ -334,17 +352,12 @@ async fn revoke_invitation(
     }
 }
 
-
-async fn list_operators(
-    State(state): State<AppState>,
-) -> Json<Vec<Operator>> {
+async fn list_operators(State(state): State<AppState>) -> Json<Vec<Operator>> {
     let ops = state.operators.lock().await;
     Json(ops.clone())
 }
 
-async fn query_audit(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<AuditRecord>>, StatusCode> {
+async fn query_audit(State(state): State<AppState>) -> Result<Json<Vec<AuditRecord>>, StatusCode> {
     let audit = state.audit.lock().await;
     Ok(Json(audit.records().to_vec()))
 }

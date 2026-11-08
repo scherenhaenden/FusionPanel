@@ -83,7 +83,8 @@ pub struct PluginsRequest {
 
 // Ensure caller is the tenant
 fn extract_tenant(headers: &axum::http::HeaderMap) -> Result<String, ErrorResponse> {
-    headers.get("X-Tenant-ID")
+    headers
+        .get("X-Tenant-ID")
         .and_then(|h| h.to_str().ok())
         .map(|s| s.to_string())
         .ok_or_else(|| ErrorResponse {
@@ -101,13 +102,13 @@ async fn validate_ownership(
     instance_id: Uuid,
 ) -> Result<WordPressInstance, ErrorResponse> {
     let instances = state.instances.lock().await;
-    
+
     if let Some(instance) = instances.iter().find(|i| i.id == instance_id) {
         if instance.tenant_id == tenant_id {
             return Ok(instance.clone());
         }
     }
-    
+
     Err(ErrorResponse {
         error: ErrorDetail {
             code: "not_found", // Return 404 to avoid leaking existence of other tenants' instances
@@ -133,7 +134,7 @@ pub async fn install_handler(
     }
 
     let job_id = Uuid::new_v4();
-    
+
     // Store job as pending
     {
         let mut jobs = state.jobs.lock().await;
@@ -156,9 +157,9 @@ pub async fn install_handler(
                 job.status = "running".to_string();
             }
         }
-        
+
         tokio::time::sleep(Duration::from_millis(50)).await;
-        
+
         // Mark job as completed and create the instance
         {
             let mut jobs = jobs_ref.lock().await;
@@ -166,7 +167,7 @@ pub async fn install_handler(
                 job.status = "completed".to_string();
             }
         }
-        
+
         {
             let mut instances = instances_ref.lock().await;
             instances.push(WordPressInstance {
@@ -333,7 +334,10 @@ mod tests {
                 tenant_id: "tenant-123".to_string(),
             }])),
         };
-        (Router::new().nest("/v1/wordpress", router(app_state.clone())), app_state)
+        (
+            Router::new().nest("/v1/wordpress", router(app_state.clone())),
+            app_state,
+        )
     }
 
     #[tokio::test]
@@ -345,7 +349,9 @@ mod tests {
                     .method("POST")
                     .uri("/v1/wordpress/install")
                     .header("Content-Type", "application/json")
-                    .body(Body::from(r#"{"domain":"test.com","title":"Test","admin_email":"admin@test.com"}"#))
+                    .body(Body::from(
+                        r#"{"domain":"test.com","title":"Test","admin_email":"admin@test.com"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -364,17 +370,19 @@ mod tests {
                     .uri("/v1/wordpress/install")
                     .header("X-Tenant-ID", "tenant-123")
                     .header("Content-Type", "application/json")
-                    .body(Body::from(r#"{"domain":"test.com","title":"Test","admin_email":"admin@test.com"}"#))
+                    .body(Body::from(
+                        r#"{"domain":"test.com","title":"Test","admin_email":"admin@test.com"}"#,
+                    ))
                     .unwrap(),
             )
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        
+
         // Wait for async task to complete
         tokio::time::sleep(Duration::from_millis(150)).await;
-        
+
         // Verify job was recorded and marked completed
         let jobs = state.jobs.lock().await;
         assert_eq!(jobs.len(), 1);

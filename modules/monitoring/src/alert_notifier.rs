@@ -1,9 +1,9 @@
 #![forbid(unsafe_code)]
 
+use crate::incident::{Incident, IncidentState};
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::time::Duration;
-use chrono::{DateTime, Utc};
-use crate::incident::{Incident, IncidentState};
 
 pub trait NotificationChannel {
     fn send(&self, incident: &Incident) -> Result<(), String>;

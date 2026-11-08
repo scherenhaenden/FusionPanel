@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use deployments::build::{execute_build, plan_build};
 use deployments::release::ReleaseManager;
 use deployments::types::{

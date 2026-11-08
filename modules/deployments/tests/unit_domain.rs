@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use deployments::domain::{
     Deployment, DeploymentId, DeploymentStatus, Environment, ReleaseId, TransitionError,
 };

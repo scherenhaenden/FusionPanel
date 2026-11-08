@@ -12,14 +12,8 @@ fn test_escape_nginx_string() {
         escape_nginx_string("example.com\"; include /etc/shadow; #"),
         "example.com\\\"; include /etc/shadow; #"
     );
-    assert_eq!(
-        escape_nginx_string("$domain"),
-        "\\$domain"
-    );
-    assert_eq!(
-        escape_nginx_string("some\\path"),
-        "some\\\\path"
-    );
+    assert_eq!(escape_nginx_string("$domain"), "\\$domain");
+    assert_eq!(escape_nginx_string("some\\path"), "some\\\\path");
 }
 
 #[test]
@@ -35,7 +29,8 @@ fn test_generate_static_site_config_basic() {
     assert!(config.contains("add_header X-Content-Type-Options \"nosniff\" always;"));
 
     assert!(config.contains("gzip on;"));
-    assert!(config.contains("gzip_types text/css application/javascript image/svg+xml application/json;"));
+    assert!(config
+        .contains("gzip_types text/css application/javascript image/svg+xml application/json;"));
 
     assert!(config.contains("location ~* \\.(css|js|svg|json)$ {"));
     assert!(config.contains("add_header Cache-Control \"public, immutable\";"));

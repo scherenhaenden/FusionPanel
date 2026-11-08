@@ -47,10 +47,22 @@ pub fn generate_salt() -> String {
 
 pub fn generate_wp_config(config: &SiteConfig) -> String {
     let mut out = String::from("<?php\n");
-    out.push_str(&format!("define( 'DB_NAME', '{}' );\n", config.db.db_name.replace('\'', "\\'")));
-    out.push_str(&format!("define( 'DB_USER', '{}' );\n", config.db.db_user.replace('\'', "\\'")));
-    out.push_str(&format!("define( 'DB_PASSWORD', '{}' );\n", config.db.db_password.replace('\'', "\\'")));
-    out.push_str(&format!("define( 'DB_HOST', '{}' );\n", config.db.host.replace('\'', "\\'")));
+    out.push_str(&format!(
+        "define( 'DB_NAME', '{}' );\n",
+        config.db.db_name.replace('\'', "\\'")
+    ));
+    out.push_str(&format!(
+        "define( 'DB_USER', '{}' );\n",
+        config.db.db_user.replace('\'', "\\'")
+    ));
+    out.push_str(&format!(
+        "define( 'DB_PASSWORD', '{}' );\n",
+        config.db.db_password.replace('\'', "\\'")
+    ));
+    out.push_str(&format!(
+        "define( 'DB_HOST', '{}' );\n",
+        config.db.host.replace('\'', "\\'")
+    ));
     out.push_str("define( 'DB_CHARSET', 'utf8' );\n");
     out.push_str("define( 'DB_COLLATE', '' );\n\n");
 
@@ -81,10 +93,14 @@ pub fn generate_wp_config(config: &SiteConfig) -> String {
 
 pub async fn provision_wordpress(config: SiteConfig) -> Result<(), ProvisionError> {
     if config.domain.is_empty() {
-        return Err(ProvisionError::ValidationError("Domain cannot be empty".to_string()));
+        return Err(ProvisionError::ValidationError(
+            "Domain cannot be empty".to_string(),
+        ));
     }
     if config.admin_email.is_empty() {
-        return Err(ProvisionError::ValidationError("Admin email cannot be empty".to_string()));
+        return Err(ProvisionError::ValidationError(
+            "Admin email cannot be empty".to_string(),
+        ));
     }
 
     if !config.target_directory.exists() {
@@ -105,7 +121,8 @@ pub async fn provision_wordpress(config: SiteConfig) -> Result<(), ProvisionErro
     file.sync_all()?;
 
     let mut cmd = Command::new("wp");
-    cmd.arg("core").arg("install")
+    cmd.arg("core")
+        .arg("install")
         .arg(format!("--url={}", config.domain))
         .arg(format!("--title={}", config.site_title))
         .arg(format!("--admin_user={}", config.admin_user))
@@ -119,12 +136,15 @@ pub async fn provision_wordpress(config: SiteConfig) -> Result<(), ProvisionErro
             if !output.status.success() {
                 generate_bootstrap(&config)?;
             }
-        },
+        }
         Err(e) => {
             if e.kind() == std::io::ErrorKind::NotFound {
                 generate_bootstrap(&config)?;
             } else {
-                return Err(ProvisionError::CommandError(format!("Failed to execute wp-cli: {}", e)));
+                return Err(ProvisionError::CommandError(format!(
+                    "Failed to execute wp-cli: {}",
+                    e
+                )));
             }
         }
     }

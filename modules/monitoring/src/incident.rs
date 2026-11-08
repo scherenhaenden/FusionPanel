@@ -35,7 +35,10 @@ impl Incident {
             self.updated_at = Utc::now();
             Ok(())
         } else {
-            Err(format!("Cannot acknowledge incident from state {:?}", self.state))
+            Err(format!(
+                "Cannot acknowledge incident from state {:?}",
+                self.state
+            ))
         }
     }
 
@@ -45,7 +48,10 @@ impl Incident {
             self.updated_at = Utc::now();
             Ok(())
         } else {
-            Err(format!("Cannot resolve incident from state {:?}", self.state))
+            Err(format!(
+                "Cannot resolve incident from state {:?}",
+                self.state
+            ))
         }
     }
 }

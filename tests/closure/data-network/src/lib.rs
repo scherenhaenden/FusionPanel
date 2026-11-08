@@ -27,13 +27,17 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for SFTP and FTPS destinations")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for SFTP and FTPS destinations"
+    )]
     fn test_bak_05() {
         panic!("RESULT=BLOCKED: Missing core implementation for SFTP and FTPS destinations");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Backblaze B2 and Google Cloud Storage destinations")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Backblaze B2 and Google Cloud Storage destinations"
+    )]
     fn test_bak_06() {
         panic!("RESULT=BLOCKED: Missing core implementation for Backblaze B2 and Google Cloud Storage destinations");
     }
@@ -57,7 +61,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Backup verification")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Backup verification"
+    )]
     fn test_bak_10() {
         panic!("RESULT=BLOCKED: Missing core implementation for Backup verification");
     }
@@ -81,25 +87,33 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Restore to another domain")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Restore to another domain"
+    )]
     fn test_bak_14() {
         panic!("RESULT=BLOCKED: Missing core implementation for Restore to another domain");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Restore confidence dashboard")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Restore confidence dashboard"
+    )]
     fn test_bak_15() {
         panic!("RESULT=BLOCKED: Missing core implementation for Restore confidence dashboard");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for MariaDB and MySQL management")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for MariaDB and MySQL management"
+    )]
     fn test_db_01() {
         panic!("RESULT=BLOCKED: Missing core implementation for MariaDB and MySQL management");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for PostgreSQL management")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for PostgreSQL management"
+    )]
     fn test_db_02() {
         panic!("RESULT=BLOCKED: Missing core implementation for PostgreSQL management");
     }
@@ -111,7 +125,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Database users and passwords")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Database users and passwords"
+    )]
     fn test_db_04() {
         panic!("RESULT=BLOCKED: Missing core implementation for Database users and passwords");
     }
@@ -129,7 +145,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Protected phpMyAdmin access")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Protected phpMyAdmin access"
+    )]
     fn test_db_07() {
         panic!("RESULT=BLOCKED: Missing core implementation for Protected phpMyAdmin access");
     }
@@ -141,13 +159,17 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Site and database provisioning integration")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Site and database provisioning integration"
+    )]
     fn test_db_09() {
         panic!("RESULT=BLOCKED: Missing core implementation for Site and database provisioning integration");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for DNS zone management")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for DNS zone management"
+    )]
     fn test_net_01() {
         panic!("RESULT=BLOCKED: Missing core implementation for DNS zone management");
     }
@@ -183,7 +205,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for DKIM and SPF controls")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for DKIM and SPF controls"
+    )]
     fn test_net_07() {
         panic!("RESULT=BLOCKED: Missing core implementation for DKIM and SPF controls");
     }
@@ -205,5 +229,4 @@ mod tests {
     fn test_net_10() {
         panic!("RESULT=BLOCKED: Missing core implementation for SMTP relay");
     }
-
 }

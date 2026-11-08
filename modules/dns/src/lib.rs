@@ -1,11 +1,11 @@
 #![forbid(unsafe_code)]
 
-pub mod domain;
-pub mod dnssec_mgr;
-pub mod provider;
 pub mod backend;
-pub mod zone_file;
+pub mod dnssec_mgr;
+pub mod domain;
+pub mod provider;
 pub mod validation;
+pub mod zone_file;
 
 #[cfg(test)]
 mod tests;

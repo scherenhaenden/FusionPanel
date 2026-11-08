@@ -72,17 +72,15 @@ impl Worker {
         let result = timeout(self.execution_timeout, self.agent_client.execute(request)).await;
 
         match result {
-            Ok(Ok(response)) => {
-                match response.result {
-                    ResponseResult::Result(_) => {
-                        let mut store = self.store.lock().unwrap();
-                        let _ = store.transition(&job.id, JobState::Succeeded, None);
-                    }
-                    ResponseResult::Error(err) => {
-                        self.transition_to_failed(&job.id, format!("Agent error: {}", err.message))?;
-                    }
+            Ok(Ok(response)) => match response.result {
+                ResponseResult::Result(_) => {
+                    let mut store = self.store.lock().unwrap();
+                    let _ = store.transition(&job.id, JobState::Succeeded, None);
                 }
-            }
+                ResponseResult::Error(err) => {
+                    self.transition_to_failed(&job.id, format!("Agent error: {}", err.message))?;
+                }
+            },
             Ok(Err(e)) => {
                 self.transition_to_failed(&job.id, format!("Agent client error: {}", e))?;
             }

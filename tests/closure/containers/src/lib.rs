@@ -3,31 +3,41 @@
 #[cfg(test)]
 mod tests {
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Native Docker management")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Native Docker management"
+    )]
     fn test_ctr_01() {
         panic!("RESULT=BLOCKED: Missing core implementation for Native Docker management");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Docker Compose stacks")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Docker Compose stacks"
+    )]
     fn test_ctr_02() {
         panic!("RESULT=BLOCKED: Missing core implementation for Docker Compose stacks");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Application templates")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Application templates"
+    )]
     fn test_ctr_03() {
         panic!("RESULT=BLOCKED: Missing core implementation for Application templates");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Registry and image management")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Registry and image management"
+    )]
     fn test_ctr_04() {
         panic!("RESULT=BLOCKED: Missing core implementation for Registry and image management");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Container lifecycle")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Container lifecycle"
+    )]
     fn test_ctr_05() {
         panic!("RESULT=BLOCKED: Missing core implementation for Container lifecycle");
     }
@@ -45,7 +55,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Image update detection")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Image update detection"
+    )]
     fn test_ctr_08() {
         panic!("RESULT=BLOCKED: Missing core implementation for Image update detection");
     }
@@ -69,13 +81,17 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Idle container sleep and wake behavior")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Idle container sleep and wake behavior"
+    )]
     fn test_ctr_12() {
         panic!("RESULT=BLOCKED: Missing core implementation for Idle container sleep and wake behavior");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Horizontal autoscaling")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Horizontal autoscaling"
+    )]
     fn test_ctr_13() {
         panic!("RESULT=BLOCKED: Missing core implementation for Horizontal autoscaling");
     }
@@ -93,19 +109,25 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Multi-language builds")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Multi-language builds"
+    )]
     fn test_dep_03() {
         panic!("RESULT=BLOCKED: Missing core implementation for Multi-language builds");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Blue-green deployments")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Blue-green deployments"
+    )]
     fn test_dep_04() {
         panic!("RESULT=BLOCKED: Missing core implementation for Blue-green deployments");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Per-commit preview environments")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Per-commit preview environments"
+    )]
     fn test_dep_05() {
         panic!("RESULT=BLOCKED: Missing core implementation for Per-commit preview environments");
     }
@@ -123,33 +145,42 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Scheduled deployments")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Scheduled deployments"
+    )]
     fn test_dep_08() {
         panic!("RESULT=BLOCKED: Missing core implementation for Scheduled deployments");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Two-person deployment approval")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Two-person deployment approval"
+    )]
     fn test_dep_09() {
         panic!("RESULT=BLOCKED: Missing core implementation for Two-person deployment approval");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Deployment history and progress")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Deployment history and progress"
+    )]
     fn test_dep_10() {
         panic!("RESULT=BLOCKED: Missing core implementation for Deployment history and progress");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Failure diagnostics")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Failure diagnostics"
+    )]
     fn test_dep_11() {
         panic!("RESULT=BLOCKED: Missing core implementation for Failure diagnostics");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for GitHub Actions integration")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for GitHub Actions integration"
+    )]
     fn test_dep_12() {
         panic!("RESULT=BLOCKED: Missing core implementation for GitHub Actions integration");
     }
-
 }

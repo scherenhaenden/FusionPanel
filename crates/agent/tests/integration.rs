@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use agent::executor::{CommandExecutor, CommandRequest};
 use agent::files::FileManager;
 use agent::protocol::{AgentError, AgentRequest, AgentResponse};

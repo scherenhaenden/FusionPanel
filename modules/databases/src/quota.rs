@@ -63,18 +63,24 @@ impl QuotaEnforcer {
     }
 
     pub fn set_limits(&mut self, tenant_id: Uuid, limits: QuotaLimits) {
-        let tenant = self.tenants.entry(tenant_id).or_insert_with(|| TenantQuota {
-            limits: QuotaLimits::default(),
-            usage: QuotaUsage::default(),
-        });
+        let tenant = self
+            .tenants
+            .entry(tenant_id)
+            .or_insert_with(|| TenantQuota {
+                limits: QuotaLimits::default(),
+                usage: QuotaUsage::default(),
+            });
         tenant.limits = limits;
     }
 
     pub fn set_usage(&mut self, tenant_id: Uuid, usage: QuotaUsage) {
-        let tenant = self.tenants.entry(tenant_id).or_insert_with(|| TenantQuota {
-            limits: QuotaLimits::default(),
-            usage: QuotaUsage::default(),
-        });
+        let tenant = self
+            .tenants
+            .entry(tenant_id)
+            .or_insert_with(|| TenantQuota {
+                limits: QuotaLimits::default(),
+                usage: QuotaUsage::default(),
+            });
         tenant.usage = usage;
     }
 

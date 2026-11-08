@@ -15,19 +15,25 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Node.js and Python hosting")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Node.js and Python hosting"
+    )]
     fn test_host_03() {
         panic!("RESULT=BLOCKED: Missing core implementation for Node.js and Python hosting");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Nginx and virtual hosts")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Nginx and virtual hosts"
+    )]
     fn test_host_04() {
         panic!("RESULT=BLOCKED: Missing core implementation for Nginx and virtual hosts");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Per-site PHP-FPM pools")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Per-site PHP-FPM pools"
+    )]
     fn test_host_05() {
         panic!("RESULT=BLOCKED: Missing core implementation for Per-site PHP-FPM pools");
     }
@@ -39,7 +45,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Wildcard certificates")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Wildcard certificates"
+    )]
     fn test_host_07() {
         panic!("RESULT=BLOCKED: Missing core implementation for Wildcard certificates");
     }
@@ -87,9 +95,13 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Atomic provisioning with compensation")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Atomic provisioning with compensation"
+    )]
     fn test_host_15() {
-        panic!("RESULT=BLOCKED: Missing core implementation for Atomic provisioning with compensation");
+        panic!(
+            "RESULT=BLOCKED: Missing core implementation for Atomic provisioning with compensation"
+        );
     }
 
     #[test]
@@ -105,7 +117,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Automatic installation")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Automatic installation"
+    )]
     fn test_wp_01() {
         panic!("RESULT=BLOCKED: Missing core implementation for Automatic installation");
     }
@@ -129,13 +143,19 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for WordPress staging and production push")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for WordPress staging and production push"
+    )]
     fn test_wp_05() {
-        panic!("RESULT=BLOCKED: Missing core implementation for WordPress staging and production push");
+        panic!(
+            "RESULT=BLOCKED: Missing core implementation for WordPress staging and production push"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Vulnerability scanning")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Vulnerability scanning"
+    )]
     fn test_wp_06() {
         panic!("RESULT=BLOCKED: Missing core implementation for Vulnerability scanning");
     }
@@ -147,13 +167,17 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Plugin failure diagnostics")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Plugin failure diagnostics"
+    )]
     fn test_wp_08() {
         panic!("RESULT=BLOCKED: Missing core implementation for Plugin failure diagnostics");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Restore with URL rewrite")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Restore with URL rewrite"
+    )]
     fn test_wp_09() {
         panic!("RESULT=BLOCKED: Missing core implementation for Restore with URL rewrite");
     }
@@ -165,15 +189,18 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for WordPress hardening")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for WordPress hardening"
+    )]
     fn test_wp_11() {
         panic!("RESULT=BLOCKED: Missing core implementation for WordPress hardening");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Multiple installation management")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Multiple installation management"
+    )]
     fn test_wp_12() {
         panic!("RESULT=BLOCKED: Missing core implementation for Multiple installation management");
     }
-
 }

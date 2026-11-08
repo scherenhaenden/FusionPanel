@@ -267,5 +267,8 @@ async fn test_terminal_immutability() {
     let res = service.cancel_operation(&id);
     assert!(res.is_err());
     let err_str = res.unwrap_err().to_string();
-    assert!(err_str.contains("Invalid state transition from Failed to Cancelled") || err_str.contains("Invalid state transition"));
+    assert!(
+        err_str.contains("Invalid state transition from Failed to Cancelled")
+            || err_str.contains("Invalid state transition")
+    );
 }

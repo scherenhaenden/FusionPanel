@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use backup_destinations::sync::{
     BackupManifest, RetentionPolicy, StorageDest, SyncEngine, SyncError,
 };

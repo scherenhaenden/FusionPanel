@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use deployments::webhooks::{github, gitlab};
 
 #[test]

@@ -10,7 +10,6 @@ fn test_governor_instantiation() {
 
 #[test]
 fn test_compute_load_score() {
-
     let mut gov = SystemGovernor::new(0.5, 0.5).unwrap();
     let score = gov.compute_load_score().unwrap();
     // In a test environment, load is non-negative and likely > 0 if there's any memory usage
@@ -19,7 +18,6 @@ fn test_compute_load_score() {
 
 #[test]
 fn test_is_near_oom() {
-
     let mut gov = SystemGovernor::new(1.0, 1.0).unwrap();
     // 101% is impossible to reach, so it should not be near OOM
     let near_oom = gov.is_near_oom(101.0).unwrap();
@@ -32,7 +30,6 @@ fn test_is_near_oom() {
 
 #[test]
 fn test_identify_throttle_candidates() {
-
     let mut gov = SystemGovernor::new(1.0, 1.0).unwrap();
 
     // An arbitrarily large memory amount that no process should consume

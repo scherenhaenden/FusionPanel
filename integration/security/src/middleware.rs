@@ -93,8 +93,7 @@ pub async fn rate_limit_middleware(
     // Check token rate limiting if Authorization header is present
     if let Some(auth_header) = req.headers().get(header::AUTHORIZATION) {
         if let Ok(auth_str) = auth_header.to_str() {
-            if auth_str.starts_with("Bearer ") {
-                let token = &auth_str[7..];
+            if let Some(token) = auth_str.strip_prefix("Bearer ") {
                 if !state.rate_limiter.check_token(token).await {
                     allowed = false;
                 }

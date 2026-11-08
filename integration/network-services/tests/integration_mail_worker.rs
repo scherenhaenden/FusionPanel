@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use mail::domain::{EmailAddress, MailQuota, MailboxAccount, PasswordHash};
 use network_services::mail_worker::{MailWorker, MailWorkerError};
 use sqlx::sqlite::SqlitePoolOptions;
@@ -41,6 +43,9 @@ async fn test_real_disposable_mail_integration() {
     std::fs::write(postfix_dir.join("aliases.db"), "").unwrap();
 
     let db_path = dir.path().join("mail.db");
+    // Docker bind mounts may create a directory when the host file does not exist.
+    // SQLite needs this path to be a regular file before the container is started.
+    std::fs::File::create(&db_path).unwrap();
 
     std::fs::write(
         dovecot_dir.join("10-auth.conf"),

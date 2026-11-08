@@ -21,10 +21,31 @@ impl Username {
         }
 
         let protected = [
-            "root", "daemon", "bin", "sys", "sync", "games", "man", "lp", "mail", "news",
-            "uucp", "proxy", "www-data", "backup", "list", "irc", "gnats", "nobody",
-            "systemd-network", "systemd-resolve", "systemd-timesync", "messagebus",
-            "syslog", "mysql", "postgres"
+            "root",
+            "daemon",
+            "bin",
+            "sys",
+            "sync",
+            "games",
+            "man",
+            "lp",
+            "mail",
+            "news",
+            "uucp",
+            "proxy",
+            "www-data",
+            "backup",
+            "list",
+            "irc",
+            "gnats",
+            "nobody",
+            "systemd-network",
+            "systemd-resolve",
+            "systemd-timesync",
+            "messagebus",
+            "syslog",
+            "mysql",
+            "postgres",
         ];
 
         if protected.contains(&name) {
@@ -126,8 +147,16 @@ mod tests {
             gid: u32,
         }
 
-        let acc1 = Account { name: Username::new("user1").unwrap(), uid: 1000, gid: 1000 };
-        let acc2 = Account { name: Username::new("user2").unwrap(), uid: 1001, gid: 1001 };
+        let acc1 = Account {
+            name: Username::new("user1").unwrap(),
+            uid: 1000,
+            gid: 1000,
+        };
+        let acc2 = Account {
+            name: Username::new("user2").unwrap(),
+            uid: 1001,
+            gid: 1001,
+        };
 
         // Separation of numeric UIDs/GIDs
         assert_ne!(acc1.uid, acc2.uid);
@@ -149,8 +178,16 @@ mod tests {
         let user1_uid = 1000;
         let user2_uid = 1001;
 
-        let res1 = Resource { path: "/home/user1/file".to_string(), owner_uid: user1_uid, owner_gid: user1_uid };
-        let res2 = Resource { path: "/home/user2/file".to_string(), owner_uid: user2_uid, owner_gid: user2_uid };
+        let res1 = Resource {
+            path: "/home/user1/file".to_string(),
+            owner_uid: user1_uid,
+            owner_gid: user1_uid,
+        };
+        let res2 = Resource {
+            path: "/home/user2/file".to_string(),
+            owner_uid: user2_uid,
+            owner_gid: user2_uid,
+        };
 
         assert_eq!(res1.owner_uid, user1_uid);
         assert_eq!(res1.owner_gid, user1_uid);
