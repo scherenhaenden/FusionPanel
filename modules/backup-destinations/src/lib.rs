@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod checksum_verifier;
 pub mod health_probe;
 pub mod local;
 pub mod retention_pruner;
