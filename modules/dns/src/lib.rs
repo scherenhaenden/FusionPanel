@@ -9,6 +9,7 @@ pub mod domain;
 pub mod forwarders;
 pub mod provider;
 pub mod split_horizon;
+pub mod ttl_timer;
 pub mod validation;
 pub mod zone_file;
 
