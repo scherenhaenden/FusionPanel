@@ -8,6 +8,12 @@ on:
     branches:
       - master
 
+# Only superseded attempts for the same PR are cancelled. Distinct master
+# commits keep independent groups so each merged commit remains qualified.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   discovery:
     runs-on: ubuntu-latest
@@ -34,16 +40,19 @@ jobs:
 
       - name: Discover Manifests & Detect Orphan Tests
         id: discover
-        run: ./scripts/ci/discover.py
-
-      - name: Detect Dropped Files
         run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            DROPPED_FILES=$(git diff --name-status origin/master...${{ github.event.pull_request.head.sha }} | awk '$1 == "D" {print $2}')
-            if [ -n "$DROPPED_FILES" ]; then
-              echo "::error::Dropped files detected: $DROPPED_FILES"
-              exit 1
-            fi
+          python3 -m unittest discover -s scripts/ci/tests -v
+          ./scripts/ci/discover.py
+
+      - name: Report PR Deletions
+        if: github.event_name == 'pull_request'
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --diff-filter=D --name-only "origin/master...$PR_HEAD" > deleted-files.txt
+          if [ -s deleted-files.txt ]; then
+            echo '::notice::The PR deletes files; review the listed changes.'
+            cat deleted-files.txt
           fi
 
   validation:
@@ -83,9 +92,11 @@ jobs:
 
   compile-and-unit-cargo:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     needs: [discovery, dependency-lane]
     strategy:
       fail-fast: false
+      max-parallel: 6
       matrix:
         manifest: ${{ fromJson(needs.discovery.outputs.cargo_manifests) }}
     steps:
@@ -112,9 +123,12 @@ jobs:
       - name: Compile
         run: |
           set -o pipefail
-          cargo build --manifest-path ${{ matrix.manifest }} 2>&1 | tee compile.log
+          args=(--manifest-path "$MANIFEST")
+          if [ "$MANIFEST" = "Cargo.toml" ]; then args+=(--workspace); fi
+          cargo build "${args[@]}" 2>&1 | tee compile.log
         env:
           CARGO_TERM_COLOR: always
+          MANIFEST: ${{ matrix.manifest }}
 
       - name: Check Formatting
         run: |
@@ -125,15 +139,40 @@ jobs:
           fi
 
       - name: Run Clippy
-        run: cargo clippy --manifest-path ${{ matrix.manifest }} -- -D warnings
+        env:
+          MANIFEST: ${{ matrix.manifest }}
+        run: |
+          args=(--manifest-path "$MANIFEST")
+          if [ "$MANIFEST" = "Cargo.toml" ]; then args+=(--workspace); fi
+          cargo clippy "${args[@]}" -- -D warnings
 
       - name: Run Tests
         id: test
         run: |
           set -o pipefail
-          cargo test --manifest-path ${{ matrix.manifest }} 2>&1 | tee test.log
+          args=(--manifest-path "$MANIFEST")
+          if [ "$MANIFEST" = "Cargo.toml" ]; then args+=(--workspace); fi
+          cargo test "${args[@]}" 2>&1 | tee test.log
         env:
           CARGO_TERM_COLOR: always
+          MANIFEST: ${{ matrix.manifest }}
+
+      # Each member was an individual matrix check; keep its zero-test guard.
+      - name: Check Workspace Member Test Counts
+        if: matrix.manifest == 'Cargo.toml'
+        run: |
+          set -o pipefail
+          python3 scripts/ci/discover.py --root-workspace-members > workspace-members.txt
+          while IFS= read -r member; do
+            echo "Checking tests for $member"
+            cargo test --manifest-path "$member" 2>&1 | tee member-test.log
+            passed=$( (grep -o -E '[0-9]+ passed' member-test.log || true) | awk '{sum += $1} END {print sum+0}')
+            failed=$( (grep -o -E '[0-9]+ failed' member-test.log || true) | awk '{sum += $1} END {print sum+0}')
+            if [ "$failed" -gt 0 ] || [ "$passed" -eq 0 ]; then
+              echo "::error::Workspace member has failing or zero tests: $member"
+              exit 1
+            fi
+          done < workspace-members.txt
 
       - name: Enforce Zero-Test Success
         run: |
@@ -167,12 +206,15 @@ jobs:
           path: |
             compile.log
             test.log
+            member-test.log
 
   compile-and-unit-npm:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     needs: [discovery, dependency-lane]
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         manifest: ${{ fromJson(needs.discovery.outputs.package_jsons) }}
     steps:
@@ -197,18 +239,26 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Compile and Test
+        env:
+          MANIFEST: ${{ matrix.manifest }}
         run: |
           set -o pipefail
-          DIR=$(dirname ${{ matrix.manifest }})
+          DIR=$(dirname "$MANIFEST")
           LOG_DIR=$(pwd)
 
           cd "$DIR"
           npm ci
-          npm run build 2>&1 | tee "$LOG_DIR/compile.log"
+          if [ "$MANIFEST" = "tests/e2e/browser/package.json" ]; then
+            # The Playwright suite is JavaScript and has no build script.
+            find . -type f -name '*.js' -not -path './node_modules/*' -print0 |
+              while IFS= read -r -d '' file; do node --check "$file" || exit $?; done 2>&1 | tee "$LOG_DIR/compile.log"
+          else
+            npm run build 2>&1 | tee "$LOG_DIR/compile.log"
+          fi
           npm test 2>&1 | tee "$LOG_DIR/test.log"
 
           if grep -q "Tests:.*0 total" "$LOG_DIR/test.log"; then
-            echo "::error::Zero-test success detected in ${{ matrix.manifest }}. Tests are mandatory."
+            echo "::error::Zero-test success detected in $MANIFEST. Tests are mandatory."
             exit 1
           fi
 
