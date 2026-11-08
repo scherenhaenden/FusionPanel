@@ -14,6 +14,7 @@ pub mod error;
 pub mod models;
 pub mod plan;
 pub mod quota;
+pub mod quota_dict;
 pub mod sieve;
 pub mod spf_flatten;
 
