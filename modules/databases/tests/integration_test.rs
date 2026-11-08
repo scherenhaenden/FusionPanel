@@ -427,6 +427,7 @@ async fn test_mariadb_container_adapter() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "BLOCKED: requires disposable MariaDB and PostgreSQL services"]
 async fn run_integration_tests() {
     let r1 = test_mariadb_adapter().await;
     if let Err(DatabaseError::DependencyUnavailable(msg)) = r1 {

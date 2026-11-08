@@ -85,6 +85,7 @@ async fn test_postgres_adapter() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "BLOCKED: requires a disposable PostgreSQL service configured with TEST_PG_*"]
 async fn run_integration_tests() {
     let r2 = test_postgres_adapter().await;
     if let Err(DatabaseError::DependencyUnavailable(_msg)) = r2 {
