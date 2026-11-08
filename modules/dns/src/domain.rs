@@ -97,7 +97,7 @@ impl DomainName {
             }
             if !label
                 .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '*' )
             {
                 return Err(DomainError::InvalidLabel(label.to_string()));
             }
