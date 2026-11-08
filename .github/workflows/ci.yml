@@ -252,6 +252,8 @@ jobs:
             # The Playwright suite is JavaScript and has no build script.
             find . -type f -name '*.js' -not -path './node_modules/*' -print0 |
               while IFS= read -r -d '' file; do node --check "$file" || exit $?; done 2>&1 | tee "$LOG_DIR/compile.log"
+            node --input-type=module -e "import { requireVariantFixture } from './tests/variant-fixture.js'; requireVariantFixture();"
+            npx playwright install --with-deps chromium
           else
             npm run build 2>&1 | tee "$LOG_DIR/compile.log"
           fi
