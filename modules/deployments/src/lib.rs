@@ -11,3 +11,4 @@ pub mod types;
 pub mod webhook;
 pub mod webhooks;
 pub mod workflow;
+pub mod artifact_verifier;
