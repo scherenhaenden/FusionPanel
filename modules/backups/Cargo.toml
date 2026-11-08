@@ -15,7 +15,7 @@ flate2 = "1.0"
 hex = "0.4"
 thiserror = "1.0"
 uuid = { version = "1.10", features = ["v4", "serde"] }
-chrono = "0.4.45"
+chrono = { version = "0.4.45", features = ["serde"] }
 zstd = "0.14.3"
 
 [dev-dependencies]
