@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-use std::time::{Duration, Instant};
 use security::route_limiter::{RouteLimit, RouteRateLimiter};
+use std::time::{Duration, Instant};
 
 #[test]
 fn test_route_limiter_allows_and_blocks() {
@@ -52,14 +52,12 @@ fn test_route_limiter_allows_and_blocks() {
 
 #[test]
 fn test_burst_recovery() {
-    let limits = vec![
-        RouteLimit {
-            pattern: "/v1/burst".to_string(),
-            method: None,
-            burst_capacity: 1,
-            leak_rate: Duration::from_secs(2), // 1 token every 2 seconds
-        }
-    ];
+    let limits = vec![RouteLimit {
+        pattern: "/v1/burst".to_string(),
+        method: None,
+        burst_capacity: 1,
+        leak_rate: Duration::from_secs(2), // 1 token every 2 seconds
+    }];
 
     let mut limiter = RouteRateLimiter::new(limits);
     let start = Instant::now();
@@ -84,14 +82,12 @@ fn test_burst_recovery() {
 
 #[test]
 fn test_multiple_methods_matched() {
-    let limits = vec![
-        RouteLimit {
-            pattern: "/v1/test".to_string(),
-            method: None,
-            burst_capacity: 1,
-            leak_rate: Duration::from_secs(10),
-        }
-    ];
+    let limits = vec![RouteLimit {
+        pattern: "/v1/test".to_string(),
+        method: None,
+        burst_capacity: 1,
+        leak_rate: Duration::from_secs(10),
+    }];
 
     let mut limiter = RouteRateLimiter::new(limits);
     let now = Instant::now();
@@ -107,4 +103,43 @@ fn test_multiple_methods_matched() {
     // POST should have its own bucket and be ok
     assert!(limiter.check("ip-1", "/v1/test", "POST", now).is_ok());
     assert!(limiter.check("ip-1", "/v1/test", "POST", now).is_err());
+}
+
+#[test]
+fn test_prefix_requires_path_segment_boundary_and_prefers_specific_rule() {
+    let limits = vec![
+        RouteLimit {
+            pattern: "/admin".to_string(),
+            method: None,
+            burst_capacity: 1,
+            leak_rate: Duration::from_secs(60),
+        },
+        RouteLimit {
+            pattern: "/admin/users".to_string(),
+            method: Some("POST".to_string()),
+            burst_capacity: 2,
+            leak_rate: Duration::from_secs(60),
+        },
+    ];
+    let mut limiter = RouteRateLimiter::new(limits);
+    let now = Instant::now();
+
+    assert!(limiter.check("key", "/administrator", "GET", now).is_ok());
+    assert!(limiter.check("key", "/admin/users", "POST", now).is_ok());
+    assert!(limiter.check("key", "/admin/users/7", "POST", now).is_ok());
+    assert!(limiter.check("key", "/admin/users/7", "POST", now).is_err());
+}
+
+#[test]
+fn test_zero_rate_is_rejected_without_panicking() {
+    let mut limiter = RouteRateLimiter::new(vec![RouteLimit {
+        pattern: "/limited".to_string(),
+        method: None,
+        burst_capacity: 1,
+        leak_rate: Duration::ZERO,
+    }]);
+
+    assert!(limiter
+        .check("key", "/limited", "GET", Instant::now())
+        .is_err());
 }

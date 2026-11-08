@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 /// Configuration for a specific route and method limit.
 #[derive(Debug, Clone)]
 pub struct RouteLimit {
-    pub pattern: String, // Prefix or exact match
+    pub pattern: String,        // Prefix or exact match
     pub method: Option<String>, // e.g., "GET", "POST", None means all methods
     pub burst_capacity: usize,
     pub leak_rate: Duration, // Time per token leak
@@ -54,15 +54,19 @@ impl TokenBucket {
             self.last_leak = now;
         }
     }
+
+    fn is_full(&mut self, now: Instant) -> bool {
+        self.replenish(now);
+        self.tokens >= self.capacity as f64
+    }
 }
 
 pub struct RouteRateLimiter {
     limits: Vec<RouteLimit>,
-    /// Maps IP+Method+Route to a token bucket.
-    /// In a real app, might just be global per route or per user per route.
-    /// We'll just map a key to a bucket.
-    buckets: HashMap<String, TokenBucket>,
+    buckets: HashMap<(String, String, String), TokenBucket>,
 }
+
+const MAX_BUCKETS: usize = 100_000;
 
 impl RouteRateLimiter {
     pub fn new(limits: Vec<RouteLimit>) -> Self {
@@ -77,20 +81,48 @@ impl RouteRateLimiter {
     /// Returns Ok(()) if the request is allowed.
     /// Returns Err(String) if the request is rate-limited, where the String is the value
     /// for the "Retry-After" HTTP header (the wait time in seconds rounded up).
-    pub fn check(&mut self, key: &str, path: &str, method: &str, now: Instant) -> Result<(), String> {
-        // Find the most specific matching rule (or first matching rule)
-        let matched_limit = self.limits.iter().find(|limit| {
-            let method_match = limit.method.as_deref().map_or(true, |m| m.eq_ignore_ascii_case(method));
-            let path_match = path.starts_with(&limit.pattern);
-            method_match && path_match
-        });
+    pub fn check(
+        &mut self,
+        key: &str,
+        path: &str,
+        method: &str,
+        now: Instant,
+    ) -> Result<(), String> {
+        let matched_limit = self
+            .limits
+            .iter()
+            .filter(|limit| {
+                let method_match = limit
+                    .method
+                    .as_deref()
+                    .map_or(true, |m| m.eq_ignore_ascii_case(method));
+                let path_match = path_matches(path, &limit.pattern);
+                method_match && path_match
+            })
+            .max_by_key(|limit| (limit.pattern.len(), limit.method.is_some()));
 
         if let Some(limit) = matched_limit {
-            let bucket_key = format!("{}:{}:{}", key, method, limit.pattern);
+            if limit.leak_rate.is_zero() || limit.burst_capacity == 0 {
+                return Err("1".to_string());
+            }
 
-            let bucket = self.buckets.entry(bucket_key).or_insert_with(|| {
-                TokenBucket::new(limit.burst_capacity, limit.leak_rate, now)
-            });
+            let bucket_key = (
+                key.to_string(),
+                method.to_ascii_uppercase(),
+                limit.pattern.clone(),
+            );
+
+            if !self.buckets.contains_key(&bucket_key) && self.buckets.len() >= MAX_BUCKETS {
+                self.buckets.retain(|_, bucket| !bucket.is_full(now));
+                if self.buckets.len() >= MAX_BUCKETS {
+                    return Err("1".to_string());
+                }
+            }
+
+            let bucket = self
+                .buckets
+                .entry(bucket_key)
+                .or_insert_with(|| TokenBucket::new(limit.burst_capacity, limit.leak_rate, now));
 
             match bucket.consume(1.0, now) {
                 Ok(()) => Ok(()),
@@ -104,4 +136,11 @@ impl RouteRateLimiter {
             Ok(())
         }
     }
+}
+
+fn path_matches(path: &str, pattern: &str) -> bool {
+    path == pattern
+        || path
+            .strip_prefix(pattern)
+            .is_some_and(|suffix| pattern.ends_with('/') || suffix.starts_with('/'))
 }
