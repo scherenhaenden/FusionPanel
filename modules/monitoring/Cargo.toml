@@ -11,3 +11,6 @@ uuid = { version = "1.7.0", features = ["v4"] }
 chrono = { version = "0.4.34" }
 serde = { version = "1.0", features = ["derive"] }
 sysinfo = "0.30"
+
+[dev-dependencies]
+tempfile = "3"
