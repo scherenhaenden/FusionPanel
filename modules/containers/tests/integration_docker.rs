@@ -19,7 +19,9 @@ fn docker_can_run_containers() -> bool {
 #[tokio::test]
 async fn test_docker_lifecycle() {
     if !docker_can_run_containers() {
-        println!("BLOCKED: Docker cannot run containers (overlayfs error or similar). Returning early.");
+        println!(
+            "BLOCKED: Docker cannot run containers (overlayfs error or similar). Returning early."
+        );
         return;
     }
 
@@ -31,29 +33,56 @@ async fn test_docker_lifecycle() {
         .with_command(vec!["sleep".to_string(), "30".to_string()]);
 
     // Create
-    engine.create(&spec).await.expect("Failed to create container");
+    engine
+        .create(&spec)
+        .await
+        .expect("Failed to create container");
 
     // Inspect created
-    let status = engine.inspect(&container_id).await.expect("Failed to inspect");
+    let status = engine
+        .inspect(&container_id)
+        .await
+        .expect("Failed to inspect");
     assert_eq!(status, ContainerStatus::Created);
 
     // Start
-    engine.start(&container_id).await.expect("Failed to start container");
-    let status = engine.inspect(&container_id).await.expect("Failed to inspect");
+    engine
+        .start(&container_id)
+        .await
+        .expect("Failed to start container");
+    let status = engine
+        .inspect(&container_id)
+        .await
+        .expect("Failed to inspect");
     assert_eq!(status, ContainerStatus::Running);
 
     // Restart
-    engine.restart(&container_id).await.expect("Failed to restart container");
-    let status = engine.inspect(&container_id).await.expect("Failed to inspect");
+    engine
+        .restart(&container_id)
+        .await
+        .expect("Failed to restart container");
+    let status = engine
+        .inspect(&container_id)
+        .await
+        .expect("Failed to inspect");
     assert_eq!(status, ContainerStatus::Running);
 
     // Stop
-    engine.stop(&container_id).await.expect("Failed to stop container");
-    let status = engine.inspect(&container_id).await.expect("Failed to inspect");
+    engine
+        .stop(&container_id)
+        .await
+        .expect("Failed to stop container");
+    let status = engine
+        .inspect(&container_id)
+        .await
+        .expect("Failed to inspect");
     assert_eq!(status, ContainerStatus::Exited);
 
     // Remove
-    engine.remove(&container_id).await.expect("Failed to remove container");
+    engine
+        .remove(&container_id)
+        .await
+        .expect("Failed to remove container");
 
     // Inspect removed should fail or return Removed/error.
     // docker inspect on removed container returns an error and we map it to EngineError
@@ -64,7 +93,9 @@ async fn test_docker_lifecycle() {
 #[tokio::test]
 async fn test_docker_volume_persistence() {
     if !docker_can_run_containers() {
-        println!("BLOCKED: Docker cannot run containers (overlayfs error or similar). Returning early.");
+        println!(
+            "BLOCKED: Docker cannot run containers (overlayfs error or similar). Returning early."
+        );
         return;
     }
 
@@ -73,7 +104,9 @@ async fn test_docker_volume_persistence() {
     let image_ref = ImageRef::new("alpine:latest".to_string()).unwrap();
 
     // Create a temp directory inside the container directory per strict rules
-    let temp_dir = std::env::current_dir().unwrap().join(format!("test-vol-{}", Uuid::new_v4()));
+    let temp_dir = std::env::current_dir()
+        .unwrap()
+        .join(format!("test-vol-{}", Uuid::new_v4()));
     std::fs::create_dir_all(&temp_dir).unwrap();
 
     use std::os::unix::fs::PermissionsExt;
@@ -92,15 +125,23 @@ async fn test_docker_volume_persistence() {
         temp_dir.to_string_lossy().to_string(),
         "/data".to_string(),
         false,
-    ).unwrap();
+    )
+    .unwrap();
 
     let spec = ContainerSpec::new(container_id.clone(), image_ref, vec![], vec![mount])
         .with_command(vec!["sleep".to_string(), "10".to_string()]);
 
-    engine.create(&spec).await.expect("Failed to create container");
+    engine
+        .create(&spec)
+        .await
+        .expect("Failed to create container");
 
     // Start container and exec
-    Command::new("docker").arg("start").arg(container_id.as_str()).status().unwrap();
+    Command::new("docker")
+        .arg("start")
+        .arg(container_id.as_str())
+        .status()
+        .unwrap();
     let exec_status = Command::new("docker")
         .arg("exec")
         .arg(container_id.as_str())
@@ -112,7 +153,10 @@ async fn test_docker_volume_persistence() {
 
     assert!(exec_status.success());
 
-    engine.remove(&container_id).await.expect("Failed to remove container");
+    engine
+        .remove(&container_id)
+        .await
+        .expect("Failed to remove container");
 
     let file_content = std::fs::read_to_string(temp_dir.join("test.txt")).unwrap();
     assert_eq!(file_content.trim(), "hello world");
@@ -121,7 +165,9 @@ async fn test_docker_volume_persistence() {
 #[tokio::test]
 async fn test_docker_network_isolation() {
     if !docker_can_run_containers() {
-        println!("BLOCKED: Docker cannot run containers (overlayfs error or similar). Returning early.");
+        println!(
+            "BLOCKED: Docker cannot run containers (overlayfs error or similar). Returning early."
+        );
         return;
     }
 
@@ -143,13 +189,22 @@ async fn test_docker_network_isolation() {
         .with_network(network_name.clone())
         .with_command(vec!["sleep".to_string(), "10".to_string()]);
 
-    engine.create(&spec).await.expect("Failed to create container");
-    engine.start(&container_id).await.expect("Failed to start container");
+    engine
+        .create(&spec)
+        .await
+        .expect("Failed to create container");
+    engine
+        .start(&container_id)
+        .await
+        .expect("Failed to start container");
 
     // Inspect container to check network using index to support hyphens in Go templates
     let output = Command::new("docker")
         .arg("inspect")
-        .arg(format!("--format={{{{(index .NetworkSettings.Networks \"{}\").NetworkID}}}}", network_name))
+        .arg(format!(
+            "--format={{{{(index .NetworkSettings.Networks \"{}\").NetworkID}}}}",
+            network_name
+        ))
         .arg(container_id.as_str())
         .output()
         .unwrap();
@@ -158,8 +213,14 @@ async fn test_docker_network_isolation() {
     let id_str = String::from_utf8_lossy(&output.stdout);
     assert!(!id_str.trim().is_empty());
 
-    engine.stop(&container_id).await.expect("Failed to stop container");
-    engine.remove(&container_id).await.expect("Failed to remove container");
+    engine
+        .stop(&container_id)
+        .await
+        .expect("Failed to stop container");
+    engine
+        .remove(&container_id)
+        .await
+        .expect("Failed to remove container");
 
     // Remove network
     Command::new("docker")
@@ -173,7 +234,9 @@ async fn test_docker_network_isolation() {
 #[tokio::test]
 async fn test_docker_resource_limits() {
     if !docker_can_run_containers() {
-        println!("BLOCKED: Docker cannot run containers (overlayfs error or similar). Returning early.");
+        println!(
+            "BLOCKED: Docker cannot run containers (overlayfs error or similar). Returning early."
+        );
         return;
     }
 
@@ -182,10 +245,13 @@ async fn test_docker_resource_limits() {
     let image_ref = ImageRef::new("alpine:latest".to_string()).unwrap();
 
     let limits = ResourceLimits::new(500, 1024 * 1024 * 64).unwrap(); // 0.5 CPU, 64MB
-    let spec = ContainerSpec::new(container_id.clone(), image_ref, vec![], vec![])
-        .with_limits(limits);
+    let spec =
+        ContainerSpec::new(container_id.clone(), image_ref, vec![], vec![]).with_limits(limits);
 
-    engine.create(&spec).await.expect("Failed to create container");
+    engine
+        .create(&spec)
+        .await
+        .expect("Failed to create container");
 
     let output = Command::new("docker")
         .arg("inspect")
@@ -203,7 +269,10 @@ async fn test_docker_resource_limits() {
     assert_eq!(parts[0], "500000000");
     assert_eq!(parts[1], "67108864");
 
-    engine.remove(&container_id).await.expect("Failed to remove container");
+    engine
+        .remove(&container_id)
+        .await
+        .expect("Failed to remove container");
 }
 
 #[test]
@@ -212,10 +281,20 @@ fn test_refused_host_paths() {
     assert!(MountPoint::new("/etc".to_string(), "/target".to_string(), false).is_err());
 
     // Path traversal to /etc is refused
-    assert!(MountPoint::new("/home/user/../../etc".to_string(), "/target".to_string(), false).is_err());
+    assert!(MountPoint::new(
+        "/home/user/../../etc".to_string(),
+        "/target".to_string(),
+        false
+    )
+    .is_err());
 
     // Docker socket is refused
-    assert!(MountPoint::new("/var/run/docker.sock".to_string(), "/target".to_string(), false).is_err());
+    assert!(MountPoint::new(
+        "/var/run/docker.sock".to_string(),
+        "/target".to_string(),
+        false
+    )
+    .is_err());
 
     // Root is refused
     assert!(MountPoint::new("/".to_string(), "/target".to_string(), false).is_err());
@@ -231,7 +310,12 @@ fn test_refused_host_paths() {
     {
         let _ = std::os::unix::fs::symlink("/etc", &symlink_path);
         // Mounting symlink pointing to /etc must be refused
-        assert!(MountPoint::new(symlink_path.to_string_lossy().to_string(), "/target".to_string(), false).is_err());
+        assert!(MountPoint::new(
+            symlink_path.to_string_lossy().to_string(),
+            "/target".to_string(),
+            false
+        )
+        .is_err());
     }
     let _ = std::fs::remove_dir_all(&temp_symlink_dir);
 
