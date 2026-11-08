@@ -8,6 +8,7 @@ pub mod domain;
 pub mod engine;
 pub mod health;
 pub mod health_flapping;
+pub mod image_verifier;
 pub mod log_rotator;
 pub mod logs;
 pub mod resources;
