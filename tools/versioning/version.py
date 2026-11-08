@@ -11,7 +11,6 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-import tomllib
 from zoneinfo import ZoneInfo
 
 ZONE = ZoneInfo("Europe/Berlin")
@@ -93,103 +92,85 @@ def repository(path: Path) -> Path:
     return Path(git(path, "rev-parse", "--show-toplevel")).resolve()
 
 
-def configured_version(repo: Path) -> SemVer:
-    try:
-        raw_text = (repo / "VERSION").read_text()
-        raw = raw_text.removesuffix("\n")
-        if raw_text not in (raw, raw + "\n") or "\n" in raw or raw != raw.strip():
-            raise VersionError("VERSION must contain exactly one unpadded SemVer line")
-        manifest = tomllib.loads((repo / "Cargo.toml").read_text())
-        cargo_version = manifest["workspace"]["package"]["version"]
-    except (OSError, KeyError, tomllib.TOMLDecodeError) as error:
-        raise VersionError(f"Cannot read VERSION and workspace package version: {error}") from error
-    version = SemVer.parse(raw)
-    if version.metadata:
-        raise VersionError("VERSION must contain only core/prerelease; date/hash metadata is generated")
-    if cargo_version != raw:
-        raise VersionError("VERSION and workspace.package.version must match exactly")
-    return version
-
-
-def validate_tag_name(tag: str) -> SemVer:
-    if not tag.startswith("v"):
-        raise VersionError("Release tags must start with v")
-    version = SemVer.parse(tag[1:])
-    match = TAG_METADATA.fullmatch(version.metadata or "")
+def validate_tag_name(tag: str) -> str:
+    """Validate the user-facing date/hash identity."""
+    match = TAG_METADATA.fullmatch(tag)
     if not match:
-        raise VersionError("Tag metadata must be yyyy.MM.dd.HH.mm.sss.g<12-lowercase-hex-SHA>")
+        raise VersionError("Version must be yyyy.MM.dd.HH.mm.sss.g<12-lowercase-hex-SHA>")
     try:
         datetime(*map(int, match.groups()[:5]))
     except ValueError as error:
-        raise VersionError(f"Invalid date in tag: {error}") from error
-    return version
+        raise VersionError(f"Invalid date in version: {error}") from error
+    return tag
 
 
-def history(repo: Path) -> list[tuple[str, SemVer, str]]:
+def history(repo: Path) -> list[tuple[str, str, str]]:
+    """Validate new and legacy annotated release tags without rewriting either."""
     entries = []
-    for tag in git(repo, "tag", "--list", "v*").splitlines():
-        version = validate_tag_name(tag)
+    for tag in git(repo, "tag", "--list").splitlines():
+        legacy = tag.startswith("v")
+        if not legacy and not re.match(r"^\d{4}\.", tag):
+            continue
+        if legacy:
+            version = SemVer.parse(tag[1:])
+            identity = version.metadata or ""
+            validate_tag_name(identity)
+        else:
+            version = None
+            identity = validate_tag_name(tag)
         if git(repo, "cat-file", "-t", "refs/tags/" + tag) != "tag":
             raise VersionError(f"Release tag must be annotated: {tag}")
         commit = git(repo, "rev-parse", tag + "^{commit}")
-        if version.metadata.rsplit(".g", 1)[1] != commit[:12]:
+        if identity.rsplit(".g", 1)[1] != commit[:12]:
             raise VersionError(f"Tag hash does not match target commit: {tag}")
         try:
             annotation = json.loads(git(repo, "for-each-ref", "--format=%(contents)", "refs/tags/" + tag))
             if not isinstance(annotation, dict):
-                raise VersionError("Tag annotation must be a JSON manifest object")
+                raise ValueError("manifest must be a JSON object")
             instant = datetime.fromisoformat(annotation["created_at_utc"])
             stamp, local_iso, utc_iso = timestamp(instant)
         except (ValueError, TypeError, KeyError) as error:
             raise VersionError(f"Invalid release manifest on tag {tag}: {error}") from error
-        if (annotation.get("version") != tag[1:] or annotation.get("base_version") != version.base
-                or annotation.get("commit") != commit or annotation.get("tag") != tag
-                or annotation.get("date_pattern") != "yyyy.MM.dd.HH.mm.sss"
+        expected_version = tag[1:] if legacy else tag
+        if (annotation.get("version") != expected_version or annotation.get("commit") != commit
+                or annotation.get("tag") != tag or annotation.get("date_pattern") != "yyyy.MM.dd.HH.mm.sss"
                 or annotation.get("timezone") != "Europe/Berlin"
-                or annotation.get("schema_version") != 1
-                or annotation.get("branch") != "master"
-                or annotation.get("short_commit") != commit[:12]
-                or annotation.get("release_kind") != ("prerelease" if version.prerelease else "release")
-                or annotation.get("created_at_local") != local_iso
-                or annotation.get("created_at_utc") != utc_iso
-                or version.metadata != f"{stamp}.g{commit[:12]}"):
+                or annotation.get("schema_version") != (1 if legacy else 2)
+                or annotation.get("branch") != "master" or annotation.get("short_commit") != commit[:12]
+                or annotation.get("created_at_local") != local_iso or annotation.get("created_at_utc") != utc_iso
+                or identity != f"{stamp}.g{commit[:12]}"):
             raise VersionError(f"Release manifest does not match tag identity: {tag}")
-        entries.append((tag, version, commit))
-    bases = [version.base for _, version, _ in entries]
-    if len(set(bases)) != len(bases):
-        raise VersionError("A core/prerelease version was published more than once")
+        if legacy and (annotation.get("base_version") != version.base or
+                       annotation.get("release_kind") != ("prerelease" if version.prerelease else "release")):
+            raise VersionError(f"Legacy release manifest does not match tag identity: {tag}")
+        if not legacy and annotation.get("release_kind") not in ("release", "prerelease"):
+            raise VersionError(f"Invalid release kind in tag: {tag}")
+        entries.append((tag, identity, commit))
     return entries
 
 
 def check(repo: Path) -> dict:
-    version = configured_version(repo)
     entries = history(repo)
-    latest = max((v for _, v, _ in entries), default=None)
-    if latest and version < latest:
-        raise VersionError("Configured version is older than the latest published SemVer")
-    return {"base_version": version.base, "release_tag_count": len(entries), "configuration_valid": True,
-            "release_ready": False, "note": "check validates configuration/history; describe/tag also enforce clean master and publication rules"}
+    return {"release_tag_count": len(entries), "configuration_valid": True,
+            "release_ready": False, "note": "check validates history; describe/tag also require a clean master"}
 
 
 def describe(repo: Path, now: datetime | None = None) -> dict:
-    version = configured_version(repo)
     entries = history(repo)
     if git(repo, "branch", "--show-current") != "master":
         raise VersionError("Release snapshots must target master")
     if git(repo, "status", "--porcelain", "--untracked-files=all"):
         raise VersionError("Release snapshots require a completely clean working tree")
-    if entries and not all(version > previous for _, previous, _ in entries):
-        raise VersionError("Bump VERSION and Cargo.toml: every new tag must increase SemVer core/prerelease")
     commit = git(repo, "rev-parse", "HEAD")
+    if any(previous_commit == commit for _, _, previous_commit in entries):
+        raise VersionError("This commit already has a release tag")
     stamp, local_iso, utc_iso = timestamp(now or datetime.now(timezone.utc))
-    full = f"{version.base}+{stamp}.g{commit[:12]}"
-    tag = "v" + full
-    validate_tag_name(tag)
-    return {"schema_version": 1, "base_version": version.base, "version": full, "tag": tag,
+    version = validate_tag_name(f"{stamp}.g{commit[:12]}")
+    return {"schema_version": 2, "version": version, "tag": version,
             "commit": commit, "short_commit": commit[:12], "branch": "master",
             "date_pattern": "yyyy.MM.dd.HH.mm.sss", "timezone": "Europe/Berlin",
             "created_at_local": local_iso, "created_at_utc": utc_iso,
-            "release_kind": "prerelease" if version.prerelease else "release"}
+            "release_kind": "prerelease"}
 
 
 def create_tag(repo: Path, now: datetime | None = None) -> dict:
@@ -201,14 +182,27 @@ def create_tag(repo: Path, now: datetime | None = None) -> dict:
     return manifest
 
 
+def verify(repo: Path, tag: str) -> dict:
+    validate_tag_name(tag)
+    if not any(existing == tag for existing, _, _ in history(repo)):
+        raise VersionError(f"Release tag not found: {tag}")
+    return json.loads(git(repo, "for-each-ref", "--format=%(contents)", "refs/tags/" + tag))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["check", "describe", "tag"])
+    parser.add_argument("command", choices=["check", "describe", "tag", "verify"])
     parser.add_argument("--repo", type=Path, default=Path.cwd())
+    parser.add_argument("--tag", help="Annotated date/hash tag to verify")
     args = parser.parse_args()
     try:
         repo = repository(args.repo)
-        output = {"check": check, "describe": describe, "tag": create_tag}[args.command](repo)
+        if args.command == "verify":
+            if not args.tag:
+                raise VersionError("verify requires --tag")
+            output = verify(repo, args.tag)
+        else:
+            output = {"check": check, "describe": describe, "tag": create_tag}[args.command](repo)
         print(json.dumps(output, indent=2))
         return 0
     except VersionError as error:

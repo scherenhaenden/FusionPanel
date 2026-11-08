@@ -27,7 +27,12 @@ async fn main() {
     let h_url = env::var("FUSIONPANEL_AGENT_HEARTBEAT_URL")
         .unwrap_or_else(|_| "ws://127.0.0.1:8080/heartbeat".to_string());
     let transport = HmacWsTransport::new(h_url, secret.as_bytes().to_vec());
-    let daemon = AgentDaemon::new(transport, env!("CARGO_PKG_VERSION").to_string());
+    let daemon = AgentDaemon::new(
+        transport,
+        option_env!("FUSIONPANEL_BUILD_VERSION")
+            .unwrap_or("development")
+            .to_string(),
+    );
 
     tokio::spawn(async move {
         daemon.run().await;

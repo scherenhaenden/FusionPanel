@@ -56,7 +56,7 @@ async fn health_handler() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
         service: "fusionpanel-api",
-        version: env!("CARGO_PKG_VERSION"),
+        version: option_env!("FUSIONPANEL_BUILD_VERSION").unwrap_or("development"),
     })
 }
 
@@ -208,7 +208,7 @@ mod tests {
             body_str,
             format!(
                 r#"{{"status":"ok","service":"fusionpanel-api","version":"{}"}}"#,
-                env!("CARGO_PKG_VERSION")
+                option_env!("FUSIONPANEL_BUILD_VERSION").unwrap_or("development")
             )
         );
     }
