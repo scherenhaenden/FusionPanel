@@ -1,6 +1,10 @@
 # Changelog
 
-Version changes follow [the strict versioning policy](docs/engineering/VERSIONING.md). Full annotated tags add the exact requested date stamp and source hash; this file records the SemVer core/prerelease.
+Release identities follow [the versioning policy](docs/engineering/VERSIONING.md): the visible version and tag consist solely of the requested date stamp and source hash. Historical release entries retain their original names.
+
+## Unreleased
+
+- Adopt the date-and-hash release identity; preserve existing annotated SemVer tags as historical records. Cargo package versions remain internal.
 
 ## 0.1.0-dev.1 — Initial development snapshot
 
