@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod adapter;
+pub mod binlog_retention;
 pub mod health;
 pub mod maintenance;
 pub mod mariadb;
