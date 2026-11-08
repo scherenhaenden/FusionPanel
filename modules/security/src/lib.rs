@@ -19,3 +19,5 @@ pub use jail_aggregator::JailAggregator;
 pub use ssh::*;
 pub use ssh_whitelist::*;
 pub use tls_audit::*;
+pub mod totp_auth;
+pub use totp_auth::*;
