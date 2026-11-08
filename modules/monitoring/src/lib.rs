@@ -2,6 +2,7 @@
 
 pub mod alert_notifier;
 pub mod collector;
+pub mod cpu_anomaly;
 pub mod governor;
 pub mod incident;
 pub mod prometheus;
