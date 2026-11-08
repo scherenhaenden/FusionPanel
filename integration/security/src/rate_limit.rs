@@ -21,10 +21,7 @@ impl SlidingWindow {
     }
 
     pub fn check_and_add(&mut self, key: &str, now: Instant) -> bool {
-        let entry = self
-            .requests
-            .entry(key.to_string())
-            .or_insert_with(VecDeque::new);
+        let entry = self.requests.entry(key.to_string()).or_default();
 
         // Remove old entries
         while let Some(&oldest) = entry.front() {

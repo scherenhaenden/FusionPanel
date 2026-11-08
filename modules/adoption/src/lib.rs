@@ -128,3 +128,52 @@ pub struct UpstreamTlsPolicy {
     pub sni_preservation: bool,
     pub expected_hostname: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{DecommissionAttestation, OwnershipGuard, OwnershipTier, Resource};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn externally_managed_resources_cannot_be_mutated() {
+        let resource = Resource {
+            id: "external".to_string(),
+            tier: OwnershipTier::ExternallyManaged,
+        };
+
+        assert!(OwnershipGuard::can_suspend(&resource).is_err());
+        assert!(OwnershipGuard::can_delete(&resource).is_err());
+        assert!(OwnershipGuard::can_restart(&resource).is_err());
+    }
+
+    #[test]
+    fn panel_owned_resources_allow_managed_operations() {
+        let resource = Resource {
+            id: "panel".to_string(),
+            tier: OwnershipTier::PanelOwned,
+        };
+
+        assert!(OwnershipGuard::can_suspend(&resource).is_ok());
+        assert!(OwnershipGuard::can_delete(&resource).is_ok());
+        assert!(OwnershipGuard::can_restart(&resource).is_ok());
+    }
+
+    #[test]
+    fn decommission_requires_fresh_complete_evidence() {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let fresh = DecommissionAttestation::new(true, true, true, true, now);
+        assert!(fresh.is_valid().is_ok());
+
+        let incomplete = DecommissionAttestation::new(true, false, true, true, now);
+        assert_eq!(
+            incomplete.is_valid().unwrap_err(),
+            "Backup successor is not verified"
+        );
+
+        let expired = DecommissionAttestation::new(true, true, true, true, now - 86_401);
+        assert_eq!(expired.is_valid().unwrap_err(), "Evidence has expired");
+    }
+}
