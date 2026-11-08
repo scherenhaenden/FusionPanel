@@ -14,3 +14,7 @@ reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls"], def
 log = "0.4"
 rusqlite = { version = "0.31.0", features = ["bundled"] }
 uuid = { version = "1.8.0", features = ["v4", "serde"] }
+hmac = "0.12"
+sha2 = "0.10"
+rand = "0.8"
+hex = "0.4.3"
