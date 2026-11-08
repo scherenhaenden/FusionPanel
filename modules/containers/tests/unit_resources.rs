@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use containers::resources::{ResourceError, ResourceLimits};
 use containers::storage::{resolve_volume_path, StorageError};
 use std::path::Path;

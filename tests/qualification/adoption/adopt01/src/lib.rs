@@ -69,7 +69,10 @@ impl ReconciliationEngine {
             conflicts.push(ReconciliationConflict {
                 field: "root".to_string(),
                 panel_value: panel_metadata.root.clone(),
-                observed_value: format!("web: {}, app: {}", web_server_config.root, app_config.root),
+                observed_value: format!(
+                    "web: {}, app: {}",
+                    web_server_config.root, app_config.root
+                ),
             });
         }
 
@@ -125,7 +128,7 @@ impl ReconciliationEngine {
         }
 
         if panel_metadata.route_map.websocket_paths != web_server_config.route_map.websocket_paths {
-             conflicts.push(ReconciliationConflict {
+            conflicts.push(ReconciliationConflict {
                 field: "route_map.websocket_paths".to_string(),
                 panel_value: format!("{:?}", panel_metadata.route_map.websocket_paths),
                 observed_value: format!("{:?}", web_server_config.route_map.websocket_paths),
@@ -145,12 +148,15 @@ impl ReconciliationEngine {
             ReconciliationResult::Success(_) => {
                 // Apply migration logic goes here
                 Ok(())
-            },
+            }
             ReconciliationResult::Conflicts(conflicts) => {
                 // Fail closed
                 let mut error_msg = "Migration refused due to unresolved conflicts:\n".to_string();
                 for conflict in conflicts {
-                    error_msg.push_str(&format!("- Field '{}': Expected '{}', Found '{}'\n", conflict.field, conflict.panel_value, conflict.observed_value));
+                    error_msg.push_str(&format!(
+                        "- Field '{}': Expected '{}', Found '{}'\n",
+                        conflict.field, conflict.panel_value, conflict.observed_value
+                    ));
                 }
                 Err(error_msg)
             }

@@ -49,12 +49,13 @@ mod tests {
         );
     }
 }
-pub mod config;
 pub mod acme;
-pub mod vhost;
-pub mod upstream;
 pub mod compression;
+pub mod config;
+pub mod http2_push;
 pub mod php_tuning;
+pub mod upstream;
+pub mod vhost;
 
 #[cfg(test)]
 mod user_tests {
@@ -73,7 +74,8 @@ mod user_tests {
     fn test_invalid_os_usernames() {
         let name: Result<OsUsername, _> = "".to_string().try_into();
         assert!(name.is_err());
-        let name: Result<OsUsername, _> = "toolongusername12345678901234567890".to_string().try_into();
+        let name: Result<OsUsername, _> =
+            "toolongusername12345678901234567890".to_string().try_into();
         assert!(name.is_err());
         let name: Result<OsUsername, _> = "-leadinghyphen".to_string().try_into();
         assert!(name.is_err());

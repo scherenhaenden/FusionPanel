@@ -1,3 +1,5 @@
-pub mod store;
-pub mod router;
+#![forbid(unsafe_code)]
+
 pub mod agent;
+pub mod router;
+pub mod store;

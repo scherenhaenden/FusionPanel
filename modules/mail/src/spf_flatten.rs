@@ -25,7 +25,15 @@ impl<'a> SpfFlattener<'a> {
         let mut lookups = 0;
         let mut final_qualifier = "-all".to_string();
 
-        self.flatten_recursive(domain, domain, &mut ips_v4, &mut ips_v6, &mut visited, &mut lookups, &mut final_qualifier)?;
+        self.flatten_recursive(
+            domain,
+            domain,
+            &mut ips_v4,
+            &mut ips_v6,
+            &mut visited,
+            &mut lookups,
+            &mut final_qualifier,
+        )?;
 
         let mut parts = vec!["v=spf1".to_string()];
 
@@ -81,7 +89,11 @@ impl<'a> SpfFlattener<'a> {
             let mut redirect_target = "";
 
             for term in terms {
-                let mechanism = if term.starts_with('+') || term.starts_with('-') || term.starts_with('~') || term.starts_with('?') {
+                let mechanism = if term.starts_with('+')
+                    || term.starts_with('-')
+                    || term.starts_with('~')
+                    || term.starts_with('?')
+                {
                     &term[1..]
                 } else {
                     term
@@ -102,7 +114,11 @@ impl<'a> SpfFlattener<'a> {
                 // name could be a/24 so we need to separate name from slash for 'a' and 'mx' without colon
                 let mut name = name_with_slash.as_str();
                 let mut implicit_cidr = "";
-                if !name.starts_with("ip4") && !name.starts_with("ip6") && !name.starts_with("include") && name.contains('/') {
+                if !name.starts_with("ip4")
+                    && !name.starts_with("ip6")
+                    && !name.starts_with("include")
+                    && name.contains('/')
+                {
                     let mut nparts = name.splitn(2, '/');
                     name = nparts.next().unwrap();
                     implicit_cidr = nparts.next().unwrap_or("");
@@ -116,7 +132,15 @@ impl<'a> SpfFlattener<'a> {
                         ips_v6.insert(arg.to_string());
                     }
                     "include" => {
-                        self.flatten_recursive(arg, root_domain, ips_v4, ips_v6, visited, lookups, final_qualifier)?;
+                        self.flatten_recursive(
+                            arg,
+                            root_domain,
+                            ips_v4,
+                            ips_v6,
+                            visited,
+                            lookups,
+                            final_qualifier,
+                        )?;
                     }
                     "a" => {
                         let target = if arg.is_empty() { domain } else { arg };
@@ -137,17 +161,25 @@ impl<'a> SpfFlattener<'a> {
                         }
 
                         if !implicit_cidr.is_empty() {
-                             if implicit_cidr.contains('/') {
-                                 let p: Vec<&str> = implicit_cidr.split('/').collect();
-                                 cidr4 = p[0];
-                                 cidr6 = p[1];
-                             } else {
-                                 cidr4 = implicit_cidr;
-                             }
+                            if implicit_cidr.contains('/') {
+                                let p: Vec<&str> = implicit_cidr.split('/').collect();
+                                cidr4 = p[0];
+                                cidr6 = p[1];
+                            } else {
+                                cidr4 = implicit_cidr;
+                            }
                         }
 
-                        let cidr4_suffix = if !cidr4.is_empty() { format!("/{}", cidr4) } else { "".to_string() };
-                        let cidr6_suffix = if !cidr6.is_empty() { format!("/{}", cidr6) } else { "".to_string() };
+                        let cidr4_suffix = if !cidr4.is_empty() {
+                            format!("/{}", cidr4)
+                        } else {
+                            "".to_string()
+                        };
+                        let cidr6_suffix = if !cidr6.is_empty() {
+                            format!("/{}", cidr6)
+                        } else {
+                            "".to_string()
+                        };
 
                         Self::check_lookup_limit(lookups)?;
                         if let Ok(a_records) = self.resolver.resolve_a(target_domain) {
@@ -181,17 +213,25 @@ impl<'a> SpfFlattener<'a> {
                         }
 
                         if !implicit_cidr.is_empty() {
-                             if implicit_cidr.contains('/') {
-                                 let p: Vec<&str> = implicit_cidr.split('/').collect();
-                                 cidr4 = p[0];
-                                 cidr6 = p[1];
-                             } else {
-                                 cidr4 = implicit_cidr;
-                             }
+                            if implicit_cidr.contains('/') {
+                                let p: Vec<&str> = implicit_cidr.split('/').collect();
+                                cidr4 = p[0];
+                                cidr6 = p[1];
+                            } else {
+                                cidr4 = implicit_cidr;
+                            }
                         }
 
-                        let cidr4_suffix = if !cidr4.is_empty() { format!("/{}", cidr4) } else { "".to_string() };
-                        let cidr6_suffix = if !cidr6.is_empty() { format!("/{}", cidr6) } else { "".to_string() };
+                        let cidr4_suffix = if !cidr4.is_empty() {
+                            format!("/{}", cidr4)
+                        } else {
+                            "".to_string()
+                        };
+                        let cidr6_suffix = if !cidr6.is_empty() {
+                            format!("/{}", cidr6)
+                        } else {
+                            "".to_string()
+                        };
 
                         Self::check_lookup_limit(lookups)?;
                         if let Ok(mx_records) = self.resolver.resolve_mx(target_domain) {
@@ -222,7 +262,15 @@ impl<'a> SpfFlattener<'a> {
             }
 
             if has_redirect {
-                self.flatten_recursive(redirect_target, root_domain, ips_v4, ips_v6, visited, lookups, final_qualifier)?;
+                self.flatten_recursive(
+                    redirect_target,
+                    root_domain,
+                    ips_v4,
+                    ips_v6,
+                    visited,
+                    lookups,
+                    final_qualifier,
+                )?;
             }
         }
 

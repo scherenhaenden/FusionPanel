@@ -200,19 +200,25 @@ impl ExternalBinding {
 
         for path in [&source_path, &canonical_path, &target_path] {
             if path.contains("..") {
-                return Err(DomainError::InvalidInput("Path traversal detected in binding".into()));
+                return Err(DomainError::InvalidInput(
+                    "Path traversal detected in binding".into(),
+                ));
             }
             if path.contains('\0') {
                 return Err(DomainError::InvalidInput("Path contains NUL byte".into()));
             }
             if path.starts_with("/etc") || path.starts_with("/proc") || path.starts_with("/sys") {
-                return Err(DomainError::InvalidInput("Binding to protected system path is forbidden".into()));
+                return Err(DomainError::InvalidInput(
+                    "Binding to protected system path is forbidden".into(),
+                ));
             }
         }
 
         let review_ref = operator_review_reference.into();
         if review_ref.is_empty() {
-            return Err(DomainError::InvalidInput("Operator review reference is required for external bindings".into()));
+            return Err(DomainError::InvalidInput(
+                "Operator review reference is required for external bindings".into(),
+            ));
         }
 
         Ok(Self {

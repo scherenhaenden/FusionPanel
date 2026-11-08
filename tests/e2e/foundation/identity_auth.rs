@@ -167,7 +167,9 @@ async fn test_system_boot_and_identity_lifecycle() {
 
     // Multi-tenant isolation verification
     let tenant_b_id = TenantId::new_v4();
-    let scope_b = Scope::Tenant { tenant_id: tenant_b_id };
+    let scope_b = Scope::Tenant {
+        tenant_id: tenant_b_id,
+    };
 
     // User from Tenant A should not have access to Tenant B
     assert!(matches!(
@@ -183,8 +185,10 @@ async fn test_system_boot_and_identity_lifecycle() {
     session.revoke("User compromised");
     assert!(session.is_revoked());
     let token_revocation_res = session.validate_and_touch(chrono::Utc::now());
-    assert!(matches!(token_revocation_res, Err(IdentityError::SessionRevoked { .. })));
-
+    assert!(matches!(
+        token_revocation_res,
+        Err(IdentityError::SessionRevoked { .. })
+    ));
 }
 
 #[tokio::test]
@@ -227,7 +231,10 @@ async fn test_identity_flows_blocked() {
         ])
         .output()
         .expect("Failed to run CLI login");
-    assert!(!login_cli.status.success(), "BLOCKED capabilities must return nonzero");
+    assert!(
+        !login_cli.status.success(),
+        "BLOCKED capabilities must return nonzero"
+    );
 
     let user_cli = Command::new("cargo")
         .args([
@@ -244,10 +251,13 @@ async fn test_identity_flows_blocked() {
         ])
         .output()
         .expect("Failed to run CLI user create");
-    assert!(!user_cli.status.success(), "BLOCKED capabilities must return nonzero");
-    
+    assert!(
+        !user_cli.status.success(),
+        "BLOCKED capabilities must return nonzero"
+    );
+
     // HTTP capabilities should be BLOCKED over HTTP (404 Not Found)
-    
+
     let user_creation_res = client
         .post(format!("{}/v1/users", base_url))
         .header("Authorization", "Bearer blocked-test-token")
@@ -271,7 +281,7 @@ async fn test_identity_flows_blocked() {
         .await
         .expect("Request failed");
     assert_eq!(login_res.status(), reqwest::StatusCode::NOT_FOUND);
-    
+
     let get_tenant_res = client
         .get(format!("{}/v1/tenants/current", base_url))
         .header("Authorization", "Bearer blocked-test-token")
@@ -279,7 +289,7 @@ async fn test_identity_flows_blocked() {
         .await
         .expect("Request failed");
     assert_eq!(get_tenant_res.status(), reqwest::StatusCode::NOT_FOUND);
-    
+
     let revoke_session_res = client
         .delete(format!("{}/v1/sessions/current", base_url))
         .header("Authorization", "Bearer blocked-test-token")

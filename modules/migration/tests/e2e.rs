@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use migration::discovery::CloudPanelDiscovery;
 use std::path::Path;
 

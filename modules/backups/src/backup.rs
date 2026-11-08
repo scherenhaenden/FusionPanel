@@ -50,7 +50,9 @@ impl BackupJob {
         let dest_path = dest_file.as_ref();
 
         if !self.source_dir.exists() {
-            return Err(BackupError::SourceNotFound(self.source_dir.to_string_lossy().into_owned()));
+            return Err(BackupError::SourceNotFound(
+                self.source_dir.to_string_lossy().into_owned(),
+            ));
         }
 
         if dest_path.starts_with(&self.source_dir) {

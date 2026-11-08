@@ -1,16 +1,16 @@
 #![forbid(unsafe_code)]
 
 use clap::{Parser, Subcommand};
+use fusionpanel_control_store::{ControlStore, OwnershipMode};
+use identity::{PasswordManager, Role, RoleBinding, Scope, SqliteIdentityStore, TenantId, User};
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::path::Path;
 use std::process::ExitCode;
 use std::time::Duration;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
-use identity::{SqliteIdentityStore, PasswordManager, User, Role, RoleBinding, Scope, TenantId};
-use fusionpanel_control_store::{ControlStore, OwnershipMode};
-use std::path::Path;
 
 #[derive(Parser, Debug)]
 #[command(name = "fusionpanel-cli", version, about, long_about = None)]
@@ -38,7 +38,11 @@ enum Commands {
 #[derive(Subcommand, Debug)]
 enum BootstrapCommands {
     Operator {
-        #[arg(long, env = "FUSIONPANEL_DATABASE_URL", default_value = "./fusionpanel.db")]
+        #[arg(
+            long,
+            env = "FUSIONPANEL_DATABASE_URL",
+            default_value = "./fusionpanel.db"
+        )]
         database_url: String,
 
         #[arg(long, default_value = "admin")]
@@ -164,7 +168,11 @@ async fn run_cli(
             }
         }
         Commands::Bootstrap { command } => match command {
-            BootstrapCommands::Operator { database_url, username, password } => {
+            BootstrapCommands::Operator {
+                database_url,
+                username,
+                password,
+            } => {
                 let (pass, generated) = match password {
                     Some(p) => (p, None),
                     None => {
@@ -183,16 +191,25 @@ async fn run_cli(
                 let id_store = SqliteIdentityStore::open(db_path)?;
                 let mut ctrl_store = ControlStore::new(db_path)?; // run migrations
 
-                let user = User::new(username.clone(), format!("{}@localhost", username), password_hash)?;
+                let user = User::new(
+                    username.clone(),
+                    format!("{}@localhost", username),
+                    password_hash,
+                )?;
                 id_store.create_user(&user)?;
 
                 let tenant_id = TenantId::new_v4();
-                ctrl_store.create_resource(tenant_id.to_uuid(), tenant_id.to_uuid(), OwnershipMode::PlatformManaged, serde_json::json!({
-                    "name": "Default Tenant"
-                }))?;
+                ctrl_store.create_resource(
+                    tenant_id.to_uuid(),
+                    tenant_id.to_uuid(),
+                    OwnershipMode::PlatformManaged,
+                    serde_json::json!({
+                        "name": "Default Tenant"
+                    }),
+                )?;
 
                 let binding = RoleBinding {
-                    user_id: user.id().clone(),
+                    user_id: user.id(),
                     role: Role::super_admin(),
                     scope: Scope::Tenant { tenant_id },
                 };
@@ -217,7 +234,7 @@ async fn run_cli(
                     }
                 }
             }
-        }
+        },
     }
 
     Ok(())

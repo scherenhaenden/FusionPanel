@@ -3,11 +3,11 @@
 #[path = "../src/rate_limit.rs"]
 pub mod rate_limit;
 
+use ipnet::IpNet;
 use rate_limit::RateLimiter;
 use std::net::IpAddr;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
-use ipnet::IpNet;
 
 #[test]
 fn test_ip_based_allowance_and_rejection() {
@@ -25,11 +25,20 @@ fn test_ip_based_allowance_and_rejection() {
     let now = Instant::now();
 
     assert!(limiter.check_ip(ip, now), "First request should be allowed");
-    assert!(limiter.check_ip(ip, now), "Second request should be allowed");
-    assert!(!limiter.check_ip(ip, now), "Third request should be rejected");
+    assert!(
+        limiter.check_ip(ip, now),
+        "Second request should be allowed"
+    );
+    assert!(
+        !limiter.check_ip(ip, now),
+        "Third request should be rejected"
+    );
 
     let future = now + Duration::from_secs(61);
-    assert!(limiter.check_ip(ip, future), "Request after window reset should be allowed");
+    assert!(
+        limiter.check_ip(ip, future),
+        "Request after window reset should be allowed"
+    );
 }
 
 #[test]
@@ -47,12 +56,24 @@ fn test_key_based_allowance_and_rejection() {
     let key = "user1";
     let now = Instant::now();
 
-    assert!(limiter.check_key(key, now), "First request should be allowed");
-    assert!(limiter.check_key(key, now), "Second request should be allowed");
-    assert!(!limiter.check_key(key, now), "Third request should be rejected");
+    assert!(
+        limiter.check_key(key, now),
+        "First request should be allowed"
+    );
+    assert!(
+        limiter.check_key(key, now),
+        "Second request should be allowed"
+    );
+    assert!(
+        !limiter.check_key(key, now),
+        "Third request should be rejected"
+    );
 
     let future = now + Duration::from_secs(61);
-    assert!(limiter.check_key(key, future), "Request after window reset should be allowed");
+    assert!(
+        limiter.check_key(key, future),
+        "Request after window reset should be allowed"
+    );
 }
 
 #[test]
@@ -63,7 +84,7 @@ fn test_login_failure_progressive_delay() {
         100,
         Duration::from_secs(60),
         100,
-        2, // threshold
+        2,                       // threshold
         Duration::from_secs(10), // base delay
     );
 
@@ -76,15 +97,24 @@ fn test_login_failure_progressive_delay() {
 
     // 2nd failure
     limiter.record_login_failure(ip, now);
-    assert!(limiter.check_login_allowed(ip, now), "Allowed after 2 fails (at threshold)");
+    assert!(
+        limiter.check_login_allowed(ip, now),
+        "Allowed after 2 fails (at threshold)"
+    );
 
     // 3rd failure (exceeds threshold)
     limiter.record_login_failure(ip, now);
-    assert!(!limiter.check_login_allowed(ip, now), "Blocked after 3 fails");
+    assert!(
+        !limiter.check_login_allowed(ip, now),
+        "Blocked after 3 fails"
+    );
 
     // Check progressive delay (base_delay * 1 = 10s)
     let delay1 = now + Duration::from_secs(11);
-    assert!(limiter.check_login_allowed(ip, delay1), "Allowed after 10s delay");
+    assert!(
+        limiter.check_login_allowed(ip, delay1),
+        "Allowed after 10s delay"
+    );
 
     // 4th failure
     limiter.record_login_failure(ip, now);
@@ -92,14 +122,23 @@ fn test_login_failure_progressive_delay() {
 
     // Check progressive delay (base_delay * 2 = 20s)
     let delay2 = now + Duration::from_secs(11);
-    assert!(!limiter.check_login_allowed(ip, delay2), "Still blocked after 10s (needs 20s)");
+    assert!(
+        !limiter.check_login_allowed(ip, delay2),
+        "Still blocked after 10s (needs 20s)"
+    );
 
     let delay3 = now + Duration::from_secs(21);
-    assert!(limiter.check_login_allowed(ip, delay3), "Allowed after 20s delay");
+    assert!(
+        limiter.check_login_allowed(ip, delay3),
+        "Allowed after 20s delay"
+    );
 
     // Success resets failures
     limiter.record_login_success(ip);
-    assert!(limiter.check_login_allowed(ip, now), "Allowed immediately after success");
+    assert!(
+        limiter.check_login_allowed(ip, now),
+        "Allowed immediately after success"
+    );
 }
 
 #[test]

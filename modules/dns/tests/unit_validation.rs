@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 
 use dns::validation::{
-    validate_a, validate_aaaa, validate_caa, validate_cname, validate_mx, validate_srv, validate_txt,
-
+    validate_a, validate_aaaa, validate_caa, validate_cname, validate_mx, validate_srv,
+    validate_txt,
 };
 
 #[test]
@@ -21,7 +21,10 @@ fn test_validate_a() {
 fn test_validate_aaaa() {
     assert_eq!(validate_aaaa("2001:db8::1"), Ok(()));
     assert_eq!(validate_aaaa("::1"), Ok(()));
-    assert_eq!(validate_aaaa("2001:0db8:85a3:0000:0000:8a2e:0370:7334"), Ok(()));
+    assert_eq!(
+        validate_aaaa("2001:0db8:85a3:0000:0000:8a2e:0370:7334"),
+        Ok(())
+    );
 
     assert!(validate_aaaa("192.0.2.1").is_err()); // IPv4 in AAAA record
     assert!(validate_aaaa("not-an-ip").is_err());
@@ -75,14 +78,17 @@ fn test_validate_txt() {
 fn test_validate_caa() {
     assert_eq!(validate_caa("0 issue \"letsencrypt.org\""), Ok(()));
     assert_eq!(validate_caa("128 issuewild \"letsencrypt.org\""), Ok(()));
-    assert_eq!(validate_caa("0 iodef \"mailto:security@example.com\""), Ok(()));
+    assert_eq!(
+        validate_caa("0 iodef \"mailto:security@example.com\""),
+        Ok(())
+    );
 
     assert!(validate_caa("0 issue letsencrypt.org").is_err()); // Missing quotes
     assert!(validate_caa("issue \"letsencrypt.org\"").is_err()); // Missing flags
     assert!(validate_caa("256 issue \"letsencrypt.org\"").is_err()); // Invalid flags
     assert!(validate_caa("0 invalid_tag \"letsencrypt.org\"").is_err()); // Invalid tag format
-    // Not testing specific tag keywords like "issue", since any alphanumeric is technically valid by RFC 6844,
-    // although standard tags are issue, issuewild, iodef. The code currently checks `is_ascii_alphanumeric`.
+                                                                         // Not testing specific tag keywords like "issue", since any alphanumeric is technically valid by RFC 6844,
+                                                                         // although standard tags are issue, issuewild, iodef. The code currently checks `is_ascii_alphanumeric`.
 }
 
 #[test]

@@ -1,18 +1,18 @@
 #![forbid(unsafe_code)]
 
-pub mod collector;
 pub mod alert_notifier;
-pub mod rules;
-pub mod incident;
+pub mod collector;
+pub mod cpu_anomaly;
 pub mod governor;
+pub mod incident;
 pub mod prometheus;
-
+pub mod rules;
 
 #[cfg(test)]
 mod tests {
     use super::collector::{HostMetrics, MetricCollector};
-    use super::rules::{Rule, RuleEngine, MetricType, Operator};
     use super::incident::{Incident, IncidentState};
+    use super::rules::{MetricType, Operator, Rule, RuleEngine};
 
     #[test]
     fn test_threshold_evaluation_math() {
@@ -40,11 +40,11 @@ mod tests {
 
         assert!(rule1.evaluate(&metrics));
         assert!(!rule2.evaluate(&metrics));
-        
+
         let mut engine = RuleEngine::new();
         engine.add_rule(rule1.clone());
         engine.add_rule(rule2.clone());
-        
+
         let violated = engine.evaluate_all(&metrics);
         assert_eq!(violated.len(), 1);
         assert_eq!(violated[0].id, "cpu_alert");
@@ -57,7 +57,7 @@ mod tests {
 
         assert!(incident.acknowledge().is_ok());
         assert_eq!(incident.state, IncidentState::Acknowledged);
-        
+
         // Cannot ack twice
         assert!(incident.acknowledge().is_err());
 
@@ -74,7 +74,7 @@ mod tests {
         // Assuming we are in a normal linux container, /proc/stat exists.
         // Let's create an instance to verify it works normally.
         let collector_res = MetricCollector::new();
-        
+
         if std::path::Path::new("/proc/stat").exists() {
             assert!(collector_res.is_ok());
             let mut collector = collector_res.unwrap();

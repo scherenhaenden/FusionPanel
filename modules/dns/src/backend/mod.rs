@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use crate::domain::{DomainName, Record, RecordType, Zone};
-use crate::provider::{AppliedResult, DnssecStatus, Plan, Provider, ProviderError, RecordChange, ObservedState};
+use crate::provider::{
+    AppliedResult, DnssecStatus, ObservedState, Plan, Provider, ProviderError, RecordChange,
+};
 
 #[derive(Debug, Clone)]
 pub struct ExportedZone {
@@ -66,21 +68,31 @@ impl AuthoritativeBackend {
     pub fn restore_zone(&self, zone: Zone, serial: u32) -> Result<(), ProviderError> {
         let mut map = self.zones.lock().unwrap();
         let id = zone.id();
-        map.insert(id, ZoneState {
-            zone,
-            serial,
-            dnssec_enabled: false,
-        });
+        map.insert(
+            id,
+            ZoneState {
+                zone,
+                serial,
+                dnssec_enabled: false,
+            },
+        );
         Ok(())
     }
 
-    pub fn query(&self, zone_id: Uuid, name: &DomainName, record_type: RecordType) -> Result<Vec<Record>, ProviderError> {
+    pub fn query(
+        &self,
+        zone_id: Uuid,
+        name: &DomainName,
+        record_type: RecordType,
+    ) -> Result<Vec<Record>, ProviderError> {
         let map = self.zones.lock().unwrap();
         let state = map
             .get(&zone_id)
             .ok_or_else(|| ProviderError::InvalidInput(format!("Zone {} not found", zone_id)))?;
 
-        let records = state.zone.records()
+        let records = state
+            .zone
+            .records()
             .iter()
             .filter(|r| r.name() == name && r.record_type() == record_type)
             .cloned()
@@ -100,37 +112,55 @@ impl Provider for AuthoritativeBackend {
             Plan::CreateZone(zone) => {
                 let map = self.zones.lock().unwrap();
                 if map.contains_key(&zone.id()) {
-                    return Err(ProviderError::Conflict(format!("Zone {} already exists", zone.id())));
+                    return Err(ProviderError::Conflict(format!(
+                        "Zone {} already exists",
+                        zone.id()
+                    )));
                 }
             }
             Plan::DeleteZone(id) => {
                 let map = self.zones.lock().unwrap();
                 if !map.contains_key(id) {
-                    return Err(ProviderError::InvalidInput(format!("Zone {} not found", id)));
+                    return Err(ProviderError::InvalidInput(format!(
+                        "Zone {} not found",
+                        id
+                    )));
                 }
             }
             Plan::UpdateRecords(id, changes) => {
                 let map = self.zones.lock().unwrap();
-                let state = map.get(id).ok_or_else(|| ProviderError::InvalidInput(format!("Zone {} not found", id)))?;
+                let state = map
+                    .get(id)
+                    .ok_or_else(|| ProviderError::InvalidInput(format!("Zone {} not found", id)))?;
 
                 for change in changes {
                     match change {
                         RecordChange::Add(record) => {
                             if !record.name().is_within(state.zone.name()) {
-                                return Err(ProviderError::InvalidInput("Record outside zone".to_string()));
+                                return Err(ProviderError::InvalidInput(
+                                    "Record outside zone".to_string(),
+                                ));
                             }
                         }
                         RecordChange::Remove(record) => {
                             if !state.zone.records().contains(record) {
-                                return Err(ProviderError::Conflict("Target record not found for removal (serial conflict)".to_string()));
+                                return Err(ProviderError::Conflict(
+                                    "Target record not found for removal (serial conflict)"
+                                        .to_string(),
+                                ));
                             }
                         }
                         RecordChange::Modify { old, new } => {
                             if !state.zone.records().contains(old) {
-                                return Err(ProviderError::Conflict("Old record not found for modification (serial conflict)".to_string()));
+                                return Err(ProviderError::Conflict(
+                                    "Old record not found for modification (serial conflict)"
+                                        .to_string(),
+                                ));
                             }
                             if !new.name().is_within(state.zone.name()) {
-                                return Err(ProviderError::InvalidInput("New record outside zone".to_string()));
+                                return Err(ProviderError::InvalidInput(
+                                    "New record outside zone".to_string(),
+                                ));
                             }
                         }
                     }
@@ -146,13 +176,19 @@ impl Provider for AuthoritativeBackend {
                 let id = zone.id();
                 let mut map = self.zones.lock().unwrap();
                 if map.contains_key(&id) {
-                    return Err(ProviderError::Conflict(format!("Zone {} already exists", id)));
+                    return Err(ProviderError::Conflict(format!(
+                        "Zone {} already exists",
+                        id
+                    )));
                 }
-                map.insert(id, ZoneState {
-                    zone,
-                    serial: 1,
-                    dnssec_enabled: false,
-                });
+                map.insert(
+                    id,
+                    ZoneState {
+                        zone,
+                        serial: 1,
+                        dnssec_enabled: false,
+                    },
+                );
                 Ok(AppliedResult {
                     plan_id: Uuid::new_v4(),
                     status: "created".to_string(),
@@ -162,7 +198,10 @@ impl Provider for AuthoritativeBackend {
             Plan::DeleteZone(id) => {
                 let mut map = self.zones.lock().unwrap();
                 if map.remove(&id).is_none() {
-                    return Err(ProviderError::InvalidInput(format!("Zone {} not found", id)));
+                    return Err(ProviderError::InvalidInput(format!(
+                        "Zone {} not found",
+                        id
+                    )));
                 }
                 Ok(AppliedResult {
                     plan_id: Uuid::new_v4(),
@@ -179,12 +218,16 @@ impl Provider for AuthoritativeBackend {
                             }
                             RecordChange::Remove(record) => {
                                 if !state.zone.remove_record(&record) {
-                                    return Err(ProviderError::Conflict("Record not found for removal".to_string()));
+                                    return Err(ProviderError::Conflict(
+                                        "Record not found for removal".to_string(),
+                                    ));
                                 }
                             }
                             RecordChange::Modify { old, new } => {
                                 if !state.zone.remove_record(&old) {
-                                    return Err(ProviderError::Conflict("Old record not found for modification".to_string()));
+                                    return Err(ProviderError::Conflict(
+                                        "Old record not found for modification".to_string(),
+                                    ));
                                 }
                                 state.zone.add_record(new)?;
                             }
@@ -205,7 +248,9 @@ impl Provider for AuthoritativeBackend {
 
     fn observe_zone(&self, zone_id: Uuid) -> Result<ObservedState, ProviderError> {
         let map = self.zones.lock().unwrap();
-        let state = map.get(&zone_id).ok_or_else(|| ProviderError::InvalidInput(format!("Zone {} not found", zone_id)))?;
+        let state = map
+            .get(&zone_id)
+            .ok_or_else(|| ProviderError::InvalidInput(format!("Zone {} not found", zone_id)))?;
 
         let dnssec = if state.dnssec_enabled {
             DnssecStatus {
@@ -227,7 +272,9 @@ impl Provider for AuthoritativeBackend {
 
     fn get_dnssec_status(&self, zone_id: Uuid) -> Result<DnssecStatus, ProviderError> {
         let map = self.zones.lock().unwrap();
-        let state = map.get(&zone_id).ok_or_else(|| ProviderError::InvalidInput(format!("Zone {} not found", zone_id)))?;
+        let state = map
+            .get(&zone_id)
+            .ok_or_else(|| ProviderError::InvalidInput(format!("Zone {} not found", zone_id)))?;
 
         if state.dnssec_enabled {
             Ok(DnssecStatus {

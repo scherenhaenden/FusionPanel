@@ -250,13 +250,21 @@ mod e2e_authoritative_backend {
         backend.apply_change(create_plan).unwrap();
 
         // 2. Add a record
-        let record = Record::new(domain("www.example.com"), RecordType::A, 3600, "192.0.2.1".into()).unwrap();
+        let record = Record::new(
+            domain("www.example.com"),
+            RecordType::A,
+            3600,
+            "192.0.2.1".into(),
+        )
+        .unwrap();
         let update_plan = Plan::UpdateRecords(zone_id, vec![RecordChange::Add(record.clone())]);
         backend.plan_change(update_plan.clone()).unwrap();
         backend.apply_change(update_plan).unwrap();
 
         // 3. Query DNS directly via backend independent query
-        let query_result = backend.query(zone_id, &domain("www.example.com"), RecordType::A).unwrap();
+        let query_result = backend
+            .query(zone_id, &domain("www.example.com"), RecordType::A)
+            .unwrap();
         assert_eq!(query_result.len(), 1);
         assert_eq!(query_result[0], record);
 
@@ -285,27 +293,66 @@ mod e2e_authoritative_backend {
         }
 
         let restored_zone_id = restored_zone.id();
-        backend2.restore_zone(restored_zone, exported.serial).unwrap();
-        let restored_query = backend2.query(restored_zone_id, &domain("www.example.com"), RecordType::A).unwrap();
+        backend2
+            .restore_zone(restored_zone, exported.serial)
+            .unwrap();
+        let restored_query = backend2
+            .query(restored_zone_id, &domain("www.example.com"), RecordType::A)
+            .unwrap();
         assert_eq!(restored_query.len(), 1);
 
         // 6. Test serial conflict (Modify a stale record)
-        let stale_record = Record::new(domain("www.example.com"), RecordType::A, 3600, "192.0.2.255".into()).unwrap();
-        let new_record = Record::new(domain("www.example.com"), RecordType::A, 3600, "192.0.2.2".into()).unwrap();
-        let conflict_plan = Plan::UpdateRecords(zone_id, vec![RecordChange::Modify { old: stale_record, new: new_record }]);
+        let stale_record = Record::new(
+            domain("www.example.com"),
+            RecordType::A,
+            3600,
+            "192.0.2.255".into(),
+        )
+        .unwrap();
+        let new_record = Record::new(
+            domain("www.example.com"),
+            RecordType::A,
+            3600,
+            "192.0.2.2".into(),
+        )
+        .unwrap();
+        let conflict_plan = Plan::UpdateRecords(
+            zone_id,
+            vec![RecordChange::Modify {
+                old: stale_record,
+                new: new_record,
+            }],
+        );
 
         let plan_err = backend.plan_change(conflict_plan).unwrap_err();
-        assert!(matches!(plan_err, crate::provider::ProviderError::Conflict(_)));
+        assert!(matches!(
+            plan_err,
+            crate::provider::ProviderError::Conflict(_)
+        ));
 
         // 7. Test negative ownership (adding record outside zone)
-        let outside_record = Record::new(domain("outside.com"), RecordType::A, 3600, "192.0.2.1".into()).unwrap();
+        let outside_record = Record::new(
+            domain("outside.com"),
+            RecordType::A,
+            3600,
+            "192.0.2.1".into(),
+        )
+        .unwrap();
         let outside_plan = Plan::UpdateRecords(zone_id, vec![RecordChange::Add(outside_record)]);
         let ownership_err = backend.plan_change(outside_plan).unwrap_err();
-        assert!(matches!(ownership_err, crate::provider::ProviderError::InvalidInput(_)));
+        assert!(matches!(
+            ownership_err,
+            crate::provider::ProviderError::InvalidInput(_)
+        ));
 
         // 8. Test negative TTL (Record instantiation fails)
         // Record validation handles TTL > 2147483647
-        let invalid_ttl_res = Record::new(domain("www.example.com"), RecordType::A, 2147483648, "192.0.2.1".into());
+        let invalid_ttl_res = Record::new(
+            domain("www.example.com"),
+            RecordType::A,
+            2147483648,
+            "192.0.2.1".into(),
+        );
         assert!(invalid_ttl_res.is_err());
     }
 }

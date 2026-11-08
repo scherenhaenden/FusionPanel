@@ -55,7 +55,7 @@ impl LogRotator {
         for i in (1..=self.max_retained_files).rev() {
             let current_gz = self.rotated_gz_path(base_path, i);
             let current_uncompressed = self.rotated_path(base_path, i);
-            
+
             if i == self.max_retained_files {
                 if current_gz.exists() {
                     fs::remove_file(&current_gz)?;
@@ -66,7 +66,7 @@ impl LogRotator {
             } else {
                 let next_gz = self.rotated_gz_path(base_path, i + 1);
                 let next_uncompressed = self.rotated_path(base_path, i + 1);
-                
+
                 if current_gz.exists() {
                     fs::rename(&current_gz, &next_gz)?;
                 }
@@ -75,7 +75,7 @@ impl LogRotator {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -92,15 +92,15 @@ impl LogRotator {
     }
 
     fn compress(&self, path: &Path) -> io::Result<()> {
-        let status = Command::new("gzip")
-            .arg("-f")
-            .arg(path)
-            .status()?;
-            
+        let status = Command::new("gzip").arg("-f").arg(path).status()?;
+
         if !status.success() {
-            return Err(Error::new(ErrorKind::Other, format!("gzip failed with status: {}", status)));
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!("gzip failed with status: {}", status),
+            ));
         }
-        
+
         Ok(())
     }
 }

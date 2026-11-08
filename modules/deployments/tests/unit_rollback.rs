@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use chrono::Utc;
 use deployments::rollback::inventory::{
     AppliedResult, ObservedState, Plan, Release, ReleaseInventory, ReleaseStatus,

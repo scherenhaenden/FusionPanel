@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use adopt01::{
     Configuration, Location, ReconciliationEngine, ReconciliationResult, RouteMap, SiteType,
 };
@@ -36,7 +38,8 @@ fn test_conflict_site_type() {
     let mut web_config = default_config();
     web_config.site_type = SiteType::Proxy;
 
-    let result = ReconciliationEngine::reconcile(&panel_config, &web_config, &panel_config, &panel_config);
+    let result =
+        ReconciliationEngine::reconcile(&panel_config, &web_config, &panel_config, &panel_config);
 
     if let ReconciliationResult::Conflicts(conflicts) = &result {
         assert_eq!(conflicts.len(), 1);
@@ -56,13 +59,17 @@ fn test_conflict_root() {
     let mut web_config = default_config();
     web_config.root = "/var/www/other".to_string();
 
-    let result = ReconciliationEngine::reconcile(&panel_config, &web_config, &panel_config, &panel_config);
+    let result =
+        ReconciliationEngine::reconcile(&panel_config, &web_config, &panel_config, &panel_config);
 
     if let ReconciliationResult::Conflicts(conflicts) = &result {
         assert_eq!(conflicts.len(), 1);
         assert_eq!(conflicts[0].field, "root");
         assert_eq!(conflicts[0].panel_value, "/var/www/html");
-        assert_eq!(conflicts[0].observed_value, "web: /var/www/other, app: /var/www/html");
+        assert_eq!(
+            conflicts[0].observed_value,
+            "web: /var/www/other, app: /var/www/html"
+        );
     } else {
         panic!("Expected conflicts");
     }
@@ -77,7 +84,12 @@ fn test_conflict_upstream() {
     live_upstream.upstream_scheme = "https".to_string();
     live_upstream.upstream_port = 8443;
 
-    let result = ReconciliationEngine::reconcile(&panel_config, &panel_config, &panel_config, &live_upstream);
+    let result = ReconciliationEngine::reconcile(
+        &panel_config,
+        &panel_config,
+        &panel_config,
+        &live_upstream,
+    );
 
     if let ReconciliationResult::Conflicts(conflicts) = &result {
         assert_eq!(conflicts.len(), 2);
@@ -103,7 +115,8 @@ fn test_conflict_route_map_locations() {
         is_exact: true,
     });
 
-    let result = ReconciliationEngine::reconcile(&panel_config, &web_config, &panel_config, &panel_config);
+    let result =
+        ReconciliationEngine::reconcile(&panel_config, &web_config, &panel_config, &panel_config);
 
     if let ReconciliationResult::Conflicts(conflicts) = &result {
         assert_eq!(conflicts.len(), 1);
@@ -121,7 +134,8 @@ fn test_conflict_route_map_headers() {
     let mut web_config = default_config();
     web_config.route_map.headers.clear();
 
-    let result = ReconciliationEngine::reconcile(&panel_config, &web_config, &panel_config, &panel_config);
+    let result =
+        ReconciliationEngine::reconcile(&panel_config, &web_config, &panel_config, &panel_config);
 
     if let ReconciliationResult::Conflicts(conflicts) = &result {
         assert_eq!(conflicts.len(), 1);
@@ -139,7 +153,8 @@ fn test_conflict_aliases() {
     let mut web_config = default_config();
     web_config.aliases.push("alias.example.com".to_string());
 
-    let result = ReconciliationEngine::reconcile(&panel_config, &web_config, &panel_config, &panel_config);
+    let result =
+        ReconciliationEngine::reconcile(&panel_config, &web_config, &panel_config, &panel_config);
 
     if let ReconciliationResult::Conflicts(conflicts) = &result {
         assert_eq!(conflicts.len(), 1);

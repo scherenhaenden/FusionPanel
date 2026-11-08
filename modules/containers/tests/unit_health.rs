@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use containers::health::{HealthChecker, HealthProbePolicy, HealthState};
 use containers::logs::BoundedLogReader;
 use std::time::Duration;

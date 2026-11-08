@@ -38,8 +38,7 @@ impl PhpTuning {
         format!(
             "opcache.memory_consumption={}\n\
              opcache.revalidate_freq={}\n",
-            self.opcache_memory_consumption,
-            self.revalidate_freq
+            self.opcache_memory_consumption, self.revalidate_freq
         )
     }
 
@@ -48,9 +47,7 @@ impl PhpTuning {
             "request_slowlog_timeout = {}\n\
              request_slowlog_trace_depth = {}\n\
              slowlog = /var/log/fusionpanel/{}-slow.log\n",
-            self.request_slowlog_timeout,
-            self.trace_logging_depth,
-            site_name
+            self.request_slowlog_timeout, self.trace_logging_depth, site_name
         )
     }
 }

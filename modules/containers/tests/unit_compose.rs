@@ -1,5 +1,9 @@
+#![forbid(unsafe_code)]
+
 use containers::compose::models::PortMapping;
-use containers::compose::{parse_and_validate, parse_and_validate_with_env, validator::ValidationError, ComposeError};
+use containers::compose::{
+    parse_and_validate, parse_and_validate_with_env, validator::ValidationError, ComposeError,
+};
 use std::collections::HashMap;
 
 #[test]
@@ -212,13 +216,13 @@ services:
     volumes:
       - "./data:/var/lib/postgresql/data"
 "#;
-    
+
     let mut env = HashMap::new();
     env.insert("PORT".to_string(), "8080".to_string());
     env.insert("DB_VERSION".to_string(), "13".to_string());
 
     let result = parse_and_validate_with_env(yaml, &env).expect("Should parse and validate");
-    
+
     let web_service = result.services.get("web").unwrap();
     assert_eq!(web_service.image.as_deref(), Some("nginx:latest"));
     match &web_service.ports[0] {
@@ -240,10 +244,10 @@ services:
     environment:
       - VAR=$$ESCAPED
 "#;
-    
+
     let env = HashMap::new();
     let result = parse_and_validate_with_env(yaml, &env).expect("Should parse and validate");
-    
+
     // We don't have environment modeled in Service, but we just verify it doesn't fail parsing.
     // However, the test itself ensures no panic or error during parsing due to substitution logic
 }

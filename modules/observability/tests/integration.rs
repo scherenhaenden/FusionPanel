@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use observability::{alerts::*, incidents::*, metrics::*, probes::*};
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -57,7 +59,7 @@ fn test_tcp_probe_fail() {
 }
 
 #[test]
-fn test_tcp_probe_multiple_candidates() {
+fn test_tcp_probe_single_candidate() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     let addr = format!("127.0.0.1:{}", port);

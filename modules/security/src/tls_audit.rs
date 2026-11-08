@@ -58,7 +58,12 @@ impl TlsConfig {
         let mut weak_ciphers = Vec::new();
         for cipher in &self.ciphers {
             let upper = cipher.to_uppercase();
-            if upper.contains("CBC") || upper.contains("3DES") || upper.contains("RC4") || upper.contains("DES") || upper.contains("MD5") {
+            if upper.contains("CBC")
+                || upper.contains("3DES")
+                || upper.contains("RC4")
+                || upper.contains("DES")
+                || upper.contains("MD5")
+            {
                 weak_ciphers.push(cipher.clone());
             }
         }
@@ -74,13 +79,24 @@ impl TlsConfig {
         }
 
         deprecated_protocols.sort_by(|a, b| {
-            let a_val = match a { TlsProtocol::Tls1_0 => 1, TlsProtocol::Tls1_1 => 2, TlsProtocol::Tls1_2 => 3, TlsProtocol::Tls1_3 => 4 };
-            let b_val = match b { TlsProtocol::Tls1_0 => 1, TlsProtocol::Tls1_1 => 2, TlsProtocol::Tls1_2 => 3, TlsProtocol::Tls1_3 => 4 };
+            let a_val = match a {
+                TlsProtocol::Tls1_0 => 1,
+                TlsProtocol::Tls1_1 => 2,
+                TlsProtocol::Tls1_2 => 3,
+                TlsProtocol::Tls1_3 => 4,
+            };
+            let b_val = match b {
+                TlsProtocol::Tls1_0 => 1,
+                TlsProtocol::Tls1_1 => 2,
+                TlsProtocol::Tls1_2 => 3,
+                TlsProtocol::Tls1_3 => 4,
+            };
             a_val.cmp(&b_val)
         });
         deprecated_protocols.dedup();
 
-        let is_modern_proto = self.protocols.len() == 1 && self.protocols.contains(&TlsProtocol::Tls1_3);
+        let is_modern_proto =
+            self.protocols.len() == 1 && self.protocols.contains(&TlsProtocol::Tls1_3);
         let mut is_modern_cipher = true;
         for cipher in &self.ciphers {
             if !MODERN_CIPHERS.contains(&cipher.as_str()) {
@@ -92,7 +108,8 @@ impl TlsConfig {
 
         let is_intermediate_proto = !self.protocols.contains(&TlsProtocol::Tls1_0)
             && !self.protocols.contains(&TlsProtocol::Tls1_1)
-            && (self.protocols.contains(&TlsProtocol::Tls1_2) || self.protocols.contains(&TlsProtocol::Tls1_3));
+            && (self.protocols.contains(&TlsProtocol::Tls1_2)
+                || self.protocols.contains(&TlsProtocol::Tls1_3));
 
         let mut is_intermediate_cipher = true;
         for cipher in &self.ciphers {
@@ -101,7 +118,10 @@ impl TlsConfig {
                 break;
             }
         }
-        let is_intermediate = is_intermediate_proto && is_intermediate_cipher && !self.ciphers.is_empty() && !is_modern;
+        let is_intermediate = is_intermediate_proto
+            && is_intermediate_cipher
+            && !self.ciphers.is_empty()
+            && !is_modern;
 
         TlsAuditResult {
             is_modern,

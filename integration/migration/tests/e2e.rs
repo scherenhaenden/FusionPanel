@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use integration_migration::executor::{MigrationExecutor, MigrationState};
 use migration::inventory::{InventoryItem, InventoryItemType, MigrationInventory};
 use std::fs;
@@ -41,14 +43,15 @@ fn create_valid_inventory() -> MigrationInventory {
 }
 
 #[test]
-fn test_successful_migration_apply() {
+fn test_apply_fails_closed_without_qualified_runtime_adapters() {
     let work_dir = setup_temp_dir();
     let mut executor = MigrationExecutor::new(work_dir.path().to_path_buf());
 
     let inventory = create_valid_inventory();
 
-    executor.execute(&inventory).unwrap();
-    assert_eq!(*executor.get_state(), MigrationState::Cutover);
+    let error = executor.execute(&inventory).unwrap_err();
+    assert!(error.starts_with("BLOCKED: no qualified source export"));
+    assert_eq!(*executor.get_state(), MigrationState::Blocked);
     assert!(!work_dir.path().join(".recovery-marker").exists());
 }
 
@@ -62,13 +65,15 @@ fn test_interrupted_apply_restart() {
     let mut executor = MigrationExecutor::new(work_path.clone());
     let inventory = create_valid_inventory();
 
-    executor.execute(&inventory).unwrap();
-    assert_eq!(*executor.get_state(), MigrationState::Cutover);
-    assert!(!work_path.join(".recovery-marker").exists());
+    let error = executor.execute(&inventory).unwrap_err();
+    assert!(error.starts_with("BLOCKED: recovery marker"));
+    assert_eq!(*executor.get_state(), MigrationState::Blocked);
+    assert!(work_path.join(".recovery-marker").exists());
 
-    executor.execute(&inventory).unwrap();
-    assert_eq!(*executor.get_state(), MigrationState::Cutover);
-    assert!(!work_path.join(".recovery-marker").exists());
+    let retry_error = executor.execute(&inventory).unwrap_err();
+    assert!(retry_error.starts_with("BLOCKED: recovery marker"));
+    assert_eq!(*executor.get_state(), MigrationState::Blocked);
+    assert!(work_path.join(".recovery-marker").exists());
 }
 
 #[test]
@@ -106,8 +111,9 @@ fn test_rollback() {
 
     fs::write(work_path.join(".recovery-marker"), "checkpoint").unwrap();
 
-    executor.rollback().unwrap();
+    let error = executor.rollback().unwrap_err();
 
-    assert_eq!(*executor.get_state(), MigrationState::RolledBack);
-    assert!(!work_path.join(".recovery-marker").exists());
+    assert!(error.starts_with("BLOCKED: no qualified source/target rollback adapter"));
+    assert_eq!(*executor.get_state(), MigrationState::Blocked);
+    assert!(work_path.join(".recovery-marker").exists());
 }

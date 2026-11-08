@@ -18,7 +18,7 @@ pub fn generate_static_site_config(domain: &str, document_root: &str, port: u16)
     let escaped_root = escape_nginx_string(document_root);
 
     format!(
-r#"server {{
+        r#"server {{
     listen {port};
     server_name "{escaped_domain}";
     root "{escaped_root}";

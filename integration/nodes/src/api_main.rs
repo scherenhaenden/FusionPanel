@@ -6,12 +6,13 @@ use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() {
-    let token = std::env::var("FUSIONPANEL_ADMIN_TOKEN")
-        .expect("FUSIONPANEL_ADMIN_TOKEN must be set");
+    let token =
+        std::env::var("FUSIONPANEL_ADMIN_TOKEN").expect("FUSIONPANEL_ADMIN_TOKEN must be set");
     if token.is_empty() {
         panic!("FUSIONPANEL_ADMIN_TOKEN must not be empty");
     }
-    let listen = std::env::var("FUSIONPANEL_LISTEN").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
+    let listen =
+        std::env::var("FUSIONPANEL_LISTEN").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
     let state = Arc::new(AppState { token });
 
     let app = create_router(state);

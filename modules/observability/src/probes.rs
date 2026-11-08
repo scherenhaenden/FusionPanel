@@ -1,5 +1,5 @@
 use reqwest::blocking::Client;
-use std::net::{TcpStream, ToSocketAddrs};
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::time::{Duration, Instant};
 
 fn bounded_attempt_timeout(
@@ -66,6 +66,14 @@ pub fn check_tcp(address: &str, timeout_secs: u64) -> ProbeResult {
         }
     };
 
+    check_tcp_candidates(&addrs, start, total_timeout)
+}
+
+fn check_tcp_candidates(
+    addrs: &[SocketAddr],
+    start: Instant,
+    total_timeout: Duration,
+) -> ProbeResult {
     if addrs.is_empty() {
         return ProbeResult {
             success: false,
@@ -85,7 +93,7 @@ pub fn check_tcp(address: &str, timeout_secs: u64) -> ProbeResult {
         }
     };
 
-    for addr in &addrs {
+    for addr in addrs {
         let elapsed = start.elapsed();
         if elapsed >= total_timeout {
             return ProbeResult {
@@ -131,8 +139,28 @@ pub fn check_tcp(address: &str, timeout_secs: u64) -> ProbeResult {
 
 #[cfg(test)]
 mod tests {
-    use super::bounded_attempt_timeout;
-    use std::time::Duration;
+    use super::{bounded_attempt_timeout, check_tcp_candidates};
+    use std::net::{SocketAddr, TcpListener};
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn tcp_probe_tries_next_candidate_after_first_candidate_fails() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let reachable = listener.local_addr().unwrap();
+        let accept_thread = thread::spawn(move || listener.accept().unwrap());
+        let unreachable: SocketAddr = "127.0.0.1:0".parse().unwrap();
+
+        let result = check_tcp_candidates(
+            &[unreachable, reachable],
+            Instant::now(),
+            Duration::from_secs(1),
+        );
+
+        assert!(result.success, "probe failed: {:?}", result.error);
+        assert!(result.latency_ms < 1_000);
+        accept_thread.join().unwrap();
+    }
 
     #[test]
     fn tcp_candidate_budget_is_capped_by_remaining_probe_deadline() {

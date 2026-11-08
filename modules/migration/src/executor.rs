@@ -159,19 +159,35 @@ mod tests {
     impl MigrationAdapter for MockAdapter {
         fn create_user(&mut self, name: &str) -> Result<(), String> {
             self.calls.push(format!("create_user:{}", name));
-            if self.user_fail { Err("user fail".to_string()) } else { Ok(()) }
+            if self.user_fail {
+                Err("user fail".to_string())
+            } else {
+                Ok(())
+            }
         }
         fn create_database(&mut self, name: &str) -> Result<(), String> {
             self.calls.push(format!("create_database:{}", name));
-            if self.db_fail { Err("db fail".to_string()) } else { Ok(()) }
+            if self.db_fail {
+                Err("db fail".to_string())
+            } else {
+                Ok(())
+            }
         }
         fn create_site(&mut self, name: &str) -> Result<(), String> {
             self.calls.push(format!("create_site:{}", name));
-            if self.site_fail { Err("site fail".to_string()) } else { Ok(()) }
+            if self.site_fail {
+                Err("site fail".to_string())
+            } else {
+                Ok(())
+            }
         }
         fn delete_user(&mut self, name: &str) -> Result<(), String> {
             self.calls.push(format!("delete_user:{}", name));
-            if self.rollback_user_fail { Err("rollback fail".to_string()) } else { Ok(()) }
+            if self.rollback_user_fail {
+                Err("rollback fail".to_string())
+            } else {
+                Ok(())
+            }
         }
         fn delete_database(&mut self, name: &str) -> Result<(), String> {
             self.calls.push(format!("delete_database:{}", name));
@@ -218,18 +234,24 @@ mod tests {
         let mut adapter = MockAdapter::new();
         let mut executor = MigrationExecutor::new(&mut adapter);
         let plan = create_plan();
-        
+
         let result = executor.execute(&plan);
         assert!(result.success);
         assert!(result.decommission_attested);
         assert_eq!(result.records.len(), 3);
-        assert!(result.records.iter().all(|r| r.status == ExecutionStatus::Success));
-        
-        assert_eq!(adapter.calls, vec![
-            "create_user:admin",
-            "create_database:db1",
-            "create_site:site1",
-        ]);
+        assert!(result
+            .records
+            .iter()
+            .all(|r| r.status == ExecutionStatus::Success));
+
+        assert_eq!(
+            adapter.calls,
+            vec![
+                "create_user:admin",
+                "create_database:db1",
+                "create_site:site1",
+            ]
+        );
     }
 
     #[test]
@@ -238,23 +260,26 @@ mod tests {
         adapter.site_fail = true;
         let mut executor = MigrationExecutor::new(&mut adapter);
         let plan = create_plan();
-        
+
         let result = executor.execute(&plan);
         assert!(!result.success);
         assert!(!result.decommission_attested);
-        
+
         assert_eq!(result.records.len(), 3);
         assert_eq!(result.records[0].status, ExecutionStatus::RolledBack);
         assert_eq!(result.records[1].status, ExecutionStatus::RolledBack);
         assert_eq!(result.records[2].status, ExecutionStatus::Failed);
-        
-        assert_eq!(adapter.calls, vec![
-            "create_user:admin",
-            "create_database:db1",
-            "create_site:site1",
-            "delete_database:db1",
-            "delete_user:admin",
-        ]);
+
+        assert_eq!(
+            adapter.calls,
+            vec![
+                "create_user:admin",
+                "create_database:db1",
+                "create_site:site1",
+                "delete_database:db1",
+                "delete_user:admin",
+            ]
+        );
     }
 
     #[test]
@@ -262,22 +287,25 @@ mod tests {
         let mut adapter = MockAdapter::new();
         adapter.db_fail = true;
         adapter.rollback_user_fail = true;
-        
+
         let mut executor = MigrationExecutor::new(&mut adapter);
         let plan = create_plan();
-        
+
         let result = executor.execute(&plan);
         assert!(!result.success);
-        
+
         assert_eq!(result.records.len(), 2);
-        assert_eq!(result.records[0].status, ExecutionStatus::RollbackFailed); 
+        assert_eq!(result.records[0].status, ExecutionStatus::RollbackFailed);
         assert_eq!(result.records[1].status, ExecutionStatus::Failed);
-        
-        assert_eq!(adapter.calls, vec![
-            "create_user:admin",
-            "create_database:db1",
-            "delete_user:admin",
-        ]);
+
+        assert_eq!(
+            adapter.calls,
+            vec![
+                "create_user:admin",
+                "create_database:db1",
+                "delete_user:admin",
+            ]
+        );
     }
 
     #[test]
@@ -286,7 +314,7 @@ mod tests {
         let mut executor = MigrationExecutor::new(&mut adapter);
         let mut plan = create_plan();
         plan.is_dry_run = true;
-        
+
         let result = executor.execute(&plan);
         assert!(result.success);
         assert!(result.records.is_empty());

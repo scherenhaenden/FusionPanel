@@ -49,8 +49,16 @@ pub fn handle_request(req: AgentRequest) -> AgentResponse {
             error: None,
         },
         "site.validate" => {
-            let domain = req.payload.get("domain").and_then(|v| v.as_str()).unwrap_or("");
-            let docroot = req.payload.get("document_root").and_then(|v| v.as_str()).unwrap_or("");
+            let domain = req
+                .payload
+                .get("domain")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let docroot = req
+                .payload
+                .get("document_root")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
 
             if domain.is_empty() || docroot.is_empty() {
                 return AgentResponse {
@@ -64,8 +72,12 @@ pub fn handle_request(req: AgentRequest) -> AgentResponse {
                 };
             }
 
-            if domain.contains("..") || docroot.contains("..") || docroot.contains("\0") || !docroot.starts_with("/srv/fusionpanel/sites/") {
-                 return AgentResponse {
+            if domain.contains("..")
+                || docroot.contains("..")
+                || docroot.contains("\0")
+                || !docroot.starts_with("/srv/fusionpanel/sites/")
+            {
+                return AgentResponse {
                     version: 1,
                     request_id: req.request_id,
                     result: None,
@@ -84,7 +96,7 @@ pub fn handle_request(req: AgentRequest) -> AgentResponse {
                 })),
                 error: None,
             }
-        },
+        }
         _ => AgentResponse {
             version: 1,
             request_id: req.request_id,
@@ -93,6 +105,6 @@ pub fn handle_request(req: AgentRequest) -> AgentResponse {
                 code: "unsupported_operation".to_string(),
                 message: "Unsupported operation".to_string(),
             }),
-        }
+        },
     }
 }

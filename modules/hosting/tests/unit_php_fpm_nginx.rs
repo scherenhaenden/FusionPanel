@@ -3,9 +3,9 @@
 #[path = "../src/nginx/php_fpm.rs"]
 mod php_fpm;
 
-use hosting::domain::{SiteConfig, HostingSpec, PhpConfig, StaticConfig};
-use hosting::domain::identity::{SiteId, TenantId, ResourceOwner};
-use hosting::domain::validation::{DomainName, PhpVersion, PoolName, MemoryLimit};
+use hosting::domain::identity::{ResourceOwner, SiteId, TenantId};
+use hosting::domain::validation::{DomainName, MemoryLimit, PhpVersion, PoolName};
+use hosting::domain::{HostingSpec, PhpConfig, SiteConfig, StaticConfig};
 use std::convert::TryInto;
 use uuid::Uuid;
 
@@ -36,7 +36,8 @@ fn create_mock_site(is_php: bool) -> SiteConfig {
         ResourceOwner::PanelOwned { tenant_id },
         "test-user".to_string().try_into().unwrap(),
         vec![],
-    ).unwrap()
+    )
+    .unwrap()
 }
 
 #[test]
@@ -56,7 +57,10 @@ fn test_generate_nginx_php_fpm_config_valid() {
     assert!(config.contains("client_max_body_size"));
 
     // Check socket path isolation
-    assert!(config.contains(&format!("fastcgi_pass unix:/run/php/php-fpm-{}.sock;", site_id)));
+    assert!(config.contains(&format!(
+        "fastcgi_pass unix:/run/php/php-fpm-{}.sock;",
+        site_id
+    )));
 }
 
 #[test]

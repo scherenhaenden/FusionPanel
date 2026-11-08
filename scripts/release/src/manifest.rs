@@ -96,7 +96,9 @@ mod tests {
         };
         assert_eq!(
             manifest.validate(),
-            Err(ManifestError::InvalidComponent("fusionpanel-api".to_string()))
+            Err(ManifestError::InvalidComponent(
+                "fusionpanel-api".to_string()
+            ))
         );
     }
 

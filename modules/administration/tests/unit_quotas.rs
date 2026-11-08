@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use administration::quotas::{QuotaEngine, QuotaError, ResourceQuotas};
 use uuid::Uuid;
 

@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use administration::teams::invitation::{Invitation, InvitationError, Role};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;

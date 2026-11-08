@@ -114,17 +114,19 @@ impl Node {
 
         Ok(Self {
             id: Uuid::new_v4(),
-            state: NodeState::Invited { enrollment_token: uuid::Uuid::new_v4().to_string(),
+            state: NodeState::Invited {
+                enrollment_token: uuid::Uuid::new_v4().to_string(),
                 invited_at: now,
                 expires_at,
             },
         })
     }
 
-
     pub fn enrollment_token(&self) -> Option<&str> {
         match &self.state {
-            NodeState::Invited { enrollment_token, .. } => Some(enrollment_token.as_str()),
+            NodeState::Invited {
+                enrollment_token, ..
+            } => Some(enrollment_token.as_str()),
             _ => None,
         }
     }
@@ -145,7 +147,13 @@ impl Node {
         }
     }
 
-    pub fn enroll(&mut self, node_id: Uuid, key_identity: String, ownership: NodeOwnership, token: String) -> Result<(), StateError> {
+    pub fn enroll(
+        &mut self,
+        node_id: Uuid,
+        key_identity: String,
+        ownership: NodeOwnership,
+        token: String,
+    ) -> Result<(), StateError> {
         self.enroll_at(Utc::now(), node_id, key_identity, ownership, token)
     }
 
@@ -162,7 +170,11 @@ impl Node {
         }
 
         match &self.state {
-            NodeState::Invited { expires_at, enrollment_token, .. } => {
+            NodeState::Invited {
+                expires_at,
+                enrollment_token,
+                ..
+            } => {
                 if now >= *expires_at {
                     return Err(StateError::InvitationExpired);
                 }
@@ -215,8 +227,12 @@ impl Node {
 
     pub fn is_heartbeat_expired(&self, timeout_seconds: i64) -> bool {
         match &self.state {
-            NodeState::Enrolled { last_heartbeat: Some(hb), .. } => {
-                let timeout_duration = chrono::Duration::try_seconds(timeout_seconds).unwrap_or_else(|| chrono::Duration::seconds(0));
+            NodeState::Enrolled {
+                last_heartbeat: Some(hb),
+                ..
+            } => {
+                let timeout_duration = chrono::Duration::try_seconds(timeout_seconds)
+                    .unwrap_or_else(|| chrono::Duration::seconds(0));
                 let now = Utc::now();
                 if let Some(expiry) = hb.checked_add_signed(timeout_duration) {
                     now > expiry
@@ -239,7 +255,6 @@ impl Node {
         }
     }
 
-
     pub fn update_status(&mut self, new_status: NodeStatus) -> Result<(), StateError> {
         match &mut self.state {
             NodeState::Enrolled { status, .. } => {
@@ -252,8 +267,12 @@ impl Node {
     }
 
     pub fn report_capacity(&mut self, new_capacity: NodeCapacity) -> Result<(), StateError> {
-        if !new_capacity.cpu.is_finite() || new_capacity.cpu < 0.0 || !new_capacity.memory.is_finite() || new_capacity.memory < 0.0 {
-             return Err(StateError::InvalidCapacity);
+        if !new_capacity.cpu.is_finite()
+            || new_capacity.cpu < 0.0
+            || !new_capacity.memory.is_finite()
+            || new_capacity.memory < 0.0
+        {
+            return Err(StateError::InvalidCapacity);
         }
 
         match &mut self.state {
@@ -268,8 +287,13 @@ impl Node {
 
     pub fn evaluate_health(&mut self, timeout_seconds: i64) -> Result<(), StateError> {
         match &mut self.state {
-            NodeState::Enrolled { last_heartbeat: Some(hb), status, .. } => {
-                let timeout_duration = chrono::Duration::try_seconds(timeout_seconds).unwrap_or_else(|| chrono::Duration::seconds(0));
+            NodeState::Enrolled {
+                last_heartbeat: Some(hb),
+                status,
+                ..
+            } => {
+                let timeout_duration = chrono::Duration::try_seconds(timeout_seconds)
+                    .unwrap_or_else(|| chrono::Duration::seconds(0));
                 let now = Utc::now();
                 if let Some(expiry) = hb.checked_add_signed(timeout_duration) {
                     if now > expiry {
@@ -325,7 +349,13 @@ mod tests {
         };
 
         assert_eq!(
-            node.enroll_at(expires_at, Uuid::new_v4(), "key-identity-123".to_string(), NodeOwnership::Managed, node.enrollment_token().unwrap().to_string()),
+            node.enroll_at(
+                expires_at,
+                Uuid::new_v4(),
+                "key-identity-123".to_string(),
+                NodeOwnership::Managed,
+                node.enrollment_token().unwrap().to_string()
+            ),
             Err(StateError::InvitationExpired)
         );
         assert!(matches!(node.state(), NodeState::Invited { .. }));
@@ -336,7 +366,12 @@ mod tests {
         for key_identity in [String::new(), "   ".to_string()] {
             let mut node = Node::new_invited(24).unwrap();
             assert_eq!(
-                node.enroll(Uuid::new_v4(), key_identity, NodeOwnership::Managed, node.enrollment_token().unwrap().to_string()),
+                node.enroll(
+                    Uuid::new_v4(),
+                    key_identity,
+                    NodeOwnership::Managed,
+                    node.enrollment_token().unwrap().to_string()
+                ),
                 Err(StateError::EmptyKeyIdentity)
             );
             assert!(matches!(node.state(), NodeState::Invited { .. }));
@@ -347,8 +382,13 @@ mod tests {
     fn revocation_preserves_enrolled_identity_for_revocation_checks() {
         let node_id = Uuid::new_v4();
         let mut node = Node::new_invited(24).unwrap();
-        node.enroll(node_id, "key-fingerprint-123".to_string(), NodeOwnership::Managed, node.enrollment_token().unwrap().to_string())
-            .unwrap();
+        node.enroll(
+            node_id,
+            "key-fingerprint-123".to_string(),
+            NodeOwnership::Managed,
+            node.enrollment_token().unwrap().to_string(),
+        )
+        .unwrap();
         let enrolled_identity = node.identity().unwrap().clone();
 
         node.revoke("compromised".to_string()).unwrap();
@@ -370,18 +410,29 @@ mod tests {
         node.revoke("invitation withdrawn".to_string()).unwrap();
 
         assert_eq!(
-            node.enroll(Uuid::new_v4(), "key-identity-123".to_string(), NodeOwnership::Managed, "some-token".to_string()),
+            node.enroll(
+                Uuid::new_v4(),
+                "key-identity-123".to_string(),
+                NodeOwnership::Managed,
+                "some-token".to_string()
+            ),
             Err(StateError::AlreadyRevoked)
         );
     }
 }
 
-    #[test]
-    fn ha_enable_returns_unsupported() {
-        let mut node = Node::new_invited(24).unwrap();
-        node.enroll(Uuid::new_v4(), "key-identity-123".to_string(), NodeOwnership::Managed, node.enrollment_token().unwrap().to_string()).unwrap();
-        assert_eq!(node.enable_ha(), Err(StateError::UnsupportedHa));
-    }
+#[test]
+fn ha_enable_returns_unsupported() {
+    let mut node = Node::new_invited(24).unwrap();
+    node.enroll(
+        Uuid::new_v4(),
+        "key-identity-123".to_string(),
+        NodeOwnership::Managed,
+        node.enrollment_token().unwrap().to_string(),
+    )
+    .unwrap();
+    assert_eq!(node.enable_ha(), Err(StateError::UnsupportedHa));
+}
 
 #[cfg(test)]
 mod tests2 {
@@ -391,7 +442,12 @@ mod tests2 {
     fn invalid_enrollment_token_fails() {
         let mut node = Node::new_invited(24).unwrap();
         assert_eq!(
-            node.enroll(Uuid::new_v4(), "key".to_string(), NodeOwnership::Managed, "wrong-token".to_string()),
+            node.enroll(
+                Uuid::new_v4(),
+                "key".to_string(),
+                NodeOwnership::Managed,
+                "wrong-token".to_string()
+            ),
             Err(StateError::InvalidToken)
         );
         assert!(matches!(node.state(), NodeState::Invited { .. }));
@@ -400,7 +456,13 @@ mod tests2 {
     #[test]
     fn can_update_status_and_report_capacity() {
         let mut node = Node::new_invited(24).unwrap();
-        node.enroll(Uuid::new_v4(), "key".to_string(), NodeOwnership::Managed, node.enrollment_token().unwrap().to_string()).unwrap();
+        node.enroll(
+            Uuid::new_v4(),
+            "key".to_string(),
+            NodeOwnership::Managed,
+            node.enrollment_token().unwrap().to_string(),
+        )
+        .unwrap();
 
         assert_eq!(node.update_status(NodeStatus::Draining), Ok(()));
         match node.state() {
@@ -424,34 +486,70 @@ mod tests2 {
     #[test]
     fn invalid_capacity_is_rejected() {
         let mut node = Node::new_invited(24).unwrap();
-        node.enroll(Uuid::new_v4(), "key".to_string(), NodeOwnership::Managed, node.enrollment_token().unwrap().to_string()).unwrap();
+        node.enroll(
+            Uuid::new_v4(),
+            "key".to_string(),
+            NodeOwnership::Managed,
+            node.enrollment_token().unwrap().to_string(),
+        )
+        .unwrap();
 
         let mut bad_cpu = NodeCapacity::default();
         bad_cpu.cpu = -1.0;
-        assert_eq!(node.report_capacity(bad_cpu), Err(StateError::InvalidCapacity));
+        assert_eq!(
+            node.report_capacity(bad_cpu),
+            Err(StateError::InvalidCapacity)
+        );
 
         let mut nan_cpu = NodeCapacity::default();
         nan_cpu.cpu = f64::NAN;
-        assert_eq!(node.report_capacity(nan_cpu), Err(StateError::InvalidCapacity));
+        assert_eq!(
+            node.report_capacity(nan_cpu),
+            Err(StateError::InvalidCapacity)
+        );
     }
 
     #[test]
     fn status_and_capacity_fail_on_unenrolled_nodes() {
         let mut node = Node::new_invited(24).unwrap();
-        assert_eq!(node.update_status(NodeStatus::Active), Err(StateError::NotEnrolled));
-        assert_eq!(node.report_capacity(NodeCapacity::default()), Err(StateError::NotEnrolled));
+        assert_eq!(
+            node.update_status(NodeStatus::Active),
+            Err(StateError::NotEnrolled)
+        );
+        assert_eq!(
+            node.report_capacity(NodeCapacity::default()),
+            Err(StateError::NotEnrolled)
+        );
 
-        node.enroll(Uuid::new_v4(), "key".to_string(), NodeOwnership::Managed, node.enrollment_token().unwrap().to_string()).unwrap();
+        node.enroll(
+            Uuid::new_v4(),
+            "key".to_string(),
+            NodeOwnership::Managed,
+            node.enrollment_token().unwrap().to_string(),
+        )
+        .unwrap();
         node.revoke("reason".to_string()).unwrap();
 
-        assert_eq!(node.update_status(NodeStatus::Active), Err(StateError::AlreadyRevoked));
-        assert_eq!(node.report_capacity(NodeCapacity::default()), Err(StateError::AlreadyRevoked));
+        assert_eq!(
+            node.update_status(NodeStatus::Active),
+            Err(StateError::AlreadyRevoked)
+        );
+        assert_eq!(
+            node.report_capacity(NodeCapacity::default()),
+            Err(StateError::AlreadyRevoked)
+        );
     }
 
     #[test]
     fn evaluate_health_marks_offline_when_heartbeat_expired() {
         let mut node = Node::new_invited(24).unwrap();
-        node.enroll(Uuid::new_v4(), "key".to_string(), NodeOwnership::Managed, node.enrollment_token().unwrap().to_string()).unwrap();
+        node.enroll(
+            Uuid::new_v4(),
+            "key".to_string(),
+            NodeOwnership::Managed,
+            node.enrollment_token().unwrap().to_string(),
+        )
+        .unwrap();
 
         // Expire heartbeat manually
         match &mut node.state {
@@ -474,14 +572,18 @@ mod tests2 {
         let old_invited = r#"{"id":"00000000-0000-0000-0000-000000000000","state":{"Invited":{"invited_at":"2023-01-01T00:00:00Z","expires_at":"2023-01-02T00:00:00Z"}}}"#;
         let node: Node = serde_json::from_str(old_invited).unwrap();
         match node.state() {
-            NodeState::Invited { enrollment_token, .. } => assert_eq!(enrollment_token, ""),
+            NodeState::Invited {
+                enrollment_token, ..
+            } => assert_eq!(enrollment_token, ""),
             _ => panic!("Expected Invited"),
         }
 
         let old_enrolled = r#"{"id":"00000000-0000-0000-0000-000000000000","state":{"Enrolled":{"enrolled_at":"2023-01-01T00:00:00Z","identity":{"node_id":"00000000-0000-0000-0000-000000000000","key_identity":"key"},"ownership":"Managed","last_heartbeat":null}}}"#;
         let node: Node = serde_json::from_str(old_enrolled).unwrap();
         match node.state() {
-            NodeState::Enrolled { status, capacity, .. } => {
+            NodeState::Enrolled {
+                status, capacity, ..
+            } => {
                 assert_eq!(*status, NodeStatus::Active);
                 assert_eq!(*capacity, NodeCapacity::default());
             }

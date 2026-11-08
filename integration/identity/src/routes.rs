@@ -69,7 +69,7 @@ async fn login_handler(
         }
     };
 
-    if let Err(_) = PasswordManager::verify_password(&payload.password, user.password_hash()) {
+    if PasswordManager::verify_password(&payload.password, user.password_hash()).is_err() {
         println!(
             "AUDIT EVENT: Failed password verification for username: {}",
             payload.username
@@ -92,7 +92,7 @@ async fn login_handler(
         error: "Internal error creating session".into(),
     })?;
 
-    if let Err(_) = store.save_session(&session) {
+    if store.save_session(&session).is_err() {
         return Err(ErrorResponse {
             error: "Internal error saving session".into(),
         });
@@ -128,7 +128,7 @@ async fn refresh_handler(
     let store = state.store.lock().await;
 
     let now = chrono::Utc::now();
-    if let Err(_) = store.update_session_touch(session_id, now) {
+    if store.update_session_touch(session_id, now).is_err() {
         return Err(ErrorResponse {
             error: "Session expired or revoked".into(),
         });

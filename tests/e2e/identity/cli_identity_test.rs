@@ -134,4 +134,3 @@ async fn test_cli_integration() {
     assert!(caps_stdout.contains("Capabilities:"));
     assert!(caps_stdout.contains("- control-plane.health.read"));
 }
-

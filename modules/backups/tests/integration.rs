@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use backups::backup::BackupJob;
 use backups::error::BackupError;
 use backups::models::{BackupType, DbInfo, FileInfo, Manifest, RetentionPolicy};
@@ -39,7 +41,8 @@ fn test_full_backup_and_restore_cycle() {
     assert_eq!(manifest.files.len(), 2);
     assert_eq!(manifest.databases.len(), 1);
 
-    let restored_manifest = restore_archive(&archive_path, restore_dir.path()).expect("Restore failed");
+    let restored_manifest =
+        restore_archive(&archive_path, restore_dir.path()).expect("Restore failed");
     assert_eq!(manifest.backup_id, restored_manifest.backup_id);
 
     let restored_file1 = fs::read_to_string(restore_dir.path().join("file1.txt")).unwrap();
@@ -121,10 +124,14 @@ fn test_tamper_detection() {
 
     // Check if error is SizeMismatch or ChecksumMismatch
     match result {
-        Err(BackupError::SizeMismatch { path, .. }) | Err(BackupError::ChecksumMismatch { path, .. }) => {
+        Err(BackupError::SizeMismatch { path, .. })
+        | Err(BackupError::ChecksumMismatch { path, .. }) => {
             assert_eq!(path, "file1.txt");
         }
-        _ => panic!("Expected SizeMismatch or ChecksumMismatch error, got {:?}", result),
+        _ => panic!(
+            "Expected SizeMismatch or ChecksumMismatch error, got {:?}",
+            result
+        ),
     }
 
     // Ensure the corrupted file was not written to target
@@ -455,7 +462,8 @@ fn test_restore_transactional_rollback() {
         fault_inject_error_after: Some(1), // Fail after restoring 1 file
     };
 
-    let result = backups::restore::restore_archive_with_options(&archive_path, restore_dir.path(), &options);
+    let result =
+        backups::restore::restore_archive_with_options(&archive_path, restore_dir.path(), &options);
 
     assert!(matches!(result, Err(BackupError::FaultInjected)));
 
@@ -490,7 +498,8 @@ fn test_selective_restore() {
         fault_inject_error_after: None,
     };
 
-    let result = backups::restore::restore_archive_with_options(&archive_path, restore_dir.path(), &options);
+    let result =
+        backups::restore::restore_archive_with_options(&archive_path, restore_dir.path(), &options);
     assert!(result.is_ok());
 
     assert!(!restore_dir.path().join("file1.txt").exists());
@@ -500,9 +509,9 @@ fn test_selective_restore() {
 
 #[test]
 fn test_retention_identifies_true_backups_without_extensions() {
-    use std::time::{Duration, SystemTime};
-    use backups::retention::apply_retention_policy;
     use backups::models::RetentionPolicy;
+    use backups::retention::apply_retention_policy;
+    use std::time::{Duration, SystemTime};
 
     let source_dir = TempDir::new().unwrap();
     let backup_dir = TempDir::new().unwrap();
@@ -517,7 +526,8 @@ fn test_retention_identifies_true_backups_without_extensions() {
     job.execute(&valid_backup_path).expect("Backup failed");
 
     // Modify time to be old
-    let old_time = filetime::FileTime::from_system_time(SystemTime::now() - Duration::from_secs(86400 * 10));
+    let old_time =
+        filetime::FileTime::from_system_time(SystemTime::now() - Duration::from_secs(86400 * 10));
     filetime::set_file_times(&valid_backup_path, old_time, old_time).unwrap();
 
     // Create a fake backup with a .zst extension that is actually empty

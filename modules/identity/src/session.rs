@@ -108,6 +108,9 @@ impl Session {
         })
     }
 
+    // Persistence reconstruction requires every stored session field to be
+    // supplied so validation runs against the exact persisted state.
+    #[allow(clippy::too_many_arguments)]
     pub fn from_persisted(
         id: SessionId,
         user_id: UserId,

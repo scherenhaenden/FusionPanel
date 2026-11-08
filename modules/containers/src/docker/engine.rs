@@ -37,13 +37,15 @@ impl ContainerEngine for DockerCliEngine {
 
         // Ports
         for port in &spec.ports {
-            cmd.arg("-p").arg(format!("{}:{}", port.host_port(), port.container_port()));
+            cmd.arg("-p")
+                .arg(format!("{}:{}", port.host_port(), port.container_port()));
         }
 
         // Mounts
         for mount in &spec.mounts {
             let ro_str = if mount.read_only() { "ro" } else { "rw" };
-            cmd.arg("-v").arg(format!("{}:{}:{}", mount.source(), mount.target(), ro_str));
+            cmd.arg("-v")
+                .arg(format!("{}:{}:{}", mount.source(), mount.target(), ro_str));
         }
 
         cmd.arg(spec.image.as_str());
@@ -60,7 +62,10 @@ impl ContainerEngine for DockerCliEngine {
 
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
-            return Err(DomainError::EngineError(format!("docker create failed: {}", err)));
+            return Err(DomainError::EngineError(format!(
+                "docker create failed: {}",
+                err
+            )));
         }
 
         Ok(())
@@ -77,7 +82,10 @@ impl ContainerEngine for DockerCliEngine {
 
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
-            return Err(DomainError::EngineError(format!("docker start failed: {}", err)));
+            return Err(DomainError::EngineError(format!(
+                "docker start failed: {}",
+                err
+            )));
         }
 
         Ok(())
@@ -94,7 +102,10 @@ impl ContainerEngine for DockerCliEngine {
 
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
-            return Err(DomainError::EngineError(format!("docker stop failed: {}", err)));
+            return Err(DomainError::EngineError(format!(
+                "docker stop failed: {}",
+                err
+            )));
         }
 
         Ok(())
@@ -111,7 +122,10 @@ impl ContainerEngine for DockerCliEngine {
 
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
-            return Err(DomainError::EngineError(format!("docker restart failed: {}", err)));
+            return Err(DomainError::EngineError(format!(
+                "docker restart failed: {}",
+                err
+            )));
         }
 
         Ok(())
@@ -128,7 +142,10 @@ impl ContainerEngine for DockerCliEngine {
 
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
-            return Err(DomainError::EngineError(format!("docker rm failed: {}", err)));
+            return Err(DomainError::EngineError(format!(
+                "docker rm failed: {}",
+                err
+            )));
         }
 
         Ok(())
@@ -137,8 +154,8 @@ impl ContainerEngine for DockerCliEngine {
     async fn inspect(&self, id: &ContainerId) -> Result<ContainerStatus, DomainError> {
         let mut cmd = Command::new("docker");
         cmd.arg("inspect")
-           .arg("--format={{.State.Status}}")
-           .arg(id.as_str());
+            .arg("--format={{.State.Status}}")
+            .arg(id.as_str());
 
         let output = timeout(DOCKER_TIMEOUT, cmd.output())
             .await
@@ -147,7 +164,10 @@ impl ContainerEngine for DockerCliEngine {
 
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
-            return Err(DomainError::EngineError(format!("docker inspect failed: {}", err)));
+            return Err(DomainError::EngineError(format!(
+                "docker inspect failed: {}",
+                err
+            )));
         }
 
         let status_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -158,7 +178,10 @@ impl ContainerEngine for DockerCliEngine {
             "exited" | "dead" => Ok(ContainerStatus::Exited),
             "paused" | "restarting" => Ok(ContainerStatus::Running),
             "" => Ok(ContainerStatus::Removed),
-            _ => Err(DomainError::EngineError(format!("Unknown state: {}", status_str))),
+            _ => Err(DomainError::EngineError(format!(
+                "Unknown state: {}",
+                status_str
+            ))),
         }
     }
 }

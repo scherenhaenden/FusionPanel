@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 #[test]
 #[ignore = "BLOCKED: Missing dependency 'fusionpanel-cli'"]
 fn test_e2e_release() {

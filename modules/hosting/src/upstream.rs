@@ -42,24 +42,42 @@ pub struct UpstreamPoolConfig {
 
 pub fn generate_upstream_pool(config: &UpstreamPoolConfig) -> Result<String> {
     if config.name.is_empty() {
-        return Err(DomainError::InvalidInput("Upstream pool name cannot be empty".into()));
+        return Err(DomainError::InvalidInput(
+            "Upstream pool name cannot be empty".into(),
+        ));
     }
-    if !config.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
-        return Err(DomainError::InvalidInput("Invalid characters in upstream pool name".into()));
+    if !config
+        .name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err(DomainError::InvalidInput(
+            "Invalid characters in upstream pool name".into(),
+        ));
     }
     if config.servers.is_empty() {
-        return Err(DomainError::InvalidInput("Upstream pool must contain at least one server".into()));
+        return Err(DomainError::InvalidInput(
+            "Upstream pool must contain at least one server".into(),
+        ));
     }
 
     let mut out = String::new();
     writeln!(&mut out, "upstream {} {{", config.name).unwrap();
 
     if let Some(zone_name) = &config.zone_name {
-        if !zone_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
-            return Err(DomainError::InvalidInput("Invalid characters in zone name".into()));
+        if !zone_name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err(DomainError::InvalidInput(
+                "Invalid characters in zone name".into(),
+            ));
         }
         let size = config.zone_size.as_deref().unwrap_or("64k");
-        if !size.chars().all(|c| c.is_ascii_digit() || c == 'k' || c == 'm' || c == 'K' || c == 'M') {
+        if !size
+            .chars()
+            .all(|c| c.is_ascii_digit() || c == 'k' || c == 'm' || c == 'K' || c == 'M')
+        {
             return Err(DomainError::InvalidInput("Invalid zone size format".into()));
         }
         writeln!(&mut out, "    zone {} {};", zone_name, size).unwrap();
@@ -67,11 +85,25 @@ pub fn generate_upstream_pool(config: &UpstreamPoolConfig) -> Result<String> {
 
     for server in &config.servers {
         if server.address.is_empty() {
-            return Err(DomainError::InvalidInput("Upstream server address cannot be empty".into()));
+            return Err(DomainError::InvalidInput(
+                "Upstream server address cannot be empty".into(),
+            ));
         }
 
-        if server.address.contains(|c| c == ';' || c == '\n' || c == '\r' || c == '{' || c == '}' || c == '$' || c == '"' || c == '\'' || c == '\\') {
-            return Err(DomainError::InvalidInput("Invalid characters in upstream server address".into()));
+        if server.address.contains(|c| {
+            c == ';'
+                || c == '\n'
+                || c == '\r'
+                || c == '{'
+                || c == '}'
+                || c == '$'
+                || c == '"'
+                || c == '\''
+                || c == '\\'
+        }) {
+            return Err(DomainError::InvalidInput(
+                "Invalid characters in upstream server address".into(),
+            ));
         }
 
         write!(&mut out, "    server {}", server.address).unwrap();
@@ -85,8 +117,13 @@ pub fn generate_upstream_pool(config: &UpstreamPoolConfig) -> Result<String> {
         }
 
         if let Some(fail_timeout) = &server.fail_timeout {
-            if !fail_timeout.chars().all(|c| c.is_ascii_digit() || c == 's' || c == 'm' || c == 'h') {
-                return Err(DomainError::InvalidInput("Invalid fail_timeout format".into()));
+            if !fail_timeout
+                .chars()
+                .all(|c| c.is_ascii_digit() || c == 's' || c == 'm' || c == 'h')
+            {
+                return Err(DomainError::InvalidInput(
+                    "Invalid fail_timeout format".into(),
+                ));
             }
             write!(&mut out, " fail_timeout={}", fail_timeout).unwrap();
         }
@@ -105,23 +142,32 @@ pub fn generate_upstream_pool(config: &UpstreamPoolConfig) -> Result<String> {
     writeln!(&mut out, "}}").unwrap();
 
     for mb in &config.match_blocks {
-        if !mb.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        if !mb
+            .name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
             return Err(DomainError::InvalidInput("Invalid match block name".into()));
         }
         writeln!(&mut out, "\nmatch {} {{", mb.name).unwrap();
         if !mb.statuses.is_empty() {
             for status in &mb.statuses {
-                 if status.contains(|c| c == ';' || c == '\n' || c == '\r' || c == '{' || c == '}') {
-                    return Err(DomainError::InvalidInput("Invalid characters in status match".into()));
-                 }
+                if status.contains(|c| c == ';' || c == '\n' || c == '\r' || c == '{' || c == '}') {
+                    return Err(DomainError::InvalidInput(
+                        "Invalid characters in status match".into(),
+                    ));
+                }
             }
             writeln!(&mut out, "    status {};", mb.statuses.join(" ")).unwrap();
         }
         if let Some(body) = &mb.body_regex {
             if body.contains(|c| c == '\n' || c == '\r' || c == ';') {
-                return Err(DomainError::InvalidInput("Invalid characters in body regex".into()));
+                return Err(DomainError::InvalidInput(
+                    "Invalid characters in body regex".into(),
+                ));
             }
-            writeln!(&mut out, "    body ~ \"{}\";", body.replace('"', "\\\"")).unwrap(); // Escape quotes
+            writeln!(&mut out, "    body ~ \"{}\";", body.replace('"', "\\\"")).unwrap();
+            // Escape quotes
         }
         writeln!(&mut out, "}}").unwrap();
     }
@@ -134,8 +180,13 @@ pub fn generate_health_check_directive(check: &ActiveHealthCheck) -> Result<Stri
     let mut out = "health_check".to_string();
 
     if let Some(interval) = &check.interval {
-        if !interval.chars().all(|c| c.is_ascii_digit() || c == 's' || c == 'm' || c == 'h') {
-            return Err(DomainError::InvalidInput("Invalid health check interval".into()));
+        if !interval
+            .chars()
+            .all(|c| c.is_ascii_digit() || c == 's' || c == 'm' || c == 'h')
+        {
+            return Err(DomainError::InvalidInput(
+                "Invalid health check interval".into(),
+            ));
         }
         out.push_str(&format!(" interval={}", interval));
     }
@@ -149,14 +200,28 @@ pub fn generate_health_check_directive(check: &ActiveHealthCheck) -> Result<Stri
     }
 
     if let Some(uri) = &check.uri {
-        if uri.contains(|c| c == ';' || c == '\n' || c == '\r' || c == '{' || c == '}' || c == '"' || c == '\'' || c == '$') {
-            return Err(DomainError::InvalidInput("Invalid characters in health check URI".into()));
+        if uri.contains(|c| {
+            c == ';'
+                || c == '\n'
+                || c == '\r'
+                || c == '{'
+                || c == '}'
+                || c == '"'
+                || c == '\''
+                || c == '$'
+        }) {
+            return Err(DomainError::InvalidInput(
+                "Invalid characters in health check URI".into(),
+            ));
         }
         out.push_str(&format!(" uri={}", uri));
     }
 
     if let Some(match_name) = &check.match_name {
-        if !match_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        if !match_name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
             return Err(DomainError::InvalidInput("Invalid match name".into()));
         }
         out.push_str(&format!(" match={}", match_name));

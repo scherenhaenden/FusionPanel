@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use mail::dns_records::{DkimKeyType, DnsGenerator, DnsRecordType};
 
 #[test]

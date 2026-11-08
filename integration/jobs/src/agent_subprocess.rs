@@ -1,10 +1,10 @@
-use std::process::Stdio;
 use async_trait::async_trait;
-use tokio::process::Command;
+use std::process::Stdio;
 use tokio::io::AsyncWriteExt;
+use tokio::process::Command;
 
-use fusionpanel_agent_protocol::{Request, Response};
 use crate::worker::AgentClient;
+use fusionpanel_agent_protocol::{Request, Response};
 
 pub struct SubprocessAgentClient {
     pub executable_path: String,
@@ -23,7 +23,10 @@ impl AgentClient for SubprocessAgentClient {
             .map_err(|e| e.to_string())?;
 
         if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(payload.as_bytes()).await.map_err(|e| e.to_string())?;
+            stdin
+                .write_all(payload.as_bytes())
+                .await
+                .map_err(|e| e.to_string())?;
             // explicitly drop stdin to signal EOF to the child
             drop(stdin);
         }
@@ -32,10 +35,14 @@ impl AgentClient for SubprocessAgentClient {
 
         if !output.status.success() {
             let stderr_str = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Process exited with status {}: {}", output.status, stderr_str));
+            return Err(format!(
+                "Process exited with status {}: {}",
+                output.status, stderr_str
+            ));
         }
 
-        let response: Response = serde_json::from_slice(&output.stdout).map_err(|e| format!("Failed to parse output: {}", e))?;
+        let response: Response = serde_json::from_slice(&output.stdout)
+            .map_err(|e| format!("Failed to parse output: {}", e))?;
         Ok(response)
     }
 }

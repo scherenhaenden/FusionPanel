@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 // E2E verification
 // S09 requirement: "Create domain, serve uploaded content and undo failed provision after S26.
 // If runtime prerequisites are not available yet, provide executable case definitions and record BLOCKED with the exact dependency.

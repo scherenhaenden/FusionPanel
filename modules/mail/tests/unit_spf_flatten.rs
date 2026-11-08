@@ -8,10 +8,14 @@ impl DnsResolver for MockDnsResolver {
     fn resolve_txt(&self, domain: &str) -> Result<Vec<String>, String> {
         match domain {
             "example.com" => Ok(vec!["v=spf1 include:example.net a mx -all".to_string()]),
-            "example.net" => Ok(vec!["v=spf1 ip4:192.168.1.1 ip6:2001:db8::1 redirect=example.org".to_string()]),
+            "example.net" => Ok(vec![
+                "v=spf1 ip4:192.168.1.1 ip6:2001:db8::1 redirect=example.org".to_string(),
+            ]),
             "example.org" => Ok(vec!["v=spf1 a:other.com/24/64 ~all".to_string()]),
             "loop1.com" => Ok(vec!["v=spf1 include:loop2.com -all".to_string()]),
-            "loop2.com" => Ok(vec!["v=spf1 include:loop1.com ip4:10.0.0.1 -all".to_string()]),
+            "loop2.com" => Ok(vec![
+                "v=spf1 include:loop1.com ip4:10.0.0.1 -all".to_string()
+            ]),
             "toomany.com" => Ok(vec!["v=spf1 include:toomany1.com -all".to_string()]),
             "toomany1.com" => Ok(vec!["v=spf1 include:toomany2.com -all".to_string()]),
             "toomany2.com" => Ok(vec!["v=spf1 include:toomany3.com -all".to_string()]),

@@ -23,7 +23,9 @@ mod tests {
         // Block 1: Create store and write secret
         {
             let store = SecretStore::new(&storage_path, &master_key, None).unwrap();
-            let secret_ref = store.create_secret(tenant, scope, &original_material).unwrap();
+            let secret_ref = store
+                .create_secret(tenant, scope, &original_material)
+                .unwrap();
             secret_id = secret_ref.id.clone();
         }
 
@@ -50,7 +52,9 @@ mod tests {
             let store = SecretStore::new(&storage_path, &master_key, None);
             // Opening with old key shouldn't fail store creation, but decrypting will fail
             let store_old = store.unwrap();
-            let err = store_old.read_secret(&secret_id, tenant, scope).unwrap_err();
+            let err = store_old
+                .read_secret(&secret_id, tenant, scope)
+                .unwrap_err();
             assert!(matches!(err, SecretError::CryptoError(_)));
         }
     }
@@ -68,7 +72,9 @@ mod tests {
         // Block 1: Initial store and secret creation
         {
             let store = SecretStore::new(&storage_path, &master_key, None).unwrap();
-            let secret_ref = store.create_secret(tenant, scope, &SecretMaterial::new(b"secret".to_vec())).unwrap();
+            let secret_ref = store
+                .create_secret(tenant, scope, &SecretMaterial::new(b"secret".to_vec()))
+                .unwrap();
             secret_id = secret_ref.id.clone();
         }
 
@@ -109,7 +115,9 @@ mod tests {
         // Block 1: Initial store and secret creation with OLD key
         {
             let store = SecretStore::new(&storage_path, &old_master_key, None).unwrap();
-            let secret_ref = store.create_secret(tenant, scope, &SecretMaterial::new(b"secret".to_vec())).unwrap();
+            let secret_ref = store
+                .create_secret(tenant, scope, &SecretMaterial::new(b"secret".to_vec()))
+                .unwrap();
             secret_id = secret_ref.id.clone();
         }
 
