@@ -1,9 +1,9 @@
 #![forbid(unsafe_code)]
 
-#[path = "../src/domain/mod.rs"]
-pub mod domain;
 #[path = "../src/compression.rs"]
 pub mod compression;
+#[path = "../src/domain/mod.rs"]
+pub mod domain;
 
 use compression::{generate_compression_config, CompressionSettings};
 

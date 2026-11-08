@@ -22,7 +22,7 @@ fn test_corrupted_ciphertext_detection() {
 mod crypto_tests {
     use aes_gcm::{
         aead::{Aead, AeadCore, KeyInit, OsRng},
-        Aes256Gcm, Key
+        Aes256Gcm, Key,
     };
 
     struct Envelope {
@@ -43,7 +43,11 @@ mod crypto_tests {
         (ciphertext, nonce.to_vec())
     }
 
-    fn decrypt_with_key(key: &Key<Aes256Gcm>, nonce_bytes: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
+    fn decrypt_with_key(
+        key: &Key<Aes256Gcm>,
+        nonce_bytes: &[u8],
+        ciphertext: &[u8],
+    ) -> Result<Vec<u8>, aes_gcm::Error> {
         let cipher = Aes256Gcm::new(key);
         let nonce = aes_gcm::Nonce::from_slice(nonce_bytes);
         cipher.decrypt(nonce, ciphertext)
@@ -52,7 +56,7 @@ mod crypto_tests {
     #[test]
     fn test_envelope_encryption_and_decryption() {
         let master_key = generate_key(); // KEK
-        let dek = generate_key();        // DEK
+        let dek = generate_key(); // DEK
         let payload = b"sensitive user data";
 
         // Encrypt Payload with DEK
@@ -69,11 +73,17 @@ mod crypto_tests {
         };
 
         // Decrypt DEK with KEK
-        let decrypted_dek_bytes = decrypt_with_key(&master_key, &envelope.dek_nonce, &envelope.encrypted_dek).unwrap();
+        let decrypted_dek_bytes =
+            decrypt_with_key(&master_key, &envelope.dek_nonce, &envelope.encrypted_dek).unwrap();
         let decrypted_dek = Key::<Aes256Gcm>::from_slice(&decrypted_dek_bytes);
 
         // Decrypt Payload with DEK
-        let decrypted_payload = decrypt_with_key(decrypted_dek, &envelope.payload_nonce, &envelope.encrypted_payload).unwrap();
+        let decrypted_payload = decrypt_with_key(
+            decrypted_dek,
+            &envelope.payload_nonce,
+            &envelope.encrypted_payload,
+        )
+        .unwrap();
 
         assert_eq!(payload.as_slice(), decrypted_payload.as_slice());
     }
@@ -94,16 +104,19 @@ mod crypto_tests {
         let new_kek = generate_key();
 
         // 1. Decrypt DEK using Old KEK
-        let decrypted_dek_bytes = decrypt_with_key(&old_kek, &dek_nonce_old, &encrypted_dek_old).unwrap();
+        let decrypted_dek_bytes =
+            decrypt_with_key(&old_kek, &dek_nonce_old, &encrypted_dek_old).unwrap();
 
         // 2. Re-encrypt DEK using New KEK
         let (encrypted_dek_new, dek_nonce_new) = encrypt_with_key(&new_kek, &decrypted_dek_bytes);
 
         // 3. Verify that payload ciphertext remains untouched but we can still decrypt using new KEK envelope
-        let decrypted_dek_bytes_new = decrypt_with_key(&new_kek, &dek_nonce_new, &encrypted_dek_new).unwrap();
+        let decrypted_dek_bytes_new =
+            decrypt_with_key(&new_kek, &dek_nonce_new, &encrypted_dek_new).unwrap();
         let decrypted_dek = Key::<Aes256Gcm>::from_slice(&decrypted_dek_bytes_new);
 
-        let decrypted_payload = decrypt_with_key(decrypted_dek, &payload_nonce, &encrypted_payload).unwrap();
+        let decrypted_payload =
+            decrypt_with_key(decrypted_dek, &payload_nonce, &encrypted_payload).unwrap();
         assert_eq!(payload.as_slice(), decrypted_payload.as_slice());
     }
 
@@ -120,6 +133,9 @@ mod crypto_tests {
 
         // Attempt decryption
         let result = decrypt_with_key(&dek, &payload_nonce, &encrypted_payload);
-        assert!(result.is_err(), "Decryption should fail due to corrupted ciphertext or tag");
+        assert!(
+            result.is_err(),
+            "Decryption should fail due to corrupted ciphertext or tag"
+        );
     }
 }

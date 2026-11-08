@@ -7,7 +7,9 @@ async fn test_agent_reconnect_loop_with_hmac_and_command_streaming() {
 
 #[tokio::test]
 async fn test_hmac_authentication_challenge() {
-    panic!("BLOCKED: Agent daemon currently lacks interactive HMAC challenge-response capabilities.");
+    panic!(
+        "BLOCKED: Agent daemon currently lacks interactive HMAC challenge-response capabilities."
+    );
 }
 
 #[tokio::test]

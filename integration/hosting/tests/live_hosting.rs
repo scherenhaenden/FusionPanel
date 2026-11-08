@@ -42,7 +42,9 @@ async fn test_live_hosting_e2e() {
             memory_limit: "256M".to_string().try_into().unwrap(),
         }),
         port,
-        hosting::domain::ResourceOwner::PanelOwned { tenant_id: tenant_id.clone() },
+        hosting::domain::ResourceOwner::PanelOwned {
+            tenant_id: tenant_id.clone(),
+        },
         run_as_user.clone(),
         vec![],
     )

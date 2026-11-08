@@ -33,7 +33,12 @@ async fn test_stream_dump_compression_ratio() {
 
     // Create a dummy script that outputs a lot of repetitive data
     let script_path = "/tmp/dummy_dump.sh";
-    fs::write(script_path, "yes 'this is a very repetitive line' | head -n 10000").await.unwrap();
+    fs::write(
+        script_path,
+        "yes 'this is a very repetitive line' | head -n 10000",
+    )
+    .await
+    .unwrap();
 
     // Make script executable using chmod
     let _ = std::process::Command::new("chmod")
@@ -47,7 +52,10 @@ async fn test_stream_dump_compression_ratio() {
     let compressed_data = fs::read(output_path).await.unwrap();
     // 10000 lines of ~30 chars each = ~300KB
     // Compressed should be much smaller
-    assert!(compressed_data.len() < 100_000, "Should be highly compressible");
+    assert!(
+        compressed_data.len() < 100_000,
+        "Should be highly compressible"
+    );
 }
 
 #[tokio::test]

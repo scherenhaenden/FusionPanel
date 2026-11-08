@@ -25,7 +25,11 @@ pub enum ValidationError {
 }
 
 pub fn validate_external_binding(binding: &ExternalBinding) -> Result<(), ValidationError> {
-    let paths = [&binding.source_path, &binding.canonical_path, &binding.target_path];
+    let paths = [
+        &binding.source_path,
+        &binding.canonical_path,
+        &binding.target_path,
+    ];
 
     // Check path traversal
     for path in paths.iter() {
@@ -56,7 +60,8 @@ pub fn validate_external_binding(binding: &ExternalBinding) -> Result<(), Valida
 
     // Symlink rules
     if binding.source_path != binding.canonical_path {
-        if binding.symlink_review.is_none() || binding.symlink_review.as_deref() != Some("APPROVED") {
+        if binding.symlink_review.is_none() || binding.symlink_review.as_deref() != Some("APPROVED")
+        {
             return Err(ValidationError::UnsafeSymlinkEscape);
         }
     }
@@ -125,32 +130,50 @@ mod tests {
     fn test_rejection_of_path_traversal() {
         let mut binding = valid_binding();
         binding.source_path = "/data/ext/../source".to_string();
-        assert_eq!(validate_external_binding(&binding), Err(ValidationError::PathTraversal));
+        assert_eq!(
+            validate_external_binding(&binding),
+            Err(ValidationError::PathTraversal)
+        );
     }
 
     #[test]
     fn test_rejection_of_protected_targets() {
         let mut binding = valid_binding();
         binding.target_path = "/etc/passwd".to_string();
-        assert_eq!(validate_external_binding(&binding), Err(ValidationError::ProtectedTarget));
+        assert_eq!(
+            validate_external_binding(&binding),
+            Err(ValidationError::ProtectedTarget)
+        );
 
         binding.target_path = "/var/www/ext".to_string();
         binding.source_path = "/proc/1/environ".to_string();
-        assert_eq!(validate_external_binding(&binding), Err(ValidationError::ProtectedTarget));
+        assert_eq!(
+            validate_external_binding(&binding),
+            Err(ValidationError::ProtectedTarget)
+        );
 
         binding.source_path = "/data/ext".to_string();
         binding.canonical_path = "/sys/class/net".to_string();
-        assert_eq!(validate_external_binding(&binding), Err(ValidationError::ProtectedTarget));
+        assert_eq!(
+            validate_external_binding(&binding),
+            Err(ValidationError::ProtectedTarget)
+        );
     }
 
     #[test]
     fn test_owner_ambiguity() {
         let mut binding = valid_binding();
         binding.owner = None;
-        assert_eq!(validate_external_binding(&binding), Err(ValidationError::OwnerAmbiguity));
+        assert_eq!(
+            validate_external_binding(&binding),
+            Err(ValidationError::OwnerAmbiguity)
+        );
 
         binding.owner = Some("   ".to_string());
-        assert_eq!(validate_external_binding(&binding), Err(ValidationError::OwnerAmbiguity));
+        assert_eq!(
+            validate_external_binding(&binding),
+            Err(ValidationError::OwnerAmbiguity)
+        );
     }
 
     #[test]
@@ -159,10 +182,16 @@ mod tests {
         binding.source_path = "/data/symlink".to_string();
         binding.canonical_path = "/var/lib/outside".to_string();
         binding.symlink_review = None;
-        assert_eq!(validate_external_binding(&binding), Err(ValidationError::UnsafeSymlinkEscape));
+        assert_eq!(
+            validate_external_binding(&binding),
+            Err(ValidationError::UnsafeSymlinkEscape)
+        );
 
         binding.symlink_review = Some("UNAPPROVED".to_string());
-        assert_eq!(validate_external_binding(&binding), Err(ValidationError::UnsafeSymlinkEscape));
+        assert_eq!(
+            validate_external_binding(&binding),
+            Err(ValidationError::UnsafeSymlinkEscape)
+        );
 
         binding.symlink_review = Some("APPROVED".to_string());
         binding.mount_review = None;
@@ -174,17 +203,26 @@ mod tests {
         let mut binding = valid_binding();
         binding.mount_review = None;
         binding.symlink_review = None;
-        assert_eq!(validate_external_binding(&binding), Err(ValidationError::UnreviewedMount));
+        assert_eq!(
+            validate_external_binding(&binding),
+            Err(ValidationError::UnreviewedMount)
+        );
 
         binding.mount_review = Some("PENDING".to_string());
-        assert_eq!(validate_external_binding(&binding), Err(ValidationError::UnreviewedMount));
+        assert_eq!(
+            validate_external_binding(&binding),
+            Err(ValidationError::UnreviewedMount)
+        );
     }
 
     #[test]
     fn test_missing_operator_review() {
         let mut binding = valid_binding();
         binding.operator_review_reference = None;
-        assert_eq!(validate_external_binding(&binding), Err(ValidationError::MissingReviewReference));
+        assert_eq!(
+            validate_external_binding(&binding),
+            Err(ValidationError::MissingReviewReference)
+        );
     }
 
     #[test]
@@ -193,12 +231,21 @@ mod tests {
         assert_eq!(validate_managed_root("/srv/managed/site1"), Ok(()));
 
         // Missing strict prefix
-        assert_eq!(validate_managed_root("/var/www/site1"), Err(ValidationError::StrictManagedRootViolation));
+        assert_eq!(
+            validate_managed_root("/var/www/site1"),
+            Err(ValidationError::StrictManagedRootViolation)
+        );
 
         // Protected target
-        assert_eq!(validate_managed_root("/etc/site1"), Err(ValidationError::ProtectedTarget));
+        assert_eq!(
+            validate_managed_root("/etc/site1"),
+            Err(ValidationError::ProtectedTarget)
+        );
 
         // Path traversal
-        assert_eq!(validate_managed_root("/srv/managed/../site1"), Err(ValidationError::PathTraversal));
+        assert_eq!(
+            validate_managed_root("/srv/managed/../site1"),
+            Err(ValidationError::PathTraversal)
+        );
     }
 }

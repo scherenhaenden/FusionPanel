@@ -60,10 +60,14 @@ impl DatabaseAdapter for PostgresAdapter {
 
     async fn database_exists(&self, name: &DbName) -> Result<bool> {
         let mut cmd = self.build_cmd("psql");
-        cmd.args(["-d", "postgres", "-t", "-A", "-c", &format!(
-            "SELECT 1 FROM pg_database WHERE datname = '{}';",
-            name.0
-        )]);
+        cmd.args([
+            "-d",
+            "postgres",
+            "-t",
+            "-A",
+            "-c",
+            &format!("SELECT 1 FROM pg_database WHERE datname = '{}';", name.0),
+        ]);
         let output = cmd.output().await.map_err(|e| {
             DatabaseError::OperationFailed(format!("Failed to execute psql: {}", e))
         })?;
@@ -80,9 +84,14 @@ impl DatabaseAdapter for PostgresAdapter {
         let mut cmd = self.build_cmd("psql");
         // Filter out template1, template0, etc. Postgres typical system schemas don't appear in pg_database but system templates do.
         // We exclude databases starting with 'template' and 'postgres' itself.
-        cmd.args(["-d", "postgres", "-t", "-A", "-c",
+        cmd.args([
+            "-d",
+            "postgres",
+            "-t",
+            "-A",
+            "-c",
             "SELECT datname, pg_encoding_to_char(encoding), datcollate FROM pg_database \
-             WHERE datistemplate = false AND datname != 'postgres';"
+             WHERE datistemplate = false AND datname != 'postgres';",
         ]);
         let output = cmd.output().await.map_err(|e| {
             DatabaseError::OperationFailed(format!("Failed to execute psql: {}", e))
@@ -109,10 +118,14 @@ impl DatabaseAdapter for PostgresAdapter {
 
     async fn user_exists(&self, username: &DbUser) -> Result<bool> {
         let mut cmd = self.build_cmd("psql");
-        cmd.args(["-d", "postgres", "-t", "-A", "-c", &format!(
-            "SELECT 1 FROM pg_roles WHERE rolname = '{}';",
-            username.0
-        )]);
+        cmd.args([
+            "-d",
+            "postgres",
+            "-t",
+            "-A",
+            "-c",
+            &format!("SELECT 1 FROM pg_roles WHERE rolname = '{}';", username.0),
+        ]);
         let output = cmd.output().await.map_err(|e| {
             DatabaseError::OperationFailed(format!("Failed to execute psql: {}", e))
         })?;
@@ -303,10 +316,20 @@ impl DatabaseAdapter for PostgresAdapter {
             plan.db_name.0, plan.username.0
         );
         let mut cmd_connect = self.build_cmd("psql");
-        cmd_connect.args(["-d", "postgres", "-c", &connect_sql, "-v", "ON_ERROR_STOP=1"]);
+        cmd_connect.args([
+            "-d",
+            "postgres",
+            "-c",
+            &connect_sql,
+            "-v",
+            "ON_ERROR_STOP=1",
+        ]);
 
         let output_connect = cmd_connect.output().await.map_err(|e| {
-            DatabaseError::OperationFailed(format!("Failed to execute psql for grant connect: {}", e))
+            DatabaseError::OperationFailed(format!(
+                "Failed to execute psql for grant connect: {}",
+                e
+            ))
         })?;
 
         if !output_connect.status.success() {

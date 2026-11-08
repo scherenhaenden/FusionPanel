@@ -46,18 +46,27 @@ fn test_backup_and_recovery_e2e() {
     // Simulate Backup Generation
     let backup_tar = std::env::temp_dir().join(format!(
         "fusionpanel_test_{}_backup.tar.zst",
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis()
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
     ));
-    
+
     use backups::backup::BackupJob;
     let job = BackupJob::new(&temp_dir);
-    let manifest = job.execute(&backup_tar).expect("Failed to execute backup job");
+    let manifest = job
+        .execute(&backup_tar)
+        .expect("Failed to execute backup job");
     assert!(backup_tar.exists());
 
     // Simulate S3 upload via curl to our mock server
     let mut check_curl = std::process::Command::new("sh");
     check_curl.args(["-c", "command -v curl"]);
-    if check_curl.output().map(|o| o.status.success()).unwrap_or(false) {
+    if check_curl
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
         let s3_upload_status = Command::new("curl")
             .arg("-X")
             .arg("POST")
@@ -78,7 +87,8 @@ fn test_backup_and_recovery_e2e() {
     fs::create_dir_all(&restore_dir).unwrap();
 
     use backups::restore::restore_archive;
-    let restore_manifest = restore_archive(&backup_tar, &restore_dir).expect("Failed to restore archive");
+    let restore_manifest =
+        restore_archive(&backup_tar, &restore_dir).expect("Failed to restore archive");
     assert_eq!(restore_manifest.version, manifest.version);
     assert_eq!(restore_manifest.backup_id, manifest.backup_id);
 

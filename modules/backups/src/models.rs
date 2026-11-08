@@ -22,10 +22,10 @@ pub struct DbInfo {
     pub dump_file: String,
 }
 
-use std::path::Component;
-use std::collections::HashSet;
-use uuid::Uuid;
 use chrono::DateTime;
+use std::collections::HashSet;
+use std::path::Component;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Manifest {
@@ -41,28 +41,41 @@ pub struct Manifest {
 impl Manifest {
     pub fn validate(&self) -> Result<(), crate::error::BackupError> {
         if self.version != 1 {
-            return Err(crate::error::BackupError::InvalidManifest(format!("Unsupported version: {}", self.version)));
+            return Err(crate::error::BackupError::InvalidManifest(format!(
+                "Unsupported version: {}",
+                self.version
+            )));
         }
 
         if Uuid::parse_str(&self.backup_id).is_err() {
-            return Err(crate::error::BackupError::InvalidManifest("Invalid backup_id UUID format".to_string()));
+            return Err(crate::error::BackupError::InvalidManifest(
+                "Invalid backup_id UUID format".to_string(),
+            ));
         }
 
         if DateTime::parse_from_rfc3339(&self.timestamp).is_err() {
-            return Err(crate::error::BackupError::InvalidManifest("Invalid timestamp format, expected RFC3339".to_string()));
+            return Err(crate::error::BackupError::InvalidManifest(
+                "Invalid timestamp format, expected RFC3339".to_string(),
+            ));
         }
 
         let mut seen_paths = HashSet::new();
         for file in &self.files {
             if !seen_paths.insert(&file.path) {
-                return Err(crate::error::BackupError::InvalidManifest(format!("Duplicate file path in manifest: {}", file.path)));
+                return Err(crate::error::BackupError::InvalidManifest(format!(
+                    "Duplicate file path in manifest: {}",
+                    file.path
+                )));
             }
 
             let path = std::path::Path::new(&file.path);
             for component in path.components() {
                 match component {
                     Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
-                        return Err(crate::error::BackupError::InvalidManifest(format!("Unsafe path in manifest: {}", file.path)));
+                        return Err(crate::error::BackupError::InvalidManifest(format!(
+                            "Unsafe path in manifest: {}",
+                            file.path
+                        )));
                     }
                     _ => {}
                 }

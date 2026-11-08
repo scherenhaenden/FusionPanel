@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use databases::quota::{QuotaEnforcer, QuotaLimits, QuotaUsage, QuotaError};
+use databases::quota::{QuotaEnforcer, QuotaError, QuotaLimits, QuotaUsage};
 use uuid::Uuid;
 
 #[test]

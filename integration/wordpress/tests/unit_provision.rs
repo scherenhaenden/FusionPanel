@@ -3,9 +3,9 @@
 #[path = "../src/provision.rs"]
 pub mod provision;
 
-use provision::{DbConfig, SiteConfig, provision_wordpress, generate_wp_config, generate_salt};
-use std::path::PathBuf;
+use provision::{generate_salt, generate_wp_config, provision_wordpress, DbConfig, SiteConfig};
 use std::fs;
+use std::path::PathBuf;
 
 fn tempdir() -> PathBuf {
     let mut dir = std::env::temp_dir();
@@ -26,7 +26,7 @@ fn get_mock_config(dir: PathBuf) -> SiteConfig {
             db_name: "wp_test".to_string(),
             db_user: "wp_user".to_string(),
             db_password: "wp_password".to_string(),
-        }
+        },
     }
 }
 
@@ -106,5 +106,8 @@ async fn test_provision_success_writes_files() {
 
     // We expect the bootstrap fallback to have run since wp-cli isn't configured in test env
     let bootstrap_path = dir.join("install-bootstrap.php");
-    assert!(bootstrap_path.exists(), "Bootstrap script should be created as fallback");
+    assert!(
+        bootstrap_path.exists(),
+        "Bootstrap script should be created as fallback"
+    );
 }

@@ -18,7 +18,7 @@ async fn test_get_wordpress_instance_integration() {
         jobs: Arc::new(Mutex::new(Vec::new())),
         instances: Arc::new(Mutex::new(vec![])),
     };
-    
+
     let id = Uuid::new_v4();
     app_state.instances.lock().await.push(WordPressInstance {
         id,
@@ -47,7 +47,7 @@ async fn test_upgrade_wordpress_integration() {
         jobs: Arc::new(Mutex::new(Vec::new())),
         instances: Arc::new(Mutex::new(vec![])),
     };
-    
+
     let id = Uuid::new_v4();
     app_state.instances.lock().await.push(WordPressInstance {
         id,
@@ -77,7 +77,7 @@ async fn test_plugins_wordpress_integration() {
         jobs: Arc::new(Mutex::new(Vec::new())),
         instances: Arc::new(Mutex::new(vec![])),
     };
-    
+
     let id = Uuid::new_v4();
     app_state.instances.lock().await.push(WordPressInstance {
         id,

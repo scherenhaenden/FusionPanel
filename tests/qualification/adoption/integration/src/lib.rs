@@ -2,8 +2,11 @@
 
 #[cfg(test)]
 mod tests {
-    use adoption::{OwnershipGuard, OwnershipTier, Resource, DecommissionAttestation, attempt_decommission, UpstreamTrustMode, UpstreamTlsPolicy};
-    use adopt07_tls::{UpstreamTlsPolicy as Adopt07Policy, TrustMode as Adopt07TrustMode};
+    use adopt07_tls::{TrustMode as Adopt07TrustMode, UpstreamTlsPolicy as Adopt07Policy};
+    use adoption::{
+        attempt_decommission, DecommissionAttestation, OwnershipGuard, OwnershipTier, Resource,
+        UpstreamTlsPolicy, UpstreamTrustMode,
+    };
     use std::time::{SystemTime, UNIX_EPOCH};
     use tempfile::tempdir;
 
@@ -19,9 +22,18 @@ mod tests {
         };
 
         // Externally managed resource should reject lifecycle changes
-        assert_eq!(OwnershipGuard::can_suspend(&external_resource), Err("Cannot suspend externally managed resources"));
-        assert_eq!(OwnershipGuard::can_delete(&external_resource), Err("Cannot delete externally managed resources"));
-        assert_eq!(OwnershipGuard::can_restart(&external_resource), Err("Cannot restart externally managed resources"));
+        assert_eq!(
+            OwnershipGuard::can_suspend(&external_resource),
+            Err("Cannot suspend externally managed resources")
+        );
+        assert_eq!(
+            OwnershipGuard::can_delete(&external_resource),
+            Err("Cannot delete externally managed resources")
+        );
+        assert_eq!(
+            OwnershipGuard::can_restart(&external_resource),
+            Err("Cannot restart externally managed resources")
+        );
 
         // Panel owned resource should allow lifecycle changes
         assert_eq!(OwnershipGuard::can_suspend(&panel_resource), Ok(()));
@@ -31,33 +43,58 @@ mod tests {
 
     #[test]
     fn test_decommission_attestation_success() {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         let attestation = DecommissionAttestation::new(true, true, true, true, now);
         assert_eq!(attempt_decommission(&attestation), Ok(()));
     }
 
     #[test]
     fn test_decommission_attestation_expired() {
-        let old_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - 90000;
+        let old_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            - 90000;
         let attestation = DecommissionAttestation::new(true, true, true, true, old_time);
-        assert_eq!(attempt_decommission(&attestation), Err("Evidence has expired"));
+        assert_eq!(
+            attempt_decommission(&attestation),
+            Err("Evidence has expired")
+        );
     }
 
     #[test]
     fn test_decommission_attestation_missing_evidence() {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         let attestation = DecommissionAttestation::new(false, true, true, true, now);
-        assert_eq!(attempt_decommission(&attestation), Err("Target state is not independently verified"));
+        assert_eq!(
+            attempt_decommission(&attestation),
+            Err("Target state is not independently verified")
+        );
 
         let attestation = DecommissionAttestation::new(true, false, true, true, now);
-        assert_eq!(attempt_decommission(&attestation), Err("Backup successor is not verified"));
+        assert_eq!(
+            attempt_decommission(&attestation),
+            Err("Backup successor is not verified")
+        );
 
         let attestation = DecommissionAttestation::new(true, true, false, true, now);
-        assert_eq!(attempt_decommission(&attestation), Err("Certificate renewal successor is not verified"));
+        assert_eq!(
+            attempt_decommission(&attestation),
+            Err("Certificate renewal successor is not verified")
+        );
 
         let attestation = DecommissionAttestation::new(true, true, true, false, now);
-        assert_eq!(attempt_decommission(&attestation), Err("Post-cutover changes are not reconciled"));
+        assert_eq!(
+            attempt_decommission(&attestation),
+            Err("Post-cutover changes are not reconciled")
+        );
     }
 
     #[test]
@@ -69,8 +106,14 @@ mod tests {
         std::fs::create_dir_all(&ext_dir).unwrap();
         std::fs::create_dir_all(&panel_dir).unwrap();
 
-        let panel_resource = Resource { id: "panel1".to_string(), tier: OwnershipTier::PanelOwned };
-        let ext_resource = Resource { id: "ext1".to_string(), tier: OwnershipTier::ExternallyManaged };
+        let panel_resource = Resource {
+            id: "panel1".to_string(),
+            tier: OwnershipTier::PanelOwned,
+        };
+        let ext_resource = Resource {
+            id: "ext1".to_string(),
+            tier: OwnershipTier::ExternallyManaged,
+        };
 
         // Test delete on panel resource
         if OwnershipGuard::can_delete(&panel_resource).is_ok() {
@@ -100,11 +143,12 @@ mod tests {
             expected_hostname: "example.com".to_string(),
         };
 
-        let policy = Adopt07Policy::new("example.com")
-            .with_trust_mode(Adopt07TrustMode::InsecureCompatibility {
+        let policy = Adopt07Policy::new("example.com").with_trust_mode(
+            Adopt07TrustMode::InsecureCompatibility {
                 audit_trail: "TICKET-999".to_string(),
                 migration_path: "Q3 Plan".to_string(),
-            });
+            },
+        );
 
         let config = policy.generate_nginx_config();
         assert!(config.contains("proxy_ssl_verify off;"));

@@ -113,7 +113,9 @@ pub fn attempt_decommission(attestation: &DecommissionAttestation) -> Result<(),
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpstreamTrustMode {
     SystemCa,
-    InternalCa { ca_cert_path: String },
+    InternalCa {
+        ca_cert_path: String,
+    },
     InsecureCompatibility {
         audit_trail: String,
         migration_path: String,

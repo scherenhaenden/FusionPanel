@@ -47,7 +47,8 @@ impl JailManager {
     /// Clean up expired bans and old failed attempts
     pub fn cleanup(&mut self, now: SystemTime) {
         // Remove expired bans
-        self.banned_ips.retain(|_, &mut expire_time| expire_time > now);
+        self.banned_ips
+            .retain(|_, &mut expire_time| expire_time > now);
 
         // Remove old failed attempts outside of findtime
         let findtime = self.config.findtime;
@@ -71,7 +72,10 @@ impl JailManager {
             return Ok(true); // Already banned
         }
 
-        let attempts = self.failed_attempts.entry(ip.to_string()).or_insert_with(Vec::new);
+        let attempts = self
+            .failed_attempts
+            .entry(ip.to_string())
+            .or_insert_with(Vec::new);
         attempts.push(now);
 
         if attempts.len() as u32 >= self.config.maxretry {

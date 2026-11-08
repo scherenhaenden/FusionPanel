@@ -95,8 +95,9 @@ impl SecretStore {
 
         Self::write_with_permissions(&tmp_path, version.to_string().as_bytes())?;
 
-        fs::rename(&tmp_path, &path)
-            .map_err(|e| SecretError::OperationFailed(format!("Failed to commit active_version: {}", e)))?;
+        fs::rename(&tmp_path, &path).map_err(|e| {
+            SecretError::OperationFailed(format!("Failed to commit active_version: {}", e))
+        })?;
         Ok(())
     }
 
@@ -134,7 +135,12 @@ impl SecretStore {
         };
         let current_key_version = Self::read_active_version(&storage_dir);
 
-        let store = Self { storage_dir, engine, backup_engine, current_key_version };
+        let store = Self {
+            storage_dir,
+            engine,
+            backup_engine,
+            current_key_version,
+        };
 
         // Cleanup stale files during startup (recovery phase)
         store.cleanup_stale_files()?;
@@ -158,7 +164,11 @@ impl SecretStore {
 
             if file_name.ends_with(".json") {
                 // Legacy file, migrate to current version
-                let new_path = PathBuf::from(format!("{}.v{}", path.to_string_lossy(), self.current_key_version));
+                let new_path = PathBuf::from(format!(
+                    "{}.v{}",
+                    path.to_string_lossy(),
+                    self.current_key_version
+                ));
                 let _ = fs::rename(&path, &new_path);
             } else if file_name.contains(".json.v") && !file_name.ends_with(&suffix) {
                 // Stale file from interrupted rotation, or old version file after successful rotation
@@ -344,7 +354,8 @@ impl SecretStore {
     }
 
     fn file_path(&self, id: &str) -> PathBuf {
-        self.storage_dir.join(format!("{}.json.v{}", id, self.current_key_version))
+        self.storage_dir
+            .join(format!("{}.json.v{}", id, self.current_key_version))
     }
 
     fn save_record(&self, record: &SecretRecord) -> Result<(), SecretError> {
@@ -400,7 +411,9 @@ mod tests {
         let store = SecretStore::new(dir.path(), &master_key, None).unwrap();
 
         let material = SecretMaterial::new(b"db_secret_123".to_vec());
-        let secret_ref = store.create_secret("tenant1", "db_password", &material).unwrap();
+        let secret_ref = store
+            .create_secret("tenant1", "db_password", &material)
+            .unwrap();
 
         // Wrong tenant
         let result = store.read_secret(&secret_ref.id, "tenant2", "db_password");
@@ -445,24 +458,33 @@ mod tests {
         let secret_ref = store.create_secret("tenant1", "scope1", &material).unwrap();
 
         // Reading normally works
-        let read_material = store.read_secret(&secret_ref.id, "tenant1", "scope1").unwrap();
+        let read_material = store
+            .read_secret(&secret_ref.id, "tenant1", "scope1")
+            .unwrap();
         assert_eq!(read_material.as_bytes(), material.as_bytes());
 
         // Recovering with backup key works
-        let recovered_material = store.recover_secret(&secret_ref.id, "tenant1", "scope1").unwrap();
+        let recovered_material = store
+            .recover_secret(&secret_ref.id, "tenant1", "scope1")
+            .unwrap();
         assert_eq!(recovered_material.as_bytes(), material.as_bytes());
 
         // Now imagine master key is lost, open store with NO master key but valid backup key
         // Note: the current `new` requires a master key, so we simulate a lost master key by
         // providing a new random one.
         let random_master_key = CryptoEngine::generate_key();
-        let store_lost_master = SecretStore::new(dir.path(), &random_master_key, Some(&backup_key)).unwrap();
+        let store_lost_master =
+            SecretStore::new(dir.path(), &random_master_key, Some(&backup_key)).unwrap();
 
         // Reading with new (wrong) master key fails
-        assert!(store_lost_master.read_secret(&secret_ref.id, "tenant1", "scope1").is_err());
+        assert!(store_lost_master
+            .read_secret(&secret_ref.id, "tenant1", "scope1")
+            .is_err());
 
         // But recovery still works!
-        let recovered_material_2 = store_lost_master.recover_secret(&secret_ref.id, "tenant1", "scope1").unwrap();
+        let recovered_material_2 = store_lost_master
+            .recover_secret(&secret_ref.id, "tenant1", "scope1")
+            .unwrap();
         assert_eq!(recovered_material_2.as_bytes(), material.as_bytes());
     }
 
@@ -479,6 +501,9 @@ mod tests {
 
         // Attempting to recover fails because no backup key is configured in store
         let result = store.recover_secret(&secret_ref.id, "tenant1", "scope1");
-        assert!(matches!(result.unwrap_err(), SecretError::DependencyUnavailable(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            SecretError::DependencyUnavailable(_)
+        ));
     }
 }

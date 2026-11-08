@@ -3,13 +3,17 @@
 #[cfg(test)]
 mod tests {
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for TOTP two-factor authentication")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for TOTP two-factor authentication"
+    )]
     fn test_sec_01() {
         panic!("RESULT=BLOCKED: Missing core implementation for TOTP two-factor authentication");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Passkeys and WebAuthn")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Passkeys and WebAuthn"
+    )]
     fn test_sec_02() {
         panic!("RESULT=BLOCKED: Missing core implementation for Passkeys and WebAuthn");
     }
@@ -21,25 +25,33 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Role-based access control")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Role-based access control"
+    )]
     fn test_sec_04() {
         panic!("RESULT=BLOCKED: Missing core implementation for Role-based access control");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Firewall management")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Firewall management"
+    )]
     fn test_sec_05() {
         panic!("RESULT=BLOCKED: Missing core implementation for Firewall management");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Brute-force protection")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Brute-force protection"
+    )]
     fn test_sec_06() {
         panic!("RESULT=BLOCKED: Missing core implementation for Brute-force protection");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Web application firewall")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Web application firewall"
+    )]
     fn test_sec_07() {
         panic!("RESULT=BLOCKED: Missing core implementation for Web application firewall");
     }
@@ -63,7 +75,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Safe command execution")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Safe command execution"
+    )]
     fn test_sec_11() {
         panic!("RESULT=BLOCKED: Missing core implementation for Safe command execution");
     }
@@ -75,37 +89,49 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Tamper-evident audit integrity")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Tamper-evident audit integrity"
+    )]
     fn test_sec_13() {
         panic!("RESULT=BLOCKED: Missing core implementation for Tamper-evident audit integrity");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Vulnerability scanning")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Vulnerability scanning"
+    )]
     fn test_sec_14() {
         panic!("RESULT=BLOCKED: Missing core implementation for Vulnerability scanning");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Credential encryption")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Credential encryption"
+    )]
     fn test_sec_15() {
         panic!("RESULT=BLOCKED: Missing core implementation for Credential encryption");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Content Security Policy controls")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Content Security Policy controls"
+    )]
     fn test_sec_16() {
         panic!("RESULT=BLOCKED: Missing core implementation for Content Security Policy controls");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Release integrity and provenance")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Release integrity and provenance"
+    )]
     fn test_sec_17() {
         panic!("RESULT=BLOCKED: Missing core implementation for Release integrity and provenance");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for CPU, RAM and disk metrics")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for CPU, RAM and disk metrics"
+    )]
     fn test_obs_01() {
         panic!("RESULT=BLOCKED: Missing core implementation for CPU, RAM and disk metrics");
     }
@@ -117,7 +143,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Live network traffic")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Live network traffic"
+    )]
     fn test_obs_03() {
         panic!("RESULT=BLOCKED: Missing core implementation for Live network traffic");
     }
@@ -129,7 +157,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Per-container metrics")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Per-container metrics"
+    )]
     fn test_obs_05() {
         panic!("RESULT=BLOCKED: Missing core implementation for Per-container metrics");
     }
@@ -141,37 +171,49 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for TCP and ping checks")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for TCP and ping checks"
+    )]
     fn test_obs_07() {
         panic!("RESULT=BLOCKED: Missing core implementation for TCP and ping checks");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Prometheus endpoint")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Prometheus endpoint"
+    )]
     fn test_obs_08() {
         panic!("RESULT=BLOCKED: Missing core implementation for Prometheus endpoint");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Configurable alerts")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Configurable alerts"
+    )]
     fn test_obs_09() {
         panic!("RESULT=BLOCKED: Missing core implementation for Configurable alerts");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for PagerDuty notifications")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for PagerDuty notifications"
+    )]
     fn test_obs_10() {
         panic!("RESULT=BLOCKED: Missing core implementation for PagerDuty notifications");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Slack notifications")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Slack notifications"
+    )]
     fn test_obs_11() {
         panic!("RESULT=BLOCKED: Missing core implementation for Slack notifications");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Automatic recovery actions")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Automatic recovery actions"
+    )]
     fn test_obs_12() {
         panic!("RESULT=BLOCKED: Missing core implementation for Automatic recovery actions");
     }
@@ -189,7 +231,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Incident management")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Incident management"
+    )]
     fn test_obs_15() {
         panic!("RESULT=BLOCKED: Missing core implementation for Incident management");
     }
@@ -201,7 +245,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Lightweight frontend")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Lightweight frontend"
+    )]
     fn test_node_02() {
         panic!("RESULT=BLOCKED: Missing core implementation for Lightweight frontend");
     }
@@ -213,7 +259,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Restricted privileged surface")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Restricted privileged surface"
+    )]
     fn test_node_04() {
         panic!("RESULT=BLOCKED: Missing core implementation for Restricted privileged surface");
     }
@@ -225,31 +273,41 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Master and worker node management")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Master and worker node management"
+    )]
     fn test_node_06() {
         panic!("RESULT=BLOCKED: Missing core implementation for Master and worker node management");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Move and copy sites between nodes")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Move and copy sites between nodes"
+    )]
     fn test_node_07() {
         panic!("RESULT=BLOCKED: Missing core implementation for Move and copy sites between nodes");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Load-aware placement")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Load-aware placement"
+    )]
     fn test_node_08() {
         panic!("RESULT=BLOCKED: Missing core implementation for Load-aware placement");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for LIFO provisioning compensation")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for LIFO provisioning compensation"
+    )]
     fn test_node_09() {
         panic!("RESULT=BLOCKED: Missing core implementation for LIFO provisioning compensation");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Control-state persistence")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Control-state persistence"
+    )]
     fn test_node_10() {
         panic!("RESULT=BLOCKED: Missing core implementation for Control-state persistence");
     }
@@ -261,7 +319,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Highly available control plane")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Highly available control plane"
+    )]
     fn test_node_12() {
         panic!("RESULT=BLOCKED: Missing core implementation for Highly available control plane");
     }
@@ -273,15 +333,21 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Operational and recovery CLI")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Operational and recovery CLI"
+    )]
     fn test_node_14() {
         panic!("RESULT=BLOCKED: Missing core implementation for Operational and recovery CLI");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for AGPL licensing and source compliance")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for AGPL licensing and source compliance"
+    )]
     fn test_node_15() {
-        panic!("RESULT=BLOCKED: Missing core implementation for AGPL licensing and source compliance");
+        panic!(
+            "RESULT=BLOCKED: Missing core implementation for AGPL licensing and source compliance"
+        );
     }
 
     #[test]
@@ -291,25 +357,33 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Systemd service management")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Systemd service management"
+    )]
     fn test_adm_02() {
         panic!("RESULT=BLOCKED: Missing core implementation for Systemd service management");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Operating system updates")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Operating system updates"
+    )]
     fn test_adm_03() {
         panic!("RESULT=BLOCKED: Missing core implementation for Operating system updates");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Panel updates and recovery")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Panel updates and recovery"
+    )]
     fn test_adm_04() {
         panic!("RESULT=BLOCKED: Missing core implementation for Panel updates and recovery");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for User and role management")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for User and role management"
+    )]
     fn test_adm_05() {
         panic!("RESULT=BLOCKED: Missing core implementation for User and role management");
     }
@@ -321,7 +395,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for White-label branding")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for White-label branding"
+    )]
     fn test_adm_07() {
         panic!("RESULT=BLOCKED: Missing core implementation for White-label branding");
     }
@@ -339,7 +415,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for API IP allowlists and rate limits")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for API IP allowlists and rate limits"
+    )]
     fn test_adm_10() {
         panic!("RESULT=BLOCKED: Missing core implementation for API IP allowlists and rate limits");
     }
@@ -357,7 +435,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Infrastructure as Code")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Infrastructure as Code"
+    )]
     fn test_adm_13() {
         panic!("RESULT=BLOCKED: Missing core implementation for Infrastructure as Code");
     }
@@ -369,7 +449,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Monthly client reports")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Monthly client reports"
+    )]
     fn test_adm_15() {
         panic!("RESULT=BLOCKED: Missing core implementation for Monthly client reports");
     }
@@ -381,7 +463,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for CloudPanel SQLite discovery")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for CloudPanel SQLite discovery"
+    )]
     fn test_mig_02() {
         panic!("RESULT=BLOCKED: Missing core implementation for CloudPanel SQLite discovery");
     }
@@ -411,7 +495,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Exporter-based migration")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Exporter-based migration"
+    )]
     fn test_mig_07() {
         panic!("RESULT=BLOCKED: Missing core implementation for Exporter-based migration");
     }
@@ -423,27 +509,34 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Same-server migration")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Same-server migration"
+    )]
     fn test_mig_09() {
         panic!("RESULT=BLOCKED: Missing core implementation for Same-server migration");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Whole-server migration rollback")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Whole-server migration rollback"
+    )]
     fn test_mig_10() {
         panic!("RESULT=BLOCKED: Missing core implementation for Whole-server migration rollback");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for DNS and mail migration")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for DNS and mail migration"
+    )]
     fn test_mig_11() {
         panic!("RESULT=BLOCKED: Missing core implementation for DNS and mail migration");
     }
 
     #[test]
-    #[should_panic(expected = "RESULT=BLOCKED: Missing core implementation for Migration downtime control")]
+    #[should_panic(
+        expected = "RESULT=BLOCKED: Missing core implementation for Migration downtime control"
+    )]
     fn test_mig_12() {
         panic!("RESULT=BLOCKED: Missing core implementation for Migration downtime control");
     }
-
 }

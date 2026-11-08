@@ -1,4 +1,4 @@
-use integration_nodes::agent::{AgentRequest, handle_request, AgentResponse};
+use integration_nodes::agent::{handle_request, AgentRequest, AgentResponse};
 use std::io::{self, BufRead, Write};
 
 fn main() {
@@ -21,8 +21,8 @@ fn main() {
                 error: Some(integration_nodes::agent::AgentError {
                     code: "parse_error".to_string(),
                     message: format!("Failed to parse request: {}", e),
-                })
-            }
+                }),
+            },
         };
 
         let resp_json = serde_json::to_string(&resp).unwrap();

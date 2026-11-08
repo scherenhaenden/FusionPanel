@@ -214,7 +214,9 @@ impl DatabaseAdapter for MariaDbAdapter {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            let safe_err = stderr.replace(&plan.password_ref.0, "[REDACTED]").replace(&escaped_pwd, "[REDACTED]");
+            let safe_err = stderr
+                .replace(&plan.password_ref.0, "[REDACTED]")
+                .replace(&escaped_pwd, "[REDACTED]");
             return Err(DatabaseError::OperationFailed(safe_err));
         }
         Ok(())
@@ -371,7 +373,10 @@ impl DatabaseAdapter for MariaDbAdapter {
         }
 
         // Drop both localhost and wildcard since we created them that way
-        let sql = format!("DROP USER IF EXISTS '{}'@'localhost', '{}'@'%';", username.0, username.0);
+        let sql = format!(
+            "DROP USER IF EXISTS '{}'@'localhost', '{}'@'%';",
+            username.0, username.0
+        );
 
         let mut cmd = self.build_cmd("mysql");
         cmd.args(["-e", &sql]);

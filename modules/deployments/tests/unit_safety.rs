@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-use deployments::types::{ReleaseId, DeploymentState};
 use deployments::release::ReleaseManager;
+use deployments::types::{DeploymentState, ReleaseId};
 use tempfile::TempDir;
 
 #[test]
@@ -18,18 +18,17 @@ fn test_release_id_path_traversal_prevention() {
 
     for input in hostile_inputs {
         let res = ReleaseId::parse(input);
-        assert!(res.is_err(), "Hostile input '{}' should have failed parsing", input);
+        assert!(
+            res.is_err(),
+            "Hostile input '{}' should have failed parsing",
+            input
+        );
     }
 }
 
 #[test]
 fn test_release_id_valid_parsing() {
-    let valid_inputs = vec![
-        "release-1",
-        "rel_2",
-        "12345",
-        "a-b_c-1_2-3",
-    ];
+    let valid_inputs = vec!["release-1", "rel_2", "12345", "a-b_c-1_2-3"];
 
     for input in valid_inputs {
         let res = ReleaseId::parse(input);
@@ -94,7 +93,12 @@ fn test_terminal_states_no_transitions() {
             if term == DeploymentState::Active && *next == DeploymentState::RolledBack {
                 assert!(term.can_transition_to(*next));
             } else {
-                assert!(!term.can_transition_to(*next), "{:?} should not transition to {:?}", term, next);
+                assert!(
+                    !term.can_transition_to(*next),
+                    "{:?} should not transition to {:?}",
+                    term,
+                    next
+                );
             }
         }
     }

@@ -1,6 +1,6 @@
 use chrono::Utc;
 use nodes::state::NodeState;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use uuid::Uuid;
 
@@ -44,7 +44,8 @@ impl NodeStore {
     }
 
     pub fn get_node(&self, id: Uuid) -> Result<NodeState, StoreError> {
-        let state_json: String = self.conn
+        let state_json: String = self
+            .conn
             .query_row(
                 "SELECT state FROM nodes WHERE id = ?1",
                 params![id.to_string()],

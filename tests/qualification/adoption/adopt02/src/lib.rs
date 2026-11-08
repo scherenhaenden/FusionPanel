@@ -125,7 +125,10 @@ mod tests {
 
         // Simulated check that external_db was unaffected
         let delete_result = apply_lifecycle_action(&mut external_db, "delete");
-        assert_eq!(delete_result, Err("Cannot delete externally managed resources"));
+        assert_eq!(
+            delete_result,
+            Err("Cannot delete externally managed resources")
+        );
         assert!(!external_db.is_deleted);
     }
 }

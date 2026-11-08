@@ -1,10 +1,10 @@
 #![forbid(unsafe_code)]
 
 pub mod backup;
+pub mod error;
 pub mod models;
 pub mod restore;
 pub mod retention;
-pub mod error;
 
 #[cfg(test)]
 mod tests {

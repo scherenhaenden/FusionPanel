@@ -1,14 +1,14 @@
-use std::path::{Component, Path, PathBuf};
-use std::io::{Write, Read};
-use thiserror::Error;
+use base64::{engine::general_purpose::STANDARD as b64, Engine};
+use rand::RngCore;
 use reqwest::Client;
 use serde::Deserialize;
-use sha1::{Sha1, Digest};
-use rand::RngCore;
-use base64::{engine::general_purpose::STANDARD as b64, Engine};
+use sha1::{Digest, Sha1};
 use std::fs;
+use std::io::{Read, Write};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum InstallError {
@@ -17,7 +17,11 @@ pub enum InstallError {
     #[error("API request failed: {0}")]
     ApiRequestFailed(#[from] reqwest::Error),
     #[error("Checksum verification failed for {file}: expected {expected}, got {actual}")]
-    ChecksumMismatch { file: String, expected: String, actual: String },
+    ChecksumMismatch {
+        file: String,
+        expected: String,
+        actual: String,
+    },
     #[error("Missing checksum for file: {0}")]
     MissingChecksum(String),
     #[error("IO error: {0}")]
@@ -48,7 +52,13 @@ pub struct DbCredentials<'a> {
 }
 
 impl<'a> DbCredentials<'a> {
-    pub fn new(db_name: &'a str, db_user: &'a str, db_password: &'a str, db_host: &'a str, db_prefix: &'a str) -> Self {
+    pub fn new(
+        db_name: &'a str,
+        db_user: &'a str,
+        db_password: &'a str,
+        db_host: &'a str,
+        db_prefix: &'a str,
+    ) -> Self {
         Self {
             db_name,
             db_user,
@@ -75,14 +85,25 @@ impl GeneratedDbCredentials {
             let mut key = [0u8; 64];
             rng.fill_bytes(&mut key);
             let b64_str = base64::engine::general_purpose::STANDARD.encode(key);
-            b64_str.chars().filter(|c| c.is_ascii_alphanumeric()).take(length).collect()
+            b64_str
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .take(length)
+                .collect()
         };
-        
+
         let generate_password = |rng: &mut rand::rngs::ThreadRng, length: usize| -> String {
-             let mut key = [0u8; 64];
-             rng.fill_bytes(&mut key);
-             let b64_str = base64::engine::general_purpose::STANDARD.encode(key);
-             b64_str.chars().filter(|c| c.is_ascii_alphanumeric() || "!@#$%^&*()-_=[]{}|;:,.<>?".contains(*c) && *c != '\'' && *c != '\\').take(length).collect()
+            let mut key = [0u8; 64];
+            rng.fill_bytes(&mut key);
+            let b64_str = base64::engine::general_purpose::STANDARD.encode(key);
+            b64_str
+                .chars()
+                .filter(|c| {
+                    c.is_ascii_alphanumeric()
+                        || "!@#$%^&*()-_=[]{}|;:,.<>?".contains(*c) && *c != '\'' && *c != '\\'
+                })
+                .take(length)
+                .collect()
         };
 
         Self {
@@ -93,7 +114,7 @@ impl GeneratedDbCredentials {
             db_prefix: format!("wp_{}_", generate_string(&mut rng, 4).to_lowercase()),
         }
     }
-    
+
     pub fn as_ref(&self) -> DbCredentials<'_> {
         DbCredentials {
             db_name: &self.db_name,
@@ -105,14 +126,16 @@ impl GeneratedDbCredentials {
     }
 }
 
-
 struct TempDirGuard {
     path: PathBuf,
 }
 
 impl TempDirGuard {
     fn new(base: &Path) -> Result<Self, std::io::Error> {
-        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let path = base.join(format!(".wp-staging-{}", ts));
         fs::create_dir_all(&path)?;
         fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))?;
@@ -147,30 +170,44 @@ impl Orchestrator {
         }
     }
 
-    pub async fn download_and_verify(&self, version: &str, locale: &str) -> Result<(), InstallError> {
+    pub async fn download_and_verify(
+        &self,
+        version: &str,
+        locale: &str,
+    ) -> Result<(), InstallError> {
         let target_exists = self.target_dir.exists();
         if target_exists {
             let is_empty = fs::read_dir(&self.target_dir)?.next().is_none();
             if !is_empty {
-                return Err(InstallError::IoError(std::io::Error::new(std::io::ErrorKind::DirectoryNotEmpty, "Target directory not empty")));
+                return Err(InstallError::IoError(std::io::Error::new(
+                    std::io::ErrorKind::DirectoryNotEmpty,
+                    "Target directory not empty",
+                )));
             }
         }
 
-        let download_url = format!("{}/release/{locale}/wordpress-{version}.zip", self.download_base_url);
-        let checksums_url = format!("{}/core/checksums/1.0/?version={version}&locale={locale}", self.api_base_url);
+        let download_url = format!(
+            "{}/release/{locale}/wordpress-{version}.zip",
+            self.download_base_url
+        );
+        let checksums_url = format!(
+            "{}/core/checksums/1.0/?version={version}&locale={locale}",
+            self.api_base_url
+        );
 
-        let response: ChecksumsResponse = self.client.get(&checksums_url)
-            .send()
-            .await?
-            .json()
-            .await?;
+        let response: ChecksumsResponse =
+            self.client.get(&checksums_url).send().await?.json().await?;
 
         let mut resp = self.client.get(&download_url).send().await?;
         if !resp.status().is_success() {
-            let fallback_url = format!("{}/release/wordpress-{version}.zip", self.download_base_url);
+            let fallback_url =
+                format!("{}/release/wordpress-{version}.zip", self.download_base_url);
             resp = self.client.get(&fallback_url).send().await?;
             if !resp.status().is_success() {
-                return Err(InstallError::DownloadFailed(format!("Failed to download WordPress zip: {}", resp.status())));
+                return Err(InstallError::DownloadFailed(format!(
+                    "Failed to download WordPress zip: {}",
+                    resp.status()
+                )));
             }
         }
 
@@ -187,11 +224,14 @@ impl Orchestrator {
             .map_err(|e| InstallError::ZipError(e.to_string()))?;
 
         // Reject ambiguous local/central metadata before extracting or promoting any entry.
-        archive.validate_header_consistency()
+        archive
+            .validate_header_consistency()
             .map_err(|e| InstallError::ZipError(e.to_string()))?;
 
         for i in 0..archive.len() {
-            let mut file = archive.by_index(i).map_err(|e| InstallError::ZipError(e.to_string()))?;
+            let mut file = archive
+                .by_index(i)
+                .map_err(|e| InstallError::ZipError(e.to_string()))?;
 
             let enclosed = match file.enclosed_name() {
                 Some(path) => path,
@@ -233,7 +273,9 @@ impl Orchestrator {
                 }
 
                 if file.size() > 50_000_000 {
-                    return Err(InstallError::FileSizeLimitExceeded(rel_path.display().to_string()));
+                    return Err(InstallError::FileSizeLimitExceeded(
+                        rel_path.display().to_string(),
+                    ));
                 }
 
                 let mut content = Vec::new();
@@ -288,7 +330,11 @@ impl Orchestrator {
             let mut key = [0u8; 64];
             rng.fill_bytes(&mut key);
             let b64_str = b64.encode(key);
-            b64_str.chars().filter(|c| c.is_ascii_alphanumeric() || "!@#$%^&*()-_=[]{}|;:,.<>?".contains(*c)).take(64).collect()
+            b64_str
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric() || "!@#$%^&*()-_=[]{}|;:,.<>?".contains(*c))
+                .take(64)
+                .collect()
         };
 
         let auth_key = Self::escape_php_string(&generate_salt(&mut rng));
@@ -306,7 +352,8 @@ impl Orchestrator {
         let db_host_esc = Self::escape_php_string(creds.db_host);
         let db_prefix_esc = Self::escape_php_string(creds.db_prefix);
 
-        let config_content = format!(r#"<?php
+        let config_content = format!(
+            r#"<?php
 define( 'DB_NAME', '{db_name_esc}' );
 define( 'DB_USER', '{db_user_esc}' );
 define( 'DB_PASSWORD', '{db_password_esc}' );
@@ -332,11 +379,15 @@ if ( ! defined( 'ABSPATH' ) ) {{
 }}
 
 require_once ABSPATH . 'wp-settings.php';
-"#);
+"#
+        );
 
         fs::create_dir_all(&self.target_dir)?;
 
-        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let tmp_config_path = self.target_dir.join(format!("wp-config.php.tmp-{}", ts));
 
         {
@@ -355,50 +406,78 @@ require_once ABSPATH . 'wp-settings.php';
         Ok(())
     }
 
-
-    pub async fn atomic_install(&self, version: &str, locale: &str, wp_cli: &crate::wp_cli::commands::WpCli, admin_email: &str, title: &str, url: &str, db_creds: &GeneratedDbCredentials) -> Result<(), InstallError> {
+    pub async fn atomic_install(
+        &self,
+        version: &str,
+        locale: &str,
+        wp_cli: &crate::wp_cli::commands::WpCli,
+        admin_email: &str,
+        title: &str,
+        url: &str,
+        db_creds: &GeneratedDbCredentials,
+    ) -> Result<(), InstallError> {
         let site_path = &self.target_dir;
-        
+
         let target_exists = self.target_dir.exists();
         if target_exists {
             let is_empty = fs::read_dir(&self.target_dir)?.next().is_none();
             if !is_empty {
-                return Err(InstallError::IoError(std::io::Error::new(std::io::ErrorKind::DirectoryNotEmpty, "Target directory not empty")));
+                return Err(InstallError::IoError(std::io::Error::new(
+                    std::io::ErrorKind::DirectoryNotEmpty,
+                    "Target directory not empty",
+                )));
             }
         }
-        
+
         // 1. Download
         if let Err(e) = self.download_and_verify(version, locale).await {
             self.cleanup_files();
             return Err(e);
         }
-        
+
         // 2. Generate wp-config.php
         if let Err(e) = self.generate_wp_config(&db_creds.as_ref()) {
             self.cleanup_files();
             return Err(e);
         }
-        
+
         // We cannot create databases here safely without root db creds, so assume the db is provisioned
         // If not, validation fails before install
         if let Err(e) = self.validate_database_connection(&db_creds.as_ref()).await {
-             self.cleanup_files();
-             return Err(e);
+            self.cleanup_files();
+            return Err(e);
         }
-        
+
         // 3. Core install
         let admin_user = "admin";
         let mut rng = rand::thread_rng();
         let generate_admin_pass = |rng: &mut rand::rngs::ThreadRng, length: usize| -> String {
-             let mut key = [0u8; 64];
-             rng.fill_bytes(&mut key);
-             let b64_str = base64::engine::general_purpose::STANDARD.encode(key);
-             b64_str.chars().filter(|c| c.is_ascii_alphanumeric() || "!@#$%^&*()-_=[]{}|;:,.<>?".contains(*c) && *c != '\'' && *c != '\\').take(length).collect()
+            let mut key = [0u8; 64];
+            rng.fill_bytes(&mut key);
+            let b64_str = base64::engine::general_purpose::STANDARD.encode(key);
+            b64_str
+                .chars()
+                .filter(|c| {
+                    c.is_ascii_alphanumeric()
+                        || "!@#$%^&*()-_=[]{}|;:,.<>?".contains(*c) && *c != '\'' && *c != '\\'
+                })
+                .take(length)
+                .collect()
         };
         let admin_password = generate_admin_pass(&mut rng, 24);
         // url is passed as argument
-        
-        if let Err(e) = wp_cli.core_install(site_path, url, title, admin_user, &admin_password, admin_email).await {
+
+        if let Err(e) = wp_cli
+            .core_install(
+                site_path,
+                url,
+                title,
+                admin_user,
+                &admin_password,
+                admin_email,
+            )
+            .await
+        {
             self.cleanup_database(db_creds).await;
             self.cleanup_files();
             return Err(InstallError::WpCliError(e));
@@ -406,20 +485,24 @@ require_once ABSPATH . 'wp-settings.php';
 
         Ok(())
     }
-    
+
     async fn cleanup_database(&self, creds: &GeneratedDbCredentials) {
         let user = urlencoding::encode(&creds.db_user);
         let pass = urlencoding::encode(&creds.db_password);
-        let url = format!("mysql://{}:{}@{}/{}", user, pass, creds.db_host, creds.db_name);
-        
+        let url = format!(
+            "mysql://{}:{}@{}/{}",
+            user, pass, creds.db_host, creds.db_name
+        );
+
         if let Ok(opts) = mysql_async::Opts::from_url(&url) {
             let pool = mysql_async::Pool::new(opts);
             if let Ok(mut conn) = pool.get_conn().await {
-                 let _ = mysql_async::prelude::Queryable::query_drop(&mut conn, "SHOW TABLES").await;
-                 // As a fallback to wp db reset, we can just drop all tables with the prefix
-                 // A real implementation might run `wp db reset` if wp-cli is available,
-                 // but since wp core install failed, it might be safer to drop all tables in this db.
-                 let drop_query = format!("
+                let _ = mysql_async::prelude::Queryable::query_drop(&mut conn, "SHOW TABLES").await;
+                // As a fallback to wp db reset, we can just drop all tables with the prefix
+                // A real implementation might run `wp db reset` if wp-cli is available,
+                // but since wp core install failed, it might be safer to drop all tables in this db.
+                let drop_query = format!(
+                    "
                     SET FOREIGN_KEY_CHECKS = 0;
                     SET GROUP_CONCAT_MAX_LEN=32768;
                     SET @tables = NULL;
@@ -432,37 +515,53 @@ require_once ABSPATH . 'wp-settings.php';
                     EXECUTE stmt;
                     DEALLOCATE PREPARE stmt;
                     SET FOREIGN_KEY_CHECKS = 1;
-                 ");
-                 let _ = mysql_async::prelude::Queryable::query_drop(&mut conn, drop_query).await;
+                 "
+                );
+                let _ = mysql_async::prelude::Queryable::query_drop(&mut conn, drop_query).await;
             }
         }
     }
-    
+
     fn cleanup_files(&self) {
         let _ = fs::remove_dir_all(&self.target_dir);
     }
 
-    pub async fn validate_database_connection(&self, creds: &DbCredentials<'_>) -> Result<(), InstallError> {
+    pub async fn validate_database_connection(
+        &self,
+        creds: &DbCredentials<'_>,
+    ) -> Result<(), InstallError> {
         if creds.db_name.is_empty() || creds.db_user.is_empty() || creds.db_host.is_empty() {
-            return Err(InstallError::DatabaseValidationFailed("Missing database credentials".into()));
+            return Err(InstallError::DatabaseValidationFailed(
+                "Missing database credentials".into(),
+            ));
         }
 
         let user = urlencoding::encode(creds.db_user);
         let pass = urlencoding::encode(creds.db_password);
-        let url = format!("mysql://{}:{}@{}/{}", user, pass, creds.db_host, creds.db_name);
+        let url = format!(
+            "mysql://{}:{}@{}/{}",
+            user, pass, creds.db_host, creds.db_name
+        );
 
         let opts = mysql_async::Opts::from_url(&url)
             .map_err(|e| InstallError::DatabaseValidationFailed(e.to_string()))?;
 
         let pool = mysql_async::Pool::new(opts);
-        let mut conn = pool.get_conn().await
-            .map_err(|e| InstallError::DatabaseValidationFailed(format!("Connection refused: {}", e)))?;
+        let mut conn = pool.get_conn().await.map_err(|e| {
+            InstallError::DatabaseValidationFailed(format!("Connection refused: {}", e))
+        })?;
 
-        let result: Option<String> = mysql_async::prelude::Queryable::query_first(&mut conn, "SELECT 1").await
-            .map_err(|e| InstallError::DatabaseValidationFailed(format!("Query failed: {}", e)))?;
+        let result: Option<String> =
+            mysql_async::prelude::Queryable::query_first(&mut conn, "SELECT 1")
+                .await
+                .map_err(|e| {
+                    InstallError::DatabaseValidationFailed(format!("Query failed: {}", e))
+                })?;
 
         if result.is_none() {
-            return Err(InstallError::DatabaseValidationFailed("Database query failed to return result".to_string()));
+            return Err(InstallError::DatabaseValidationFailed(
+                "Database query failed to return result".to_string(),
+            ));
         }
 
         Ok(())

@@ -1,22 +1,22 @@
 #![forbid(unsafe_code)]
 
+use administration::{
+    audit::AuditLog,
+    quotas::{QuotaEngine, ResourceQuotas},
+};
 use axum::{
     body::Body,
-    http::{Request, StatusCode, header::AUTHORIZATION},
+    http::{header::AUTHORIZATION, Request, StatusCode},
 };
+use chrono::Utc;
+use http_body_util::BodyExt;
+use integration_administration::routes::{router, AppState, DurableInvitations};
+use serde_json::json;
 use std::sync::Arc;
+use tempfile::NamedTempFile;
 use tokio::sync::Mutex;
 use tower::ServiceExt;
-use administration::{
-    quotas::{QuotaEngine, ResourceQuotas},
-    audit::AuditLog,
-};
-use integration_administration::routes::{router, AppState, DurableInvitations};
 use uuid::Uuid;
-use chrono::Utc;
-use serde_json::json;
-use http_body_util::BodyExt;
-use tempfile::NamedTempFile;
 
 async fn setup_app() -> (axum::Router, Arc<QuotaEngine>) {
     let quotas = Arc::new(QuotaEngine::new());
@@ -25,7 +25,9 @@ async fn setup_app() -> (axum::Router, Arc<QuotaEngine>) {
     let audit = Arc::new(Mutex::new(AuditLog::with_path(audit_file.path()).unwrap()));
 
     let inv_file = NamedTempFile::new().unwrap();
-    let invitations = Arc::new(Mutex::new(DurableInvitations::new(inv_file.path().to_path_buf())));
+    let invitations = Arc::new(Mutex::new(DurableInvitations::new(
+        inv_file.path().to_path_buf(),
+    )));
 
     let operators = Arc::new(Mutex::new(vec![
         integration_administration::routes::Operator {
@@ -39,7 +41,7 @@ async fn setup_app() -> (axum::Router, Arc<QuotaEngine>) {
             username: "viewer".to_string(),
             role: "viewer".to_string(),
             token: "op-viewer-token".to_string(),
-        }
+        },
     ]));
 
     let state = AppState {
@@ -52,7 +54,11 @@ async fn setup_app() -> (axum::Router, Arc<QuotaEngine>) {
     (router(state), quotas)
 }
 
-async fn post_json_auth(app: &axum::Router, uri: &str, body: serde_json::Value) -> axum::http::Response<axum::body::Body> {
+async fn post_json_auth(
+    app: &axum::Router,
+    uri: &str,
+    body: serde_json::Value,
+) -> axum::http::Response<axum::body::Body> {
     app.clone()
         .oneshot(
             Request::builder()
@@ -86,7 +92,12 @@ async fn test_health() {
     let (app, _) = setup_app().await;
 
     let response = app
-        .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -98,28 +109,36 @@ async fn test_quotas_races_and_release() {
     let (app, quotas) = setup_app().await;
     let tenant_id = Uuid::new_v4();
 
-    quotas.set_limits(tenant_id, ResourceQuotas {
-        cpu_cores: 10,
-        memory_mb: 1024,
-        disk_mb: 10000,
-        domain_count: 5,
-        database_count: 2,
-    });
+    quotas.set_limits(
+        tenant_id,
+        ResourceQuotas {
+            cpu_cores: 10,
+            memory_mb: 1024,
+            disk_mb: 10000,
+            domain_count: 5,
+            database_count: 2,
+        },
+    );
 
     let mut futures = vec![];
     for _ in 0..10 {
         let app = app.clone();
         futures.push(tokio::spawn(async move {
-            post_json_auth(&app, "/quotas/reserve", json!({
-                "tenant_id": tenant_id,
-                "resources": {
-                    "cpu_cores": 1,
-                    "memory_mb": 100,
-                    "disk_mb": 1000,
-                    "domain_count": 0,
-                    "database_count": 0
-                }
-            })).await
+            post_json_auth(
+                &app,
+                "/quotas/reserve",
+                json!({
+                    "tenant_id": tenant_id,
+                    "resources": {
+                        "cpu_cores": 1,
+                        "memory_mb": 100,
+                        "disk_mb": 1000,
+                        "domain_count": 0,
+                        "database_count": 0
+                    }
+                }),
+            )
+            .await
         }));
     }
 
@@ -135,42 +154,57 @@ async fn test_quotas_races_and_release() {
     assert_eq!(success_count, 10);
 
     // 11th fails
-    let res = post_json_auth(&app, "/quotas/reserve", json!({
-        "tenant_id": tenant_id,
-        "resources": {
-            "cpu_cores": 1,
-            "memory_mb": 100,
-            "disk_mb": 1000,
-            "domain_count": 0,
-            "database_count": 0
-        }
-    })).await;
+    let res = post_json_auth(
+        &app,
+        "/quotas/reserve",
+        json!({
+            "tenant_id": tenant_id,
+            "resources": {
+                "cpu_cores": 1,
+                "memory_mb": 100,
+                "disk_mb": 1000,
+                "domain_count": 0,
+                "database_count": 0
+            }
+        }),
+    )
+    .await;
     assert_eq!(res.status(), StatusCode::PAYLOAD_TOO_LARGE);
 
     // Test release
-    let res = post_json_auth(&app, "/quotas/release", json!({
-        "tenant_id": tenant_id,
-        "resources": {
-            "cpu_cores": 2,
-            "memory_mb": 200,
-            "disk_mb": 2000,
-            "domain_count": 0,
-            "database_count": 0
-        }
-    })).await;
+    let res = post_json_auth(
+        &app,
+        "/quotas/release",
+        json!({
+            "tenant_id": tenant_id,
+            "resources": {
+                "cpu_cores": 2,
+                "memory_mb": 200,
+                "disk_mb": 2000,
+                "domain_count": 0,
+                "database_count": 0
+            }
+        }),
+    )
+    .await;
     assert_eq!(res.status(), StatusCode::OK);
 
     // Now we can reserve again
-    let res = post_json_auth(&app, "/quotas/reserve", json!({
-        "tenant_id": tenant_id,
-        "resources": {
-            "cpu_cores": 1,
-            "memory_mb": 100,
-            "disk_mb": 1000,
-            "domain_count": 0,
-            "database_count": 0
-        }
-    })).await;
+    let res = post_json_auth(
+        &app,
+        "/quotas/reserve",
+        json!({
+            "tenant_id": tenant_id,
+            "resources": {
+                "cpu_cores": 1,
+                "memory_mb": 100,
+                "disk_mb": 1000,
+                "domain_count": 0,
+                "database_count": 0
+            }
+        }),
+    )
+    .await;
     assert_eq!(res.status(), StatusCode::OK);
 }
 
@@ -190,14 +224,18 @@ async fn test_audit_anchoring() {
     });
 
     // Unauthenticated should fail
-    let unauth_res = app.clone().oneshot(
-        Request::builder()
-            .method("POST")
-            .uri("/audit/append")
-            .header("Content-Type", "application/json")
-            .body(Body::from(event.to_string()))
-            .unwrap()
-    ).await.unwrap();
+    let unauth_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/audit/append")
+                .header("Content-Type", "application/json")
+                .body(Body::from(event.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
     assert_eq!(unauth_res.status(), StatusCode::UNAUTHORIZED);
 
     let res = post_json_auth(&app, "/audit/append", event).await;
@@ -216,11 +254,16 @@ async fn test_cross_tenant_invitation_policy() {
     let (app, _) = setup_app().await;
     let tenant_id = Uuid::new_v4();
 
-    let res = post_json_auth(&app, "/invitations", json!({
-        "tenant_id": tenant_id,
-        "role": "Admin",
-        "ttl_seconds": 3600
-    })).await;
+    let res = post_json_auth(
+        &app,
+        "/invitations",
+        json!({
+            "tenant_id": tenant_id,
+            "role": "Admin",
+            "ttl_seconds": 3600
+        }),
+    )
+    .await;
     assert_eq!(res.status(), StatusCode::OK);
 
     let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -229,9 +272,14 @@ async fn test_cross_tenant_invitation_policy() {
     let token = invitation["token"].as_str().unwrap();
 
     // Remove unused current_time
-    let res = post_json_auth(&app, &format!("/invitations/{}/accept", id), json!({
-        "token": token
-    })).await;
+    let res = post_json_auth(
+        &app,
+        &format!("/invitations/{}/accept", id),
+        json!({
+            "token": token
+        }),
+    )
+    .await;
     assert_eq!(res.status(), StatusCode::OK);
 }
 
@@ -269,7 +317,8 @@ async fn test_rbac_system_admin_only() {
     let (app, _) = setup_app().await;
 
     // Viewer should be forbidden
-    let res = app.clone()
+    let res = app
+        .clone()
         .oneshot(
             Request::builder()
                 .method("GET")
@@ -283,7 +332,8 @@ async fn test_rbac_system_admin_only() {
     assert_eq!(res.status(), StatusCode::FORBIDDEN);
 
     // System admin should be allowed
-    let res = app.clone()
+    let res = app
+        .clone()
         .oneshot(
             Request::builder()
                 .method("GET")
@@ -302,7 +352,8 @@ async fn test_audit_query_and_invitations() {
     let (app, _) = setup_app().await;
 
     // test GET /api/v1/admin/audit
-    let res = app.clone()
+    let res = app
+        .clone()
         .oneshot(
             Request::builder()
                 .method("GET")
@@ -316,18 +367,22 @@ async fn test_audit_query_and_invitations() {
     assert_eq!(res.status(), StatusCode::OK);
 
     // test POST /api/v1/admin/invitations
-    let res = app.clone()
+    let res = app
+        .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
                 .uri("/api/v1/admin/invitations")
                 .header(AUTHORIZATION, "Bearer op-system-admin-token")
                 .header("Content-Type", "application/json")
-                .body(Body::from(json!({
-                    "tenant_id": Uuid::new_v4(),
-                    "role": "Admin",
-                    "ttl_seconds": 3600
-                }).to_string()))
+                .body(Body::from(
+                    json!({
+                        "tenant_id": Uuid::new_v4(),
+                        "role": "Admin",
+                        "ttl_seconds": 3600
+                    })
+                    .to_string(),
+                ))
                 .unwrap(),
         )
         .await

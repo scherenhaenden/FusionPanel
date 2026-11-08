@@ -308,18 +308,53 @@ impl TryFrom<String> for OsUsername {
 
     fn try_from(s: String) -> Result<Self> {
         if s.is_empty() {
-            return Err(DomainError::InvalidInput("OS username cannot be empty".into()));
+            return Err(DomainError::InvalidInput(
+                "OS username cannot be empty".into(),
+            ));
         }
         if s.len() > 32 {
-            return Err(DomainError::InvalidInput("OS username too long (max 32 chars)".into()));
+            return Err(DomainError::InvalidInput(
+                "OS username too long (max 32 chars)".into(),
+            ));
         }
         if s.starts_with('-') {
-            return Err(DomainError::InvalidInput("OS username cannot start with a hyphen".into()));
+            return Err(DomainError::InvalidInput(
+                "OS username cannot start with a hyphen".into(),
+            ));
         }
-        if !s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-            return Err(DomainError::InvalidInput("OS username contains invalid characters".into()));
+        if !s
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
+            return Err(DomainError::InvalidInput(
+                "OS username contains invalid characters".into(),
+            ));
         }
-        let reserved = ["root", "daemon", "bin", "sys", "sync", "games", "man", "lp", "mail", "news", "uucp", "proxy", "www-data", "backup", "list", "irc", "gnats", "nobody", "systemd-network", "systemd-resolve", "systemd-timesync", "messagebus", "sshd"];
+        let reserved = [
+            "root",
+            "daemon",
+            "bin",
+            "sys",
+            "sync",
+            "games",
+            "man",
+            "lp",
+            "mail",
+            "news",
+            "uucp",
+            "proxy",
+            "www-data",
+            "backup",
+            "list",
+            "irc",
+            "gnats",
+            "nobody",
+            "systemd-network",
+            "systemd-resolve",
+            "systemd-timesync",
+            "messagebus",
+            "sshd",
+        ];
         if reserved.contains(&s.as_str()) {
             return Err(DomainError::InvalidInput("Protected system account".into()));
         }

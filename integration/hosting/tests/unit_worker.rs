@@ -31,7 +31,11 @@ fn setup_test_env(nginx_script: &str) -> TestEnv {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("hosting_worker_test_{}_{}", now, uuid::Uuid::new_v4()));
+    let temp_dir = std::env::temp_dir().join(format!(
+        "hosting_worker_test_{}_{}",
+        now,
+        uuid::Uuid::new_v4()
+    ));
 
     fs::create_dir_all(&temp_dir).unwrap();
     let mut perms = fs::metadata(&temp_dir).unwrap().permissions();
@@ -231,7 +235,11 @@ fn test_missing_nginx_binary() {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let temp_dir = std::env::temp_dir().join(format!("hosting_worker_test_{}_{}", now, uuid::Uuid::new_v4()));
+    let temp_dir = std::env::temp_dir().join(format!(
+        "hosting_worker_test_{}_{}",
+        now,
+        uuid::Uuid::new_v4()
+    ));
 
     fs::create_dir_all(&temp_dir).unwrap();
     let mut perms = fs::metadata(&temp_dir).unwrap().permissions();
@@ -267,7 +275,10 @@ fn test_missing_nginx_binary() {
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("Failed to run nginx -t:"));
 
-    assert!(!env.sites_available_dir.join("missing-nginx.com.conf").exists());
+    assert!(!env
+        .sites_available_dir
+        .join("missing-nginx.com.conf")
+        .exists());
 }
 
 #[test]
@@ -336,7 +347,9 @@ exit 1
 
     let result = worker.process_event(event);
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Failed to run nginx -s reload:"));
+    assert!(result
+        .unwrap_err()
+        .contains("Failed to run nginx -s reload:"));
 
     assert_eq!(
         fs::read_to_string(env.sites_available_dir.join("launch-fail.com.conf")).unwrap(),
@@ -346,7 +359,6 @@ exit 1
 
 #[test]
 fn test_restart_marker_on_failed_rollback() {
-
     // Create a situation where rollback fails by deleting the temporary file manually during test phase
     let hacky_script = r#"#!/bin/sh
 if [ "$1" = "-t" ]; then

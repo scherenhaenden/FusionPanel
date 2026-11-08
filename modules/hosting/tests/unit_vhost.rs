@@ -1,13 +1,15 @@
 #![forbid(unsafe_code)]
 
-use hosting::domain::{SiteConfig, SiteId, TenantId, DomainName, HostingSpec, PhpConfig, StaticConfig};
+use hosting::domain::{
+    DomainName, HostingSpec, PhpConfig, SiteConfig, SiteId, StaticConfig, TenantId,
+};
 
-use hosting::domain::identity::ResourceOwner;
-use hosting::vhost::{VhostOrchestrator, SystemEnvironment};
 use hosting::domain::error::{DomainError, Result};
+use hosting::domain::identity::ResourceOwner;
+use hosting::vhost::{SystemEnvironment, VhostOrchestrator};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
 
 #[derive(Clone, Default)]
 struct MockEnvironment {
@@ -22,7 +24,10 @@ struct MockEnvironment {
 
 impl SystemEnvironment for MockEnvironment {
     fn write_file(&self, path: &Path, content: &str) -> Result<()> {
-        self.files.lock().unwrap().insert(path.to_path_buf(), content.to_string());
+        self.files
+            .lock()
+            .unwrap()
+            .insert(path.to_path_buf(), content.to_string());
         Ok(())
     }
 
@@ -34,16 +39,25 @@ impl SystemEnvironment for MockEnvironment {
     }
 
     fn symlink(&self, src: &Path, dst: &Path) -> Result<()> {
-        self.symlinks.lock().unwrap().insert(dst.to_path_buf(), src.to_path_buf());
+        self.symlinks
+            .lock()
+            .unwrap()
+            .insert(dst.to_path_buf(), src.to_path_buf());
         Ok(())
     }
 
     fn read_link(&self, path: &Path) -> Result<PathBuf> {
-        self.symlinks.lock().unwrap().get(path).cloned().ok_or_else(|| DomainError::OperationFailed("Link not found".into()))
+        self.symlinks
+            .lock()
+            .unwrap()
+            .get(path)
+            .cloned()
+            .ok_or_else(|| DomainError::OperationFailed("Link not found".into()))
     }
 
     fn file_exists(&self, path: &Path) -> bool {
-        self.files.lock().unwrap().contains_key(path) || self.symlinks.lock().unwrap().contains_key(path)
+        self.files.lock().unwrap().contains_key(path)
+            || self.symlinks.lock().unwrap().contains_key(path)
     }
 
     fn test_nginx_config(&self) -> Result<()> {
@@ -78,7 +92,10 @@ fn create_static_site() -> SiteConfig {
         id: SiteId(uuid::Uuid::new_v4()),
         tenant_id: TenantId(uuid::Uuid::new_v4()),
         domain: DomainName::new("example.com").unwrap(),
-        document_root: "/srv/fusionpanel/sites/example.com".to_string().try_into().unwrap(),
+        document_root: "/srv/fusionpanel/sites/example.com"
+            .to_string()
+            .try_into()
+            .unwrap(),
         spec: HostingSpec::Static(StaticConfig),
         port: 8080.try_into().unwrap(),
         owner: ResourceOwner::ExternallyManaged,
@@ -92,7 +109,10 @@ fn create_php_site() -> SiteConfig {
         id: SiteId(uuid::Uuid::new_v4()),
         tenant_id: TenantId(uuid::Uuid::new_v4()),
         domain: DomainName::new("php.example.com").unwrap(),
-        document_root: "/srv/fusionpanel/sites/php.example.com".to_string().try_into().unwrap(),
+        document_root: "/srv/fusionpanel/sites/php.example.com"
+            .to_string()
+            .try_into()
+            .unwrap(),
         spec: HostingSpec::Php(PhpConfig {
             version: "8.2".to_string().try_into().unwrap(),
             pool_name: "php_example_com".to_string().try_into().unwrap(),
@@ -203,9 +223,18 @@ fn test_delete_php_site() {
     let enabled_path = PathBuf::from("/etc/nginx/sites-enabled/php.example.com.conf");
     let pool_path = PathBuf::from("/etc/php/8.2/fpm/pool.d/php_example_com.conf");
 
-    env.files.lock().unwrap().insert(available_path.clone(), "".into());
-    env.files.lock().unwrap().insert(pool_path.clone(), "".into());
-    env.symlinks.lock().unwrap().insert(enabled_path.clone(), available_path.clone());
+    env.files
+        .lock()
+        .unwrap()
+        .insert(available_path.clone(), "".into());
+    env.files
+        .lock()
+        .unwrap()
+        .insert(pool_path.clone(), "".into());
+    env.symlinks
+        .lock()
+        .unwrap()
+        .insert(enabled_path.clone(), available_path.clone());
 
     let result = orchestrator.delete_site(&site);
 

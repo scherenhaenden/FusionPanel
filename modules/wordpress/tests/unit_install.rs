@@ -1,13 +1,13 @@
 #![forbid(unsafe_code)]
 
+use mockito::Server;
 use std::fs;
+use std::io::Cursor;
 use std::io::Write;
+use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 use wordpress::install::{verify_file_checksum, DbCredentials, InstallError, Orchestrator};
-use std::os::unix::fs::PermissionsExt;
 use zip::write::SimpleFileOptions;
-use std::io::Cursor;
-use mockito::Server;
 
 #[tokio::test]
 async fn test_generate_wp_config() {
@@ -28,7 +28,11 @@ async fn test_generate_wp_config() {
     assert!(config_path.exists());
 
     let md = fs::metadata(&config_path).unwrap();
-    assert_eq!(md.permissions().mode() & 0o777, 0o600, "wp-config.php must have 0600 permissions");
+    assert_eq!(
+        md.permissions().mode() & 0o777,
+        0o600,
+        "wp-config.php must have 0600 permissions"
+    );
 
     let content = fs::read_to_string(config_path).unwrap();
 
@@ -76,7 +80,10 @@ async fn test_database_validation() {
             println!("BLOCKED: Cannot connect to arbitrary DB but test passed incorrectly");
         }
         Err(e) => {
-            println!("BLOCKED: DB connection expectedly failed in test env: {}", e);
+            println!(
+                "BLOCKED: DB connection expectedly failed in test env: {}",
+                e
+            );
         }
     }
 }
@@ -143,11 +150,13 @@ async fn test_corrupt_traversal_archive_mocked() {
     let api_url = server.url();
     let download_url = server.url();
 
-    let checksum_mock = server.mock("GET", "/core/checksums/1.0/?version=6.3&locale=en_US")
+    let checksum_mock = server
+        .mock("GET", "/core/checksums/1.0/?version=6.3&locale=en_US")
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(r#"{"checksums":{"index.php":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed"}}"#)
-        .create_async().await;
+        .create_async()
+        .await;
 
     // Create a zip with a traversal file
     let mut zip_buf = Vec::new();
@@ -155,7 +164,8 @@ async fn test_corrupt_traversal_archive_mocked() {
         let mut zip = zip::ZipWriter::new(Cursor::new(&mut zip_buf));
         let options = SimpleFileOptions::default();
         // Since `zip` crate escapes strings and doesn't allow ".." easily, let's use an invalid zip file to trigger ZipError
-        zip.start_file("wordpress/../../etc/passwd", options).unwrap();
+        zip.start_file("wordpress/../../etc/passwd", options)
+            .unwrap();
         zip.write_all(b"root:x:0:0:root:/root:/bin/bash").unwrap();
         zip.finish().unwrap();
     }
@@ -166,10 +176,12 @@ async fn test_corrupt_traversal_archive_mocked() {
     // Let's test a Zip bomb or large file instead, or just corrupt bytes.
     let corrupt_zip_buf = b"This is not a zip file";
 
-    let download_mock = server.mock("GET", "/release/en_US/wordpress-6.3.zip")
+    let download_mock = server
+        .mock("GET", "/release/en_US/wordpress-6.3.zip")
         .with_status(200)
         .with_body(&corrupt_zip_buf[..])
-        .create_async().await;
+        .create_async()
+        .await;
 
     let temp_dir = TempDir::new().unwrap();
     let mut orchestrator = Orchestrator::new(temp_dir.path());
@@ -204,10 +216,12 @@ async fn test_missing_checksum_mocked() {
         zip.finish().unwrap();
     }
 
-    let _download_mock = server.mock("GET", "/release/en_US/wordpress-6.3.zip")
+    let _download_mock = server
+        .mock("GET", "/release/en_US/wordpress-6.3.zip")
         .with_status(200)
         .with_body(&zip_buf[..])
-        .create_async().await;
+        .create_async()
+        .await;
 
     let temp_dir = TempDir::new().unwrap();
     let mut orchestrator = Orchestrator::new(temp_dir.path());
@@ -225,11 +239,13 @@ async fn test_successful_promotion_mocked() {
     let api_url = server.url();
     let download_url = server.url();
 
-    let _checksum_mock = server.mock("GET", "/core/checksums/1.0/?version=6.3&locale=en_US")
+    let _checksum_mock = server
+        .mock("GET", "/core/checksums/1.0/?version=6.3&locale=en_US")
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(r#"{"checksums":{"index.php":"2aae6c35c94fcfb415dbe95f408b9ce91ee846ed"}}"#)
-        .create_async().await;
+        .create_async()
+        .await;
 
     let mut zip_buf = Vec::new();
     {
@@ -237,15 +253,18 @@ async fn test_successful_promotion_mocked() {
         let options = SimpleFileOptions::default();
         zip.start_file("wordpress/index.php", options).unwrap();
         zip.write_all(b"hello world").unwrap();
-        zip.start_file("wordpress/wp-content/themes/index.php", options).unwrap();
+        zip.start_file("wordpress/wp-content/themes/index.php", options)
+            .unwrap();
         zip.write_all(b"no checksum").unwrap();
         zip.finish().unwrap();
     }
 
-    let _download_mock = server.mock("GET", "/release/en_US/wordpress-6.3.zip")
+    let _download_mock = server
+        .mock("GET", "/release/en_US/wordpress-6.3.zip")
         .with_status(200)
         .with_body(&zip_buf[..])
-        .create_async().await;
+        .create_async()
+        .await;
 
     let temp_dir = TempDir::new().unwrap();
     let mut orchestrator = Orchestrator::new(temp_dir.path());
@@ -273,10 +292,10 @@ fn test_generate_db_credentials() {
 
 #[tokio::test]
 async fn test_atomic_install_fails_on_existing_dir() {
-    use wordpress::install::{Orchestrator, GeneratedDbCredentials};
-    use wordpress::wp_cli::{commands::WpCli, WpCliExecutor};
-    use tempfile::tempdir;
     use std::fs;
+    use tempfile::tempdir;
+    use wordpress::install::{GeneratedDbCredentials, Orchestrator};
+    use wordpress::wp_cli::{commands::WpCli, WpCliExecutor};
 
     let dir = tempdir().unwrap();
     let target_dir = dir.path().join("existing");
@@ -287,8 +306,18 @@ async fn test_atomic_install_fails_on_existing_dir() {
     let orchestrator = Orchestrator::new(&target_dir);
     let wp_cli = WpCli::new(WpCliExecutor::new("echo"));
     let creds = GeneratedDbCredentials::generate();
-    
-    let res = orchestrator.atomic_install("6.4.1", "en_US", &wp_cli, "test@example.com", "Test Site", "http://localhost", &creds).await;
+
+    let res = orchestrator
+        .atomic_install(
+            "6.4.1",
+            "en_US",
+            &wp_cli,
+            "test@example.com",
+            "Test Site",
+            "http://localhost",
+            &creds,
+        )
+        .await;
     assert!(res.is_err());
     let err_str = res.unwrap_err().to_string();
     assert!(err_str.contains("Target directory not empty"));

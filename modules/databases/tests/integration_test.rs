@@ -65,15 +65,27 @@ async fn test_mariadb_adapter() -> Result<()> {
     if let Err(DatabaseError::Conflict(_)) = dup_res {
         // Ok
     } else {
-        panic!("Expected Conflict error on duplicate database creation, got {:?}", dup_res);
+        panic!(
+            "Expected Conflict error on duplicate database creation, got {:?}",
+            dup_res
+        );
     }
 
     let exists = adapter.database_exists(&db_name).await?;
     assert!(exists, "Database should exist");
 
     let dbs = adapter.list_databases().await?;
-    assert!(dbs.iter().any(|d| d.name == db_name), "Database should be in list");
-    assert!(!dbs.iter().any(|d| d.name.0 == "information_schema" || d.name.0 == "mysql" || d.name.0 == "performance_schema" || d.name.0 == "sys"), "System schemas should not be in list");
+    assert!(
+        dbs.iter().any(|d| d.name == db_name),
+        "Database should be in list"
+    );
+    assert!(
+        !dbs.iter().any(|d| d.name.0 == "information_schema"
+            || d.name.0 == "mysql"
+            || d.name.0 == "performance_schema"
+            || d.name.0 == "sys"),
+        "System schemas should not be in list"
+    );
 
     let plan = adapter
         .plan_create_user(user_name.clone(), temp_pass.clone())
@@ -81,7 +93,11 @@ async fn test_mariadb_adapter() -> Result<()> {
     adapter.apply_create_user(&plan).await?;
 
     let plan = adapter
-        .plan_grant(db_name.clone(), user_name.clone(), vec!["SELECT".into(), "INSERT".into()])
+        .plan_grant(
+            db_name.clone(),
+            user_name.clone(),
+            vec!["SELECT".into(), "INSERT".into()],
+        )
         .await?;
     adapter.apply_grant(&plan).await?;
 
@@ -119,9 +135,14 @@ async fn test_mariadb_adapter() -> Result<()> {
         .arg("SELECT 1;")
         .output()
         .await
-        .map_err(|e| DatabaseError::OperationFailed(format!("Failed to connect as user to other db: {}", e)))?;
+        .map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to connect as user to other db: {}", e))
+        })?;
 
-    assert!(!user_other_mysql.status.success(), "User should not be able to access another database");
+    assert!(
+        !user_other_mysql.status.success(),
+        "User should not be able to access another database"
+    );
 
     let dump_path = format!("/tmp/{}.sql", db_name.0);
     let plan = adapter
@@ -155,7 +176,9 @@ async fn test_mariadb_adapter() -> Result<()> {
         .arg("SELECT * FROM test_table;")
         .output()
         .await
-        .map_err(|e| DatabaseError::OperationFailed(format!("Failed to verify restored data: {}", e)))?;
+        .map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to verify restored data: {}", e))
+        })?;
 
     if !verify_mysql.status.success() {
         return Err(DatabaseError::OperationFailed(format!(
@@ -165,7 +188,10 @@ async fn test_mariadb_adapter() -> Result<()> {
     }
 
     let out_str = String::from_utf8_lossy(&verify_mysql.stdout);
-    assert!(out_str.contains("42"), "Restored database did not contain the inserted record");
+    assert!(
+        out_str.contains("42"),
+        "Restored database did not contain the inserted record"
+    );
 
     let _ = fs::remove_file(dump_path);
 
@@ -235,18 +261,32 @@ async fn test_postgres_adapter() -> Result<()> {
     if let Err(DatabaseError::Conflict(_)) = dup_res {
         // Ok
     } else {
-        panic!("Expected Conflict error on duplicate database creation, got {:?}", dup_res);
+        panic!(
+            "Expected Conflict error on duplicate database creation, got {:?}",
+            dup_res
+        );
     }
 
     let exists = adapter.database_exists(&db_name).await?;
     assert!(exists, "Database should exist");
 
     let dbs = adapter.list_databases().await?;
-    assert!(dbs.iter().any(|d| d.name == db_name), "Database should be in list");
-    assert!(!dbs.iter().any(|d| d.name.0 == "postgres" || d.name.0.starts_with("template")), "System schemas should not be in list");
+    assert!(
+        dbs.iter().any(|d| d.name == db_name),
+        "Database should be in list"
+    );
+    assert!(
+        !dbs.iter()
+            .any(|d| d.name.0 == "postgres" || d.name.0.starts_with("template")),
+        "System schemas should not be in list"
+    );
 
     let plan = adapter
-        .plan_grant(db_name.clone(), user_name.clone(), vec!["SELECT".into(), "INSERT".into()])
+        .plan_grant(
+            db_name.clone(),
+            user_name.clone(),
+            vec!["SELECT".into(), "INSERT".into()],
+        )
         .await?;
     adapter.apply_grant(&plan).await?;
 
@@ -292,9 +332,14 @@ async fn test_postgres_adapter() -> Result<()> {
         .env("PGPASSWORD", &temp_pass.0)
         .output()
         .await
-        .map_err(|e| DatabaseError::OperationFailed(format!("Failed to connect as user to other db: {}", e)))?;
+        .map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to connect as user to other db: {}", e))
+        })?;
 
-    assert!(!user_other_psql.status.success(), "User should not be able to access another database");
+    assert!(
+        !user_other_psql.status.success(),
+        "User should not be able to access another database"
+    );
 
     let dump_path = format!("/tmp/{}.sql", db_name.0);
     let plan = adapter
@@ -332,7 +377,9 @@ async fn test_postgres_adapter() -> Result<()> {
         .env("PGPASSWORD", &pass)
         .output()
         .await
-        .map_err(|e| DatabaseError::OperationFailed(format!("Failed to verify restored data: {}", e)))?;
+        .map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to verify restored data: {}", e))
+        })?;
 
     if !verify_psql.status.success() {
         return Err(DatabaseError::OperationFailed(format!(
@@ -342,7 +389,10 @@ async fn test_postgres_adapter() -> Result<()> {
     }
 
     let out_str = String::from_utf8_lossy(&verify_psql.stdout);
-    assert!(out_str.contains("42"), "Restored database did not contain the inserted record");
+    assert!(
+        out_str.contains("42"),
+        "Restored database did not contain the inserted record"
+    );
 
     let _ = fs::remove_file(dump_path);
 

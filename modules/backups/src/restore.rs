@@ -5,9 +5,9 @@ use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tar::Archive;
 use zstd::stream::Decoder as ZstdDecoder;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 static TEMP_DIR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -26,7 +26,7 @@ struct RestoreTransaction {
     rollback_dir: PathBuf,
     committed: bool,
     rollbacks: Vec<(PathBuf, PathBuf)>, // (from_rollback_dir, original_target_path)
-    new_files: Vec<PathBuf>, // newly created files to remove on rollback
+    new_files: Vec<PathBuf>,            // newly created files to remove on rollback
 }
 
 impl RestoreTransaction {
@@ -82,7 +82,11 @@ impl RestoreTransaction {
         Ok(())
     }
 
-    fn record_rollback(&mut self, rollback_path: PathBuf, target_path: PathBuf) -> Result<(), BackupError> {
+    fn record_rollback(
+        &mut self,
+        rollback_path: PathBuf,
+        target_path: PathBuf,
+    ) -> Result<(), BackupError> {
         self.rollbacks.push((rollback_path, target_path));
         self.flush_journal()
     }
@@ -164,7 +168,8 @@ pub fn recover_pending_restore(target_dir: &Path) -> Result<usize, BackupError> 
                     let journal_file = path.join("journal.json");
                     if journal_file.exists() {
                         if let Ok(content) = fs::read(&journal_file) {
-                            if let Ok(journal) = serde_json::from_slice::<RestoreJournal>(&content) {
+                            if let Ok(journal) = serde_json::from_slice::<RestoreJournal>(&content)
+                            {
                                 if !journal.committed {
                                     // Replay rollbacks
                                     for new_file in journal.new_files.iter().rev() {
@@ -172,7 +177,9 @@ pub fn recover_pending_restore(target_dir: &Path) -> Result<usize, BackupError> 
                                             let _ = fs::remove_file(new_file);
                                         }
                                     }
-                                    for (rollback_path, target_path) in journal.rollbacks.iter().rev() {
+                                    for (rollback_path, target_path) in
+                                        journal.rollbacks.iter().rev()
+                                    {
                                         if rollback_path.exists() {
                                             fs::rename(rollback_path, target_path)?;
                                         }
@@ -264,9 +271,9 @@ pub fn restore_archive_with_options<P1: AsRef<Path>, P2: AsRef<Path>>(
                 continue;
             }
 
-            let expected_info = file_info_map.get(&path_str).ok_or_else(|| {
-                BackupError::UnexpectedFile(path_str.clone())
-            })?;
+            let expected_info = file_info_map
+                .get(&path_str)
+                .ok_or_else(|| BackupError::UnexpectedFile(path_str.clone()))?;
 
             if !extracted_files.insert(path_str.clone()) {
                 return Err(BackupError::DuplicateFile(path_str.clone()));

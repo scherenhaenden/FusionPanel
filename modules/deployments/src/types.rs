@@ -34,11 +34,16 @@ impl ReleaseId {
 
     pub fn parse(s: &str) -> Result<Self, crate::error::DeploymentError> {
         if s.is_empty() {
-            return Err(crate::error::DeploymentError::InvalidInput("invalid release id: empty".to_string()));
+            return Err(crate::error::DeploymentError::InvalidInput(
+                "invalid release id: empty".to_string(),
+            ));
         }
         for c in s.chars() {
             if !c.is_ascii_alphanumeric() && c != '-' && c != '_' {
-                return Err(crate::error::DeploymentError::InvalidInput(format!("invalid release id: invalid character '{}'", c)));
+                return Err(crate::error::DeploymentError::InvalidInput(format!(
+                    "invalid release id: invalid character '{}'",
+                    c
+                )));
             }
         }
         Ok(Self(s.to_string()))

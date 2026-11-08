@@ -57,7 +57,11 @@ impl CryptoEngine {
         Ok(result)
     }
 
-    pub fn decrypt(&self, encrypted_data: &[u8], aad: &[u8]) -> Result<SecretMaterial, SecretError> {
+    pub fn decrypt(
+        &self,
+        encrypted_data: &[u8],
+        aad: &[u8],
+    ) -> Result<SecretMaterial, SecretError> {
         if encrypted_data.len() < NONCE_SIZE {
             return Err(SecretError::CryptoError("Ciphertext too short".into()));
         }

@@ -115,7 +115,12 @@ jobs:
           CARGO_TERM_COLOR: always
 
       - name: Check Formatting
-        run: cargo fmt --manifest-path ${{ matrix.manifest }} -- --check
+        run: |
+          if [ "${{ matrix.manifest }}" = "Cargo.toml" ]; then
+            cargo fmt --all --manifest-path Cargo.toml -- --check
+          else
+            cargo fmt --manifest-path ${{ matrix.manifest }} -- --check
+          fi
 
       - name: Run Clippy
         run: cargo clippy --manifest-path ${{ matrix.manifest }} -- -D warnings

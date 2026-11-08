@@ -1,10 +1,10 @@
 use axum::{
-    extract::{State, Request},
+    extract::{Request, State},
     http::{HeaderMap, StatusCode},
+    middleware::{self, Next},
     response::{IntoResponse, Json},
     routing::get,
     Router,
-    middleware::{self, Next},
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -16,7 +16,13 @@ pub struct AppState {
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/v1/health", get(health_handler))
-        .route("/v1/capabilities", get(capabilities_handler).route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware)))
+        .route(
+            "/v1/capabilities",
+            get(capabilities_handler).route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                auth_middleware,
+            )),
+        )
         .fallback(not_found_handler)
         .with_state(state)
 }

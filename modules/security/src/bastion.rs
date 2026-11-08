@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::time::SystemTime;
 use std::time::Duration;
+use std::time::SystemTime;
 
 use crate::firewall::{Action, FirewallPolicy, FirewallRule, IpNetwork, PortRange, Protocol};
 use std::str::FromStr;
@@ -83,18 +83,25 @@ impl BastionManager {
             .collect()
     }
 
-    pub fn sync_firewall(&mut self, policy: &mut FirewallPolicy, now: SystemTime) -> Result<(), BastionError> {
+    pub fn sync_firewall(
+        &mut self,
+        policy: &mut FirewallPolicy,
+        now: SystemTime,
+    ) -> Result<(), BastionError> {
         self.cleanup(now);
 
         // Remove all previous bastion rules
-        policy.rules.retain(|rule| !rule.name.starts_with(&self.config.rule_name_prefix));
+        policy
+            .rules
+            .retain(|rule| !rule.name.starts_with(&self.config.rule_name_prefix));
 
         let mut new_rules = Vec::with_capacity(self.leases.len() + policy.rules.len());
 
         // Generate rules for active leases
         for (ip, _) in self.leases.iter() {
             let network = format!("{}/{}", ip, if ip.is_ipv4() { 32 } else { 128 });
-            let ip_network = IpNetwork::from_str(&network).map_err(|_| BastionError::InvalidIpNetwork)?;
+            let ip_network =
+                IpNetwork::from_str(&network).map_err(|_| BastionError::InvalidIpNetwork)?;
 
             let rule = FirewallRule {
                 name: format!("{}{}", self.config.rule_name_prefix, ip),
