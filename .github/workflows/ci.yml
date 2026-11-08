@@ -110,7 +110,9 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Compile
-        run: cargo build --manifest-path ${{ matrix.manifest }} 2>&1 | tee compile.log
+        run: |
+          set -o pipefail
+          cargo build --manifest-path ${{ matrix.manifest }} 2>&1 | tee compile.log
         env:
           CARGO_TERM_COLOR: always
 
@@ -128,6 +130,7 @@ jobs:
       - name: Run Tests
         id: test
         run: |
+          set -o pipefail
           cargo test --manifest-path ${{ matrix.manifest }} 2>&1 | tee test.log
         env:
           CARGO_TERM_COLOR: always
@@ -195,6 +198,7 @@ jobs:
 
       - name: Compile and Test
         run: |
+          set -o pipefail
           DIR=$(dirname ${{ matrix.manifest }})
           LOG_DIR=$(pwd)
 
