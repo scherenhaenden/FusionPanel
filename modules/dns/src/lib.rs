@@ -7,6 +7,7 @@ pub mod dnssec_mgr;
 pub mod domain;
 pub mod forwarders;
 pub mod provider;
+pub mod split_horizon;
 pub mod validation;
 pub mod zone_file;
 
