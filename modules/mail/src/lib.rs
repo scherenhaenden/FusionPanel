@@ -2,6 +2,7 @@
 
 pub mod aliases;
 pub mod config;
+pub mod connection_guard;
 pub mod delivery;
 pub mod dkim;
 pub mod dkim_rotation;
