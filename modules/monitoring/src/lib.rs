@@ -11,6 +11,7 @@ pub mod rules;
 pub mod thermal;
 pub mod swap_thrashing;
 pub mod disk_saturation;
+pub mod procfs_collector;
 
 #[cfg(test)]
 mod tests {
