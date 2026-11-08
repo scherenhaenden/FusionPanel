@@ -98,7 +98,7 @@ impl BastionManager {
         let mut new_rules = Vec::with_capacity(self.leases.len() + policy.rules.len());
 
         // Generate rules for active leases
-        for (ip, _) in self.leases.iter() {
+        for ip in self.leases.keys() {
             let network = format!("{}/{}", ip, if ip.is_ipv4() { 32 } else { 128 });
             let ip_network =
                 IpNetwork::from_str(&network).map_err(|_| BastionError::InvalidIpNetwork)?;

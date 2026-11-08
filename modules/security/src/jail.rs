@@ -72,10 +72,7 @@ impl JailManager {
             return Ok(true); // Already banned
         }
 
-        let attempts = self
-            .failed_attempts
-            .entry(ip.to_string())
-            .or_insert_with(Vec::new);
+        let attempts = self.failed_attempts.entry(ip.to_string()).or_default();
         attempts.push(now);
 
         if attempts.len() as u32 >= self.config.maxretry {

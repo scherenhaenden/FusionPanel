@@ -57,7 +57,7 @@ impl DurableInvitations {
         let mut invitations = std::collections::HashMap::new();
         if path.exists() {
             if let Ok(file) = File::open(&path) {
-                for line in BufReader::new(file).lines().filter_map(Result::ok) {
+                for line in BufReader::new(file).lines().map_while(Result::ok) {
                     if let Ok(entry) = serde_json::from_str::<InvitationJournalEntry>(&line) {
                         match entry {
                             InvitationJournalEntry::Upsert(inv) => {
