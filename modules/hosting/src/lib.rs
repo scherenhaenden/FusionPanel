@@ -54,6 +54,7 @@ pub mod compression;
 pub mod config;
 pub mod error_pages;
 pub mod http2_push;
+pub mod acme_cleanup;
 pub mod php_tuning;
 pub mod upstream;
 pub mod vhost;
