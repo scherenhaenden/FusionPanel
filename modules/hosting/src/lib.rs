@@ -59,6 +59,7 @@ pub mod acme_cleanup;
 pub mod php_tuning;
 pub mod upstream;
 pub mod vhost;
+pub mod php_slowlog;
 
 #[cfg(test)]
 mod user_tests {
