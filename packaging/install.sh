@@ -134,21 +134,28 @@ install() {
     mkdir -p "$TMP_DIR/data"
     mkdir -p "$TMP_DIR/config"
 
-    # Download real versioned artifacts
+    # Release assets use a stable filename; the tag identifies the version.
+    LEGACY_DOWNLOAD_URL=""
     if [ "$VERSION" = "latest" ]; then
         DOWNLOAD_URL="https://github.com/scherenhaenden/FusionPanel/releases/latest/download/fusionpanel-${OS}-${ARCH}.tar.gz"
     else
-        DOWNLOAD_URL="https://github.com/scherenhaenden/FusionPanel/releases/download/${VERSION}/fusionpanel-${VERSION}-${OS}-${ARCH}.tar.gz"
+        case "$VERSION" in *[!a-zA-Z0-9.+_-]*|'') echo "Invalid version" >&2; exit 1;; esac
+        URL_VERSION=$(printf '%s' "$VERSION" | sed 's/+/%2B/g')
+        DOWNLOAD_URL="https://github.com/scherenhaenden/FusionPanel/releases/download/${URL_VERSION}/fusionpanel-${OS}-${ARCH}.tar.gz"
+        LEGACY_DOWNLOAD_URL="https://github.com/scherenhaenden/FusionPanel/releases/download/${URL_VERSION}/fusionpanel-${URL_VERSION}-${OS}-${ARCH}.tar.gz"
     fi
 
     # Check if download URL is mocked for tests
     if [ -n "$FUSIONPANEL_MOCK_DOWNLOAD_URL" ]; then
         DOWNLOAD_URL="$FUSIONPANEL_MOCK_DOWNLOAD_URL"
+        LEGACY_DOWNLOAD_URL=""
     fi
 
     if ! curl -sSLf "$DOWNLOAD_URL" -o "$TMP_DIR/fusionpanel.tar.gz"; then
-         echo "Error downloading $DOWNLOAD_URL" >&2
-         exit 1
+         if [ -z "$LEGACY_DOWNLOAD_URL" ] || ! curl -sSLf "$LEGACY_DOWNLOAD_URL" -o "$TMP_DIR/fusionpanel.tar.gz"; then
+             echo "Error downloading $DOWNLOAD_URL" >&2
+             exit 1
+         fi
     fi
 
     if ! tar -xzf "$TMP_DIR/fusionpanel.tar.gz" -C "$TMP_DIR/bin/"; then

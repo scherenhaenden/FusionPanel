@@ -1,0 +1,103 @@
+name: Build development packages
+
+on:
+  pull_request:
+  push:
+    tags:
+      - '[0-9][0-9][0-9][0-9].*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    container: debian:bookworm
+    steps:
+      - name: Install build prerequisites
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config libssl-dev python3
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check installer and updater release URLs
+        run: bash packaging/tests/test_release_urls.sh
+
+      - name: Validate tag and prepare release manifest
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 tools/versioning/version.py verify --tag "$RELEASE_TAG" > /tmp/fusionpanel-release-manifest.json
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+
+          tag = os.environ['RELEASE_TAG']
+          if not re.fullmatch(r'\d{4}\.\d{2}\.\d{2}\.\d{2}\.\d{2}\.\d{3}\.g[0-9a-f]{12}', tag):
+              raise SystemExit('Release tag does not have the required date and commit format')
+          if subprocess.check_output(['git', 'cat-file', '-t', 'refs/tags/' + tag], text=True).strip() != 'tag':
+              raise SystemExit('Release tag must be annotated')
+          sha = subprocess.check_output(['git', 'rev-parse', 'refs/tags/' + tag + '^{commit}'], text=True).strip()
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if sha != head or not tag.endswith('.g' + sha[:12]):
+              raise SystemExit('Tag target does not match this checkout')
+          subprocess.run(['git', 'merge-base', '--is-ancestor', sha, 'origin/master'], check=True)
+          manifest = json.loads(Path('/tmp/fusionpanel-release-manifest.json').read_text())
+          required = {'schema_version': 2, 'version': tag, 'tag': tag, 'commit': sha,
+                      'short_commit': sha[:12], 'branch': 'master', 'release_kind': 'prerelease',
+                      'date_pattern': 'yyyy.MM.dd.HH.mm.sss', 'timezone': 'Europe/Berlin'}
+          if any(manifest.get(key) != value for key, value in required.items()):
+              raise SystemExit('Annotated release manifest does not match tag identity')
+          if not manifest.get('created_at_local') or not manifest.get('created_at_utc'):
+              raise SystemExit('Annotated release manifest lacks timestamps')
+          PY
+
+      - name: Build package
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$EVENT_NAME" = push ]; then
+            label="$RELEASE_TAG"
+            bash packaging/build-package.sh "$label" "$RUNNER_TEMP/packages" /tmp/fusionpanel-release-manifest.json
+          else
+            label="ci-${PR_NUMBER:-manual}-g$(git rev-parse --short=12 HEAD)"
+            bash packaging/build-package.sh "$label" "$RUNNER_TEMP/packages"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fusionpanel-debian-x86_64-${{ github.run_id }}
+          path: ${{ runner.temp }}/packages/
+          if-no-files-found: error
+
+  publish-prerelease:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: fusionpanel-debian-x86_64-${{ github.run_id }}
+          path: packages
+      - name: Publish development prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" packages/* --verify-tag --prerelease \
+            --title "$RELEASE_TAG" \
+            --notes 'Development prerelease. This package has not been qualified for production use.'
