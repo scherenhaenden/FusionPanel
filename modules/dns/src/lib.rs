@@ -5,6 +5,7 @@ pub mod axfr_acl;
 pub mod backend;
 pub mod dnssec_mgr;
 pub mod domain;
+pub mod forwarders;
 pub mod provider;
 pub mod validation;
 pub mod zone_file;
