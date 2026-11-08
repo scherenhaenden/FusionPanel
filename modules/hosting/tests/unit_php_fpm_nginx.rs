@@ -1,8 +1,5 @@
 #![forbid(unsafe_code)]
 
-#[path = "../src/nginx/php_fpm.rs"]
-mod php_fpm;
-
 use hosting::domain::identity::{ResourceOwner, SiteId, TenantId};
 use hosting::domain::validation::{DomainName, MemoryLimit, PhpVersion, PoolName};
 use hosting::domain::{HostingSpec, PhpConfig, SiteConfig, StaticConfig};
@@ -45,7 +42,8 @@ fn test_generate_nginx_php_fpm_config_valid() {
     let site = create_mock_site(true);
     let site_id = site.id.0;
 
-    let config = php_fpm::generate_nginx_php_fpm_config(&site).expect("Config generation failed");
+    let config = hosting::nginx::php_fpm::generate_nginx_php_fpm_config(&site)
+        .expect("Config generation failed");
 
     // Check fastcgi_split_path_info
     assert!(config.contains("fastcgi_split_path_info ^(.+\\.php)(/.+)$;"));
@@ -66,7 +64,7 @@ fn test_generate_nginx_php_fpm_config_valid() {
 #[test]
 fn test_generate_nginx_php_fpm_config_invalid_spec() {
     let site = create_mock_site(false);
-    let result = php_fpm::generate_nginx_php_fpm_config(&site);
+    let result = hosting::nginx::php_fpm::generate_nginx_php_fpm_config(&site);
 
     assert!(result.is_err());
     let err = result.unwrap_err();

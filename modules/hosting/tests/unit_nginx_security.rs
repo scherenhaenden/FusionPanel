@@ -1,9 +1,6 @@
 #![forbid(unsafe_code)]
 
-#[path = "../src/nginx/security.rs"]
-mod security;
-
-use security::{generate_http_redirect, generate_tls_config};
+use hosting::nginx::security::{generate_http_redirect, generate_tls_config};
 
 #[test]
 fn test_http_redirect() {

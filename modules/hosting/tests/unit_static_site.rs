@@ -1,9 +1,6 @@
 #![forbid(unsafe_code)]
 
-#[path = "../src/nginx/static_site.rs"]
-mod static_site;
-
-use static_site::{escape_nginx_string, generate_static_site_config};
+use hosting::nginx::static_site::{escape_nginx_string, generate_static_site_config};
 
 #[test]
 fn test_escape_nginx_string() {
