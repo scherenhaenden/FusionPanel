@@ -11,5 +11,6 @@ pub mod health_flapping;
 pub mod log_rotator;
 pub mod logs;
 pub mod resources;
+pub mod secret_env;
 pub mod storage;
 pub mod supervisor;
