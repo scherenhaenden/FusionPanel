@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod acme_dns;
+pub mod axfr_acl;
 pub mod backend;
 pub mod dnssec_mgr;
 pub mod domain;

@@ -52,6 +52,7 @@ mod tests {
 pub mod acme;
 pub mod compression;
 pub mod config;
+pub mod error_pages;
 pub mod http2_push;
 pub mod php_tuning;
 pub mod upstream;
@@ -93,3 +94,4 @@ mod user_tests {
         assert_eq!(name.normalized(), "tenant_123");
     }
 }
+pub mod nginx;

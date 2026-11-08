@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod cgroups;
+pub mod circuit_breaker;
 pub mod compose;
 pub mod docker;
 pub mod domain;

@@ -59,6 +59,7 @@ impl DatabaseAdapter for PostgresAdapter {
     }
 
     async fn database_exists(&self, name: &DbName) -> Result<bool> {
+        validate_identifier(&name.0)?;
         let mut cmd = self.build_cmd("psql");
         cmd.args([
             "-d",
@@ -117,6 +118,7 @@ impl DatabaseAdapter for PostgresAdapter {
     }
 
     async fn user_exists(&self, username: &DbUser) -> Result<bool> {
+        validate_identifier(&username.0)?;
         let mut cmd = self.build_cmd("psql");
         cmd.args([
             "-d",

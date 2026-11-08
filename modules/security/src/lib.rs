@@ -1,17 +1,19 @@
 #![forbid(unsafe_code)]
 
+pub mod authorized_keys;
 pub mod bastion;
-pub mod jail_aggregator;
 pub mod csp;
 pub mod firewall;
 pub mod jail;
+pub mod jail_aggregator;
 pub mod ssh;
 pub mod tls_audit;
 
+pub use authorized_keys::*;
 pub use bastion::*;
-pub use jail_aggregator::*;
 pub use csp::*;
 pub use firewall::*;
 pub use jail::*;
+pub use jail_aggregator::JailAggregator;
 pub use ssh::*;
 pub use tls_audit::*;

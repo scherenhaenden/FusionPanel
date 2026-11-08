@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use hosting::domain::{error::Result, HostingSpec, SiteConfig};
+use crate::domain::{error::Result, HostingSpec, SiteConfig};
 
 pub fn generate_nginx_php_fpm_config(site: &SiteConfig) -> Result<String> {
     match &site.spec {
@@ -20,7 +20,7 @@ pub fn generate_nginx_php_fpm_config(site: &SiteConfig) -> Result<String> {
             );
             Ok(config)
         }
-        _ => Err(hosting::domain::error::DomainError::InvalidInput(
+        _ => Err(crate::domain::error::DomainError::InvalidInput(
             "Site is not configured for PHP".into(),
         )),
     }
