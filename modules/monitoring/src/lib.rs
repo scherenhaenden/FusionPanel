@@ -9,6 +9,7 @@ pub mod incident;
 pub mod prometheus;
 pub mod rules;
 pub mod thermal;
+pub mod swap_thrashing;
 pub mod disk_saturation;
 
 #[cfg(test)]
