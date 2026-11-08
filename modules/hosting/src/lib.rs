@@ -52,6 +52,7 @@ mod tests {
 pub mod acme;
 pub mod compression;
 pub mod config;
+pub mod http2_push;
 pub mod php_tuning;
 pub mod upstream;
 pub mod vhost;
