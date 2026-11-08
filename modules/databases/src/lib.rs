@@ -7,5 +7,6 @@ pub mod mariadb;
 pub mod pool_telemetry;
 pub mod postgres;
 pub mod quota;
+pub mod postgres_limits;
 pub mod postgres_replication;
 pub mod slow_query;
