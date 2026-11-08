@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use performance_tests::runner::run_load_test;
 use std::{
     sync::{Arc, Mutex},

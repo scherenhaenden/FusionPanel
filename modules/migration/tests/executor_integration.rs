@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use migration::executor::{ExecutionStatus, MigrationAdapter, MigrationExecutor};
 use migration::inventory::InventoryItemType;
 use migration::planner::{MigrationPlan, PlanAction, PlanActionType};

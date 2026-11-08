@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use migration::discovery::CloudPanelDiscovery;
 use rusqlite::Connection;
 use tempfile::TempDir;

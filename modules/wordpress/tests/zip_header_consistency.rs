@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::io::{Cursor, Write};
 use wordpress::install::{InstallError, Orchestrator};
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};

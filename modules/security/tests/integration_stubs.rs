@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 //! Explicitly blocked runtime cases for capabilities without host adapters.
 //! The WAF and emergency-access cases below run and report their exact missing
 //! dependencies. Other capabilities remain ignored until their adapters exist.

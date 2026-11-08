@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use app_catalog::scanner::{ImageScanner, VulnerabilityReport};
 
 const TRIVY_JSON: &str = r#"{

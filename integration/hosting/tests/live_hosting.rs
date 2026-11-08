@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use hosting::config::{generate_nginx_config, generate_php_fpm_config};
 use hosting::domain::{DomainName, HostingSpec, PhpConfig, SiteConfig, SiteId, TenantId};
 use std::convert::TryInto;

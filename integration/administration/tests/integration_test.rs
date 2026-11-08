@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use axum::{
     body::Body,
     http::{Request, StatusCode, header::AUTHORIZATION},

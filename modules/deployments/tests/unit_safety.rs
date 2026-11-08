@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use deployments::types::{ReleaseId, DeploymentState};
 use deployments::release::ReleaseManager;
 use tempfile::TempDir;

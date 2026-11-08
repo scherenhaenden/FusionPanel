@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use mail::delivery::MaildirDelivery;
 use mail::domain::MailAddress;
 use std::net::TcpStream;

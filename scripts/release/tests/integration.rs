@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use release_integration::updater::Updater;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

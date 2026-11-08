@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use backups::backup::BackupJob;
 use backups::error::BackupError;
 use backups::models::{BackupType, DbInfo, FileInfo, Manifest, RetentionPolicy};

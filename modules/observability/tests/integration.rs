@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use observability::{alerts::*, incidents::*, metrics::*, probes::*};
 use std::io::{Read, Write};
 use std::net::TcpListener;

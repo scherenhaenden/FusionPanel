@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::collections::HashMap;
 use wordpress::hardening::{
     fetch_core_checksums_with_client, generate_htaccess_hardening, generate_wp_config_hardening,

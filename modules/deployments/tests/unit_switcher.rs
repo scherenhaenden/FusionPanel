@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use deployments::switcher::switch_symlink;
 use std::fs;
 use tempfile::tempdir;

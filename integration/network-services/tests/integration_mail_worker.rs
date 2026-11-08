@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use mail::domain::{EmailAddress, MailQuota, MailboxAccount, PasswordHash};
 use network_services::mail_worker::{MailWorker, MailWorkerError};
 use sqlx::sqlite::SqlitePoolOptions;

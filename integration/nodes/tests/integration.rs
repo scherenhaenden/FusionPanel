@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use chrono::Utc;
 use nodes::state::{Node, NodeOwnership};
 use uuid::Uuid;

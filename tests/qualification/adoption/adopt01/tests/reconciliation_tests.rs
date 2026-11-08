@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use adopt01::{
     Configuration, Location, ReconciliationEngine, ReconciliationResult, RouteMap, SiteType,
 };

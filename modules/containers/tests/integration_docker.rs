@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use containers::docker::engine::DockerCliEngine;
 use containers::domain::{ContainerId, ContainerSpec, ContainerStatus, ImageRef, MountPoint};
 use containers::engine::ContainerEngine;

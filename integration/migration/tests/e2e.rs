@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use integration_migration::executor::{MigrationExecutor, MigrationState};
 use migration::inventory::{InventoryItem, InventoryItemType, MigrationInventory};
 use std::fs;

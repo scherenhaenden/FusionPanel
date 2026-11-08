@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use databases::adapter::*;
 use databases::mariadb::MariaDbAdapter;
 use databases::postgres::PostgresAdapter;

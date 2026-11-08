@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use containers::compose::models::PortMapping;
 use containers::compose::{parse_and_validate, parse_and_validate_with_env, validator::ValidationError, ComposeError};
 use std::collections::HashMap;

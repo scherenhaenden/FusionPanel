@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::path::Path;
 use tokio_test::block_on;
 use wordpress::wp_cli::{commands::WpCli, WpCliExecutor};

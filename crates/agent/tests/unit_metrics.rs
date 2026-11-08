@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use agent::metrics::MetricsCollector;
 use std::fs;
 use std::io::Write;

@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use app_catalog::installer::CatalogInstaller;
 use app_catalog::scanner::ImageScanner;
 use std::env;

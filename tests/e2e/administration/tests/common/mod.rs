@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use administration::{audit::AuditLog, quotas::QuotaEngine};
 use axum::Router;
 use integration_administration::routes::{AppState, DurableInvitations};
