@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod alert_notifier;
+pub mod webhook_retry;
 pub mod collector;
 pub mod cpu_anomaly;
 pub mod governor;
