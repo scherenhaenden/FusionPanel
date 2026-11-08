@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use monitoring::cpu_anomaly::{CpuAnomalyDetector, Anomaly};
+use monitoring::cpu_anomaly::{Anomaly, CpuAnomalyDetector, CpuStats};
 
 #[test]
 fn test_normal_behavior() {
@@ -36,7 +36,7 @@ fn test_high_iowait() {
     match anomalies[0] {
         Anomaly::HighIoWait(val) => {
             assert!((val - 40.0).abs() < f64::EPSILON);
-        },
+        }
         _ => panic!("Expected HighIoWait anomaly"),
     }
 }
@@ -58,7 +58,7 @@ fn test_high_steal_time() {
     match anomalies[0] {
         Anomaly::HighStealTime(val) => {
             assert!((val - 20.0).abs() < f64::EPSILON);
-        },
+        }
         _ => panic!("Expected HighStealTime anomaly"),
     }
 }
@@ -81,7 +81,7 @@ fn test_runaway_spike() {
     match anomalies[0] {
         Anomaly::RunawaySpike(val) => {
             assert!((val - 1.75).abs() < f64::EPSILON);
-        },
+        }
         _ => panic!("Expected RunawaySpike anomaly"),
     }
 }
@@ -111,19 +111,49 @@ fn test_multiple_anomalies() {
             Anomaly::HighIoWait(val) => {
                 assert!((val - 35.0).abs() < f64::EPSILON);
                 found_iowait = true;
-            },
+            }
             Anomaly::HighStealTime(val) => {
                 assert!((val - 20.0).abs() < f64::EPSILON);
                 found_steal = true;
-            },
+            }
             Anomaly::RunawaySpike(val) => {
                 assert!((val - 1.625).abs() < f64::EPSILON);
                 found_spike = true;
-            },
+            }
         }
     }
 
     assert!(found_iowait);
     assert!(found_steal);
     assert!(found_spike);
+}
+
+#[test]
+fn malformed_cpu_counter_is_rejected_instead_of_becoming_zero() {
+    assert!(CpuAnomalyDetector::parse_stat("cpu 10 0 10 10 1 0 bad 0").is_none());
+}
+
+#[test]
+fn counter_reset_reseeds_baseline_without_reported_io_or_steal_spike() {
+    let mut detector = CpuAnomalyDetector::new(4);
+    detector.analyze("cpu 100 0 50 1000 10 0 0 0", "1.0 1.0 1.0");
+
+    let anomalies = detector.analyze("cpu 1 0 1 1 1 0 0 1", "1.0 1.0 1.0");
+    assert!(anomalies.is_empty());
+}
+
+#[test]
+fn cpu_counter_total_saturates_on_large_values() {
+    let stats = CpuStats {
+        user: u64::MAX,
+        nice: 1,
+        ..CpuStats::default()
+    };
+    assert_eq!(stats.total(), u64::MAX);
+}
+
+#[test]
+fn malformed_or_non_finite_load_average_is_rejected() {
+    assert!(CpuAnomalyDetector::parse_loadavg("bad 1.0 1.0").is_none());
+    assert!(CpuAnomalyDetector::parse_loadavg("inf 1.0 1.0").is_none());
 }

@@ -14,7 +14,14 @@ pub struct CpuStats {
 
 impl CpuStats {
     pub fn total(&self) -> u64 {
-        self.user + self.nice + self.system + self.idle + self.iowait + self.irq + self.softirq + self.steal
+        self.user
+            .saturating_add(self.nice)
+            .saturating_add(self.system)
+            .saturating_add(self.idle)
+            .saturating_add(self.iowait)
+            .saturating_add(self.irq)
+            .saturating_add(self.softirq)
+            .saturating_add(self.steal)
     }
 }
 
@@ -50,15 +57,20 @@ impl CpuAnomalyDetector {
             if line.starts_with("cpu ") {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 9 {
+                    let counters = parts[1..9]
+                        .iter()
+                        .map(|part| part.parse::<u64>().ok())
+                        .collect::<Option<Vec<_>>>()?;
+
                     return Some(CpuStats {
-                        user: parts[1].parse().unwrap_or(0),
-                        nice: parts[2].parse().unwrap_or(0),
-                        system: parts[3].parse().unwrap_or(0),
-                        idle: parts[4].parse().unwrap_or(0),
-                        iowait: parts[5].parse().unwrap_or(0),
-                        irq: parts[6].parse().unwrap_or(0),
-                        softirq: parts[7].parse().unwrap_or(0),
-                        steal: parts[8].parse().unwrap_or(0),
+                        user: counters[0],
+                        nice: counters[1],
+                        system: counters[2],
+                        idle: counters[3],
+                        iowait: counters[4],
+                        irq: counters[5],
+                        softirq: counters[6],
+                        steal: counters[7],
                     });
                 }
             }
@@ -69,10 +81,17 @@ impl CpuAnomalyDetector {
     pub fn parse_loadavg(loadavg_str: &str) -> Option<LoadAvg> {
         let parts: Vec<&str> = loadavg_str.split_whitespace().collect();
         if parts.len() >= 3 {
+            let one_min = parts[0].parse::<f64>().ok()?;
+            let five_min = parts[1].parse::<f64>().ok()?;
+            let fifteen_min = parts[2].parse::<f64>().ok()?;
+            if !one_min.is_finite() || !five_min.is_finite() || !fifteen_min.is_finite() {
+                return None;
+            }
+
             return Some(LoadAvg {
-                one_min: parts[0].parse().unwrap_or(0.0),
-                five_min: parts[1].parse().unwrap_or(0.0),
-                fifteen_min: parts[2].parse().unwrap_or(0.0),
+                one_min,
+                five_min,
+                fifteen_min,
             });
         }
         None
@@ -85,8 +104,16 @@ impl CpuAnomalyDetector {
         let load_avg = Self::parse_loadavg(loadavg_str);
 
         if let (Some(curr), Some(prev)) = (&current_stats, &self.prev_stats) {
+            let counters_reset = curr.user < prev.user
+                || curr.nice < prev.nice
+                || curr.system < prev.system
+                || curr.idle < prev.idle
+                || curr.iowait < prev.iowait
+                || curr.irq < prev.irq
+                || curr.softirq < prev.softirq
+                || curr.steal < prev.steal;
             let total_delta = curr.total().saturating_sub(prev.total()) as f64;
-            if total_delta > 0.0 {
+            if !counters_reset && total_delta > 0.0 {
                 let iowait_delta = curr.iowait.saturating_sub(prev.iowait) as f64;
                 let steal_delta = curr.steal.saturating_sub(prev.steal) as f64;
 
