@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod aliases;
+pub mod autodiscover;
 pub mod config;
 pub mod connection_guard;
 pub mod delivery;
