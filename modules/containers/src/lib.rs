@@ -12,3 +12,4 @@ pub mod log_rotator;
 pub mod logs;
 pub mod resources;
 pub mod storage;
+pub mod supervisor;
