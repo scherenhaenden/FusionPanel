@@ -56,6 +56,7 @@ pub mod http2_push;
 pub mod php_tuning;
 pub mod upstream;
 pub mod vhost;
+pub mod error_pages;
 
 #[cfg(test)]
 mod user_tests {
