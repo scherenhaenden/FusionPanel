@@ -2,9 +2,12 @@
 
 pub mod backup;
 pub mod error;
+pub mod hardlink_pruner;
 pub mod models;
 pub mod restore;
 pub mod retention;
+
+pub use hardlink_pruner::*;
 
 #[cfg(test)]
 mod tests {
