@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 
-use databases::postgres_replication_slots::{ReplicationSlot, ReplicationSlotMonitor, SlotHealth, SlotError};
+use databases::postgres_replication_slots::{
+    ReplicationSlot, ReplicationSlotMonitor, SlotError, SlotHealth,
+};
 
 #[test]
 fn test_evaluate_health_healthy() {
@@ -13,7 +15,10 @@ fn test_evaluate_health_healthy() {
         safe_wal_size: None,
     };
 
-    assert_eq!(ReplicationSlotMonitor::evaluate_health(&slot), SlotHealth::Healthy);
+    assert_eq!(
+        ReplicationSlotMonitor::evaluate_health(&slot),
+        SlotHealth::Healthy
+    );
 }
 
 #[test]
@@ -87,7 +92,10 @@ fn test_evaluate_health_lost() {
 #[test]
 fn test_format_drop_slot_valid() {
     let sql = ReplicationSlotMonitor::format_drop_slot("valid_slot_name_123").unwrap();
-    assert_eq!(sql, "SELECT pg_drop_replication_slot('valid_slot_name_123');");
+    assert_eq!(
+        sql,
+        "SELECT pg_drop_replication_slot('valid_slot_name_123');"
+    );
 }
 
 #[test]
@@ -95,7 +103,8 @@ fn test_format_drop_slot_invalid_chars() {
     let err = ReplicationSlotMonitor::format_drop_slot("invalid-slot-name").unwrap_err();
     assert_eq!(err, SlotError::InvalidSlotName);
 
-    let err2 = ReplicationSlotMonitor::format_drop_slot("injection'; DROP TABLE slots; --").unwrap_err();
+    let err2 =
+        ReplicationSlotMonitor::format_drop_slot("injection'; DROP TABLE slots; --").unwrap_err();
     assert_eq!(err2, SlotError::InvalidSlotName);
 }
 
