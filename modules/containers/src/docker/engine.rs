@@ -16,12 +16,6 @@ impl DockerCliEngine {
     }
 }
 
-impl Default for DockerCliEngine {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[async_trait]
 impl ContainerEngine for DockerCliEngine {
     async fn create(&self, spec: &ContainerSpec) -> Result<(), DomainError> {
