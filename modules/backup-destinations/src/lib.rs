@@ -9,6 +9,8 @@ pub use glacier_transition::*;
 pub mod local;
 pub mod retention_pruner;
 pub mod s3;
+pub mod s3_compat_matrix;
+pub use s3_compat_matrix::*;
 pub mod presigned_url;
 pub use presigned_url::*;
 
