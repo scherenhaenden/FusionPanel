@@ -16,3 +16,6 @@ pub mod resources;
 pub mod secret_env;
 pub mod storage;
 pub mod supervisor;
+pub mod traffic_shaper;
+
+pub use traffic_shaper::*;
