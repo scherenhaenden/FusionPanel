@@ -17,9 +17,12 @@ pub mod outbound_rate_limit;
 pub mod plan;
 pub mod quota;
 pub mod quota_dict;
+pub mod rspamd_rules;
 pub mod sieve;
 pub mod sieve_validator;
 pub mod spf_flatten;
+
+pub use rspamd_rules::*;
 
 #[cfg(test)]
 mod tests;
