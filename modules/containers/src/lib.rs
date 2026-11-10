@@ -3,6 +3,7 @@
 pub mod cgroups;
 pub mod circuit_breaker;
 pub mod compose;
+pub mod cpu_pinning;
 pub mod docker;
 pub mod domain;
 pub mod engine;
@@ -16,3 +17,4 @@ pub mod resources;
 pub mod secret_env;
 pub mod storage;
 pub mod supervisor;
+pub use cpu_pinning::*;
