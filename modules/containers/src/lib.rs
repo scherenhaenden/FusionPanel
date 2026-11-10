@@ -16,3 +16,6 @@ pub mod resources;
 pub mod secret_env;
 pub mod storage;
 pub mod supervisor;
+pub mod volume_cloner;
+
+pub use volume_cloner::*;
