@@ -100,3 +100,5 @@ mod user_tests {
 }
 pub mod nginx;
 pub mod fastcgi_cache;
+pub mod geoip_filter;
+pub use geoip_filter::*;
