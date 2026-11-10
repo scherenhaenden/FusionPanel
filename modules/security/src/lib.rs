@@ -36,6 +36,9 @@ pub use tls_audit::*;
 pub use totp_auth::*;
 pub use webauthn_store::*;
 pub use webroot_scanner::*;
+
+pub mod pci_dss_audit;
+pub use pci_dss_audit::*;
 pub mod ssh_key_type_enforcer;
 pub use xdp_filter::*;
 pub use subnet_escalator::*;
