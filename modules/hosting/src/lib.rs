@@ -61,12 +61,6 @@ pub mod upstream;
 pub mod upstream_balancer;
 pub mod vhost;
 pub mod php_slowlog;
-pub mod fastcgi_keepalive;
-pub mod http3_quic;
-
-pub use http3_quic::*;
-pub mod fpm_profiler;
-pub use fpm_profiler::*;
 
 #[cfg(test)]
 mod user_tests {
@@ -106,10 +100,3 @@ mod user_tests {
 }
 pub mod nginx;
 pub mod fastcgi_cache;
-pub mod wildcard_cert;
-pub use wildcard_cert::*;
-pub mod modsecurity_rules;
-pub use modsecurity_rules::*;
-
-pub mod brotli_dynamic;
-pub use brotli_dynamic::*;
