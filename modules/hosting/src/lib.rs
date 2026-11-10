@@ -61,6 +61,8 @@ pub mod upstream;
 pub mod upstream_balancer;
 pub mod vhost;
 pub mod php_slowlog;
+pub mod fpm_profiler;
+pub use fpm_profiler::*;
 
 #[cfg(test)]
 mod user_tests {
