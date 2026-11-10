@@ -19,6 +19,7 @@ pub mod postgres_replication_slots;
 pub mod redis_cluster;
 pub mod slow_query;
 pub mod postgres_replication_lag;
+pub mod redis_sentinel;
 pub mod postgres_pitr;
 pub use postgres_pitr::*;
 pub mod privilege_auditor;
