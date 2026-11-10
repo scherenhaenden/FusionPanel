@@ -12,7 +12,10 @@ pub mod image_verifier;
 pub mod ipam_allocator;
 pub mod log_rotator;
 pub mod logs;
+pub mod overlay_pruner;
 pub mod resources;
 pub mod secret_env;
 pub mod storage;
 pub mod supervisor;
+
+pub use overlay_pruner::*;
