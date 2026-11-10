@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+pub mod journald_tuner;
+pub use journald_tuner::*;
+
 pub mod audit;
 pub mod audit_chain;
 pub mod disk_quota;
