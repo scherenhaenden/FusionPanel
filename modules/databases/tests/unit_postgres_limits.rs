@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use databases::postgres_limits::{PostgresLimitManager, LimitError};
+use databases::postgres_limits::{LimitError, PostgresLimitManager};
 
 #[test]
 fn test_format_connection_limit_valid() {
