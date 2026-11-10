@@ -30,7 +30,7 @@ pub struct TableMaintenanceAnalyzer {
     pub postgres_autovacuum_threshold: f64, // percentage, e.g., 0.20 for 20%
     pub postgres_autovacuum_base: u64,      // minimum dead tuples
 
-    pub mysql_fragmentation_ratio: f64,     // data_free / (table_size + data_free)
+    pub mysql_fragmentation_ratio: f64, // data_free / (table_size + data_free)
     pub mysql_min_free_bytes: u64,
 
     pub sqlite_fragmentation_ratio: f64,
@@ -53,7 +53,8 @@ impl Default for TableMaintenanceAnalyzer {
 impl TableMaintenanceAnalyzer {
     pub fn analyze_postgres(&self, stats: &TableStats) -> MaintenanceRecommendation {
         if let (Some(dead), Some(live)) = (stats.dead_tuples, stats.live_tuples) {
-            let threshold = self.postgres_autovacuum_base as f64 + (self.postgres_autovacuum_threshold * live as f64);
+            let threshold = self.postgres_autovacuum_base as f64
+                + (self.postgres_autovacuum_threshold * live as f64);
             if dead as f64 > threshold {
                 return MaintenanceRecommendation::Vacuum;
             }
@@ -80,7 +81,7 @@ impl TableMaintenanceAnalyzer {
         if let (Some(free_pages), Some(page_size)) = (stats.freelist_pages, stats.page_size) {
             let free_bytes = free_pages.saturating_mul(page_size);
             let total = stats.table_size_bytes; // For SQLite, let's consider this size in bytes which usually includes free pages or doesn't depending on PRAGMA page_count.
-            // Let's assume total_size = page_count * page_size.
+                                                // Let's assume total_size = page_count * page_size.
             if total > 0 {
                 let ratio = free_bytes as f64 / total as f64;
                 if ratio >= self.sqlite_fragmentation_ratio {
