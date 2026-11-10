@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 
 pub mod acme_dns;
+pub mod anycast_probe;
+pub use anycast_probe::*;
 pub mod axfr_acl;
 pub mod backend;
 pub mod caa_record;
