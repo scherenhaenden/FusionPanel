@@ -105,6 +105,8 @@ mod user_tests {
 }
 pub mod nginx;
 pub mod fastcgi_cache;
+pub mod modsecurity_rules;
+pub use modsecurity_rules::*;
 
 pub mod brotli_dynamic;
 pub use brotli_dynamic::*;
