@@ -13,6 +13,8 @@ pub mod health_flapping;
 pub mod image_verifier;
 pub mod ipam_allocator;
 pub mod log_rotator;
+pub mod mtu_clamper;
+pub use mtu_clamper::*;
 pub mod logs;
 pub mod overlay_pruner;
 pub mod resources;
