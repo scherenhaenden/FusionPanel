@@ -14,3 +14,5 @@ pub mod postgres_replication_slots;
 pub mod redis_cluster;
 pub mod slow_query;
 pub mod postgres_replication_lag;
+pub mod slow_query_analyzer;
+pub use slow_query_analyzer::*;
