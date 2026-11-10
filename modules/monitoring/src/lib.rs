@@ -12,6 +12,9 @@ pub mod thermal;
 pub mod swap_thrashing;
 pub mod disk_saturation;
 pub mod procfs_collector;
+pub mod socket_monitor;
+
+pub use socket_monitor::*;
 
 #[cfg(test)]
 mod tests {
