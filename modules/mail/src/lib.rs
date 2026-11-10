@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+pub mod clamav_scanner;
+pub use clamav_scanner::*;
+
 pub mod aliases;
 pub mod autodiscover;
 pub mod config;
