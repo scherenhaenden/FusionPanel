@@ -1,6 +1,5 @@
 #![forbid(unsafe_code)]
 
-pub mod apparmor_profile;
 pub mod authorized_keys;
 pub mod bastion;
 pub mod csp;
@@ -13,7 +12,6 @@ pub mod tls_audit;
 pub mod totp_auth;
 pub mod webroot_scanner;
 
-pub use apparmor_profile::*;
 pub use authorized_keys::*;
 pub use bastion::*;
 pub use csp::*;
