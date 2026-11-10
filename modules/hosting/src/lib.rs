@@ -61,6 +61,7 @@ pub mod upstream;
 pub mod upstream_balancer;
 pub mod vhost;
 pub mod php_slowlog;
+pub mod fastcgi_keepalive;
 pub mod http3_quic;
 
 pub use http3_quic::*;
