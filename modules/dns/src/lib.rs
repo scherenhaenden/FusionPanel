@@ -12,6 +12,8 @@ pub mod split_horizon;
 pub mod ttl_timer;
 pub mod validation;
 pub mod zone_file;
+pub mod tsig_keyring;
+pub use tsig_keyring::*;
 
 #[cfg(test)]
 mod tests;
