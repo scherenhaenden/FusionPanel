@@ -14,6 +14,11 @@ pub mod disk_saturation;
 pub mod procfs_collector;
 pub mod psi_parser;
 pub use psi_parser::*;
+pub mod io_psi;
+pub use io_psi::*;
+pub mod socket_monitor;
+
+pub use socket_monitor::*;
 
 #[cfg(test)]
 mod tests {

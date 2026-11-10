@@ -1,0 +1,12 @@
+--- modules/mail/src/lib.rs
++++ modules/mail/src/lib.rs
+@@ -1,6 +1,9 @@
+ #![forbid(unsafe_code)]
+
++pub mod clamav_scanner;
++pub use clamav_scanner::*;
++
+ pub mod aliases;
+ pub mod autodiscover;
+ pub mod config;
+ pub mod connection_guard;
