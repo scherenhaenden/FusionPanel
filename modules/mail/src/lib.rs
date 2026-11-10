@@ -42,6 +42,8 @@ pub use maildir_flags::*;
 pub use milter_headers::*;
 pub use relay_transport::*;
 pub use rspamd_rules::*;
+pub mod dkim_prober;
 
 #[cfg(test)]
 mod tests;
+pub use dkim_prober::*;
