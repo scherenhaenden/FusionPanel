@@ -6,6 +6,7 @@ pub use anycast_probe::*;
 pub mod axfr_acl;
 pub mod backend;
 pub mod caa_record;
+pub mod cloudflare_sync;
 pub mod dnssec_mgr;
 pub mod domain;
 pub mod forwarders;
@@ -19,6 +20,7 @@ pub mod ttl_timer;
 pub mod validation;
 pub mod zone_file;
 
+pub use cloudflare_sync::*;
 pub use rpz_compiler::*;
 pub use powerdns_sync::*;
 
