@@ -17,9 +17,12 @@ pub mod outbound_rate_limit;
 pub mod plan;
 pub mod quota;
 pub mod quota_dict;
+pub mod relay_transport;
 pub mod sieve;
 pub mod sieve_validator;
 pub mod spf_flatten;
+
+pub use relay_transport::*;
 
 #[cfg(test)]
 mod tests;
