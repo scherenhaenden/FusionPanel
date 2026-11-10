@@ -8,10 +8,13 @@ pub mod dnssec_mgr;
 pub mod domain;
 pub mod forwarders;
 pub mod provider;
+pub mod rpz_compiler;
 pub mod split_horizon;
 pub mod ttl_timer;
 pub mod validation;
 pub mod zone_file;
+
+pub use rpz_compiler::*;
 
 #[cfg(test)]
 mod tests;
