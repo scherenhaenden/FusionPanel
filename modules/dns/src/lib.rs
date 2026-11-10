@@ -7,6 +7,7 @@ pub mod caa_record;
 pub mod dnssec_mgr;
 pub mod domain;
 pub mod forwarders;
+pub mod idn_punycode;
 pub mod provider;
 pub mod split_horizon;
 pub mod ttl_timer;
