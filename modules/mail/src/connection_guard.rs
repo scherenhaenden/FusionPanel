@@ -101,7 +101,9 @@ impl MailConnectionGuard {
 
     pub fn acquire_ip(&self, ip: &str, now: Instant) -> Result<IpToken, GuardError> {
         let mut states = self.inner.ip_states.lock().unwrap();
-        let state = states.entry(ip.to_string()).or_insert_with(ConnectionState::new);
+        let state = states
+            .entry(ip.to_string())
+            .or_insert_with(ConnectionState::new);
 
         // Clean up old connection attempts
         while let Some(&oldest) = state.connection_attempts.front() {
@@ -131,7 +133,9 @@ impl MailConnectionGuard {
 
     pub fn acquire_user(&self, user: &str, now: Instant) -> Result<UserToken, GuardError> {
         let mut states = self.inner.user_states.lock().unwrap();
-        let state = states.entry(user.to_string()).or_insert_with(ConnectionState::new);
+        let state = states
+            .entry(user.to_string())
+            .or_insert_with(ConnectionState::new);
 
         // Clean up old connection attempts
         while let Some(&oldest) = state.connection_attempts.front() {

@@ -133,7 +133,11 @@ pub fn normalize_query(query: &str) -> String {
                 }
             }
         } else if c.is_ascii_digit() {
-            if prev_char.is_ascii_alphabetic() || prev_char == '_' || prev_char.is_ascii_digit() || prev_char == '$' {
+            if prev_char.is_ascii_alphabetic()
+                || prev_char == '_'
+                || prev_char.is_ascii_digit()
+                || prev_char == '$'
+            {
                 let lc = c.to_ascii_lowercase();
                 normalized.push(lc);
                 prev_char = lc;
@@ -208,14 +212,17 @@ impl QueryRanker {
             return;
         }
         let normalized = normalize_query(&entry.sql);
-        let stat = self.stats.entry(normalized.clone()).or_insert_with(|| QueryStats {
-            normalized_query: normalized,
-            total_time: 0.0,
-            execution_count: 0,
-            total_lock_time: 0.0,
-            total_rows_sent: 0,
-            total_rows_examined: 0,
-        });
+        let stat = self
+            .stats
+            .entry(normalized.clone())
+            .or_insert_with(|| QueryStats {
+                normalized_query: normalized,
+                total_time: 0.0,
+                execution_count: 0,
+                total_lock_time: 0.0,
+                total_rows_sent: 0,
+                total_rows_examined: 0,
+            });
 
         stat.total_time += entry.query_time;
         stat.execution_count += 1;
@@ -226,7 +233,11 @@ impl QueryRanker {
 
     pub fn top_queries_by_time(&self, limit: usize) -> Vec<QueryStats> {
         let mut queries: Vec<_> = self.stats.values().cloned().collect();
-        queries.sort_by(|a, b| b.total_time.partial_cmp(&a.total_time).unwrap_or(std::cmp::Ordering::Equal));
+        queries.sort_by(|a, b| {
+            b.total_time
+                .partial_cmp(&a.total_time)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         queries.truncate(limit);
         queries
     }
