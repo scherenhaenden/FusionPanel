@@ -4,8 +4,7 @@ use containers::image_verifier::{ImagePolicyVerifier, VerifyError};
 
 #[test]
 fn test_valid_digest_image() {
-    let verifier =
-        ImagePolicyVerifier::new(true, vec!["ghcr.io".to_string(), "docker.io".to_string()]);
+    let verifier = ImagePolicyVerifier::new(true, vec!["ghcr.io".to_string(), "docker.io".to_string()]);
 
     // Valid digest pin on docker.io
     assert_eq!(
@@ -32,17 +31,13 @@ fn test_implicit_registry() {
 
     // Implicit docker.io with library
     assert_eq!(
-        verifier.verify(
-            "nginx@sha256:45b235646eb836603a1168434ce3c37b313efbd05e1974ef4b790d939c368d44"
-        ),
+        verifier.verify("nginx@sha256:45b235646eb836603a1168434ce3c37b313efbd05e1974ef4b790d939c368d44"),
         Ok(())
     );
 
     // Implicit docker.io with namespace
     assert_eq!(
-        verifier.verify(
-            "bitnami/nginx@sha256:45b235646eb836603a1168434ce3c37b313efbd05e1974ef4b790d939c368d44"
-        ),
+        verifier.verify("bitnami/nginx@sha256:45b235646eb836603a1168434ce3c37b313efbd05e1974ef4b790d939c368d44"),
         Ok(())
     );
 }
@@ -78,9 +73,15 @@ fn test_floating_tag_rejection() {
 fn test_digest_pinning_not_required() {
     let verifier = ImagePolicyVerifier::new(false, vec!["docker.io".to_string()]);
 
-    assert_eq!(verifier.verify("docker.io/library/nginx:latest"), Ok(()));
+    assert_eq!(
+        verifier.verify("docker.io/library/nginx:latest"),
+        Ok(())
+    );
 
-    assert_eq!(verifier.verify("nginx"), Ok(()));
+    assert_eq!(
+        verifier.verify("nginx"),
+        Ok(())
+    );
 }
 
 #[test]
@@ -95,9 +96,7 @@ fn test_registry_allowlist_matching() {
 
     // implicit docker.io is not in the allowlist
     assert_eq!(
-        verifier.verify(
-            "nginx@sha256:45b235646eb836603a1168434ce3c37b313efbd05e1974ef4b790d939c368d44"
-        ),
+        verifier.verify("nginx@sha256:45b235646eb836603a1168434ce3c37b313efbd05e1974ef4b790d939c368d44"),
         Err(VerifyError::RegistryNotAllowed("docker.io".to_string()))
     );
 
@@ -135,8 +134,7 @@ fn test_illegal_character_handling() {
         assert_eq!(
             verifier.verify(img),
             Err(VerifyError::IllegalCharacters),
-            "Failed to reject illegal string: {}",
-            img
+            "Failed to reject illegal string: {}", img
         );
     }
 }

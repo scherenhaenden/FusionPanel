@@ -22,16 +22,10 @@ pub mod maildir_flags;
 pub mod milter_headers;
 pub mod lmtp_routing;
 pub mod models;
-
-pub use lmtp_routing::*;
 pub mod outbound_rate_limit;
 pub mod plan;
 pub mod quota;
 pub mod quota_dict;
-pub mod relay_transport;
-pub mod rspamd_rules;
-pub mod sasl_submission;
-pub use sasl_submission::*;
 pub mod sieve;
 pub mod sieve_vacation;
 pub mod sieve_validator;
