@@ -2,6 +2,7 @@
 
 pub mod audit;
 pub mod audit_chain;
+pub mod logrotate_generator;
 pub mod incident_manager;
 pub mod quota_guard;
 pub mod quotas;
