@@ -23,3 +23,6 @@ pub use ssh_whitelist::*;
 pub use tls_audit::*;
 pub use totp_auth::*;
 pub use webroot_scanner::*;
+
+pub mod pci_dss_audit;
+pub use pci_dss_audit::*;
