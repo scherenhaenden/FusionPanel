@@ -65,9 +65,9 @@ impl OutboundRateLimiter {
 
     pub fn evaluate(&self, req: &SubmissionRequest) -> RateLimitDecision {
         let domain = Self::domain_from_sender(&req.sender);
-        
+
         let mut state = self.state.lock().unwrap();
-        
+
         // 1. Cleanup expired
         if let Some(quota) = self.mailbox_limits.get(&req.sender) {
             let records = state.mailbox_records.entry(req.sender.clone()).or_default();
@@ -79,15 +79,34 @@ impl OutboundRateLimiter {
         }
 
         // 2. Compute current usage
-        let mb_usage = state.mailbox_records.get(&req.sender).map(|r| r.iter().map(|x| x.count).sum::<usize>()).unwrap_or(0);
-        let dom_usage = state.domain_records.get(&domain).map(|r| r.iter().map(|x| x.count).sum::<usize>()).unwrap_or(0);
-        
+        let mb_usage = state
+            .mailbox_records
+            .get(&req.sender)
+            .map(|r| r.iter().map(|x| x.count).sum::<usize>())
+            .unwrap_or(0);
+        let dom_usage = state
+            .domain_records
+            .get(&domain)
+            .map(|r| r.iter().map(|x| x.count).sum::<usize>())
+            .unwrap_or(0);
+
         // 3. Check for exceed
         let mut exceed_decision = None;
 
-        let check_limit = |usage: usize, req_count: usize, quota: &QuotaConfig, records: Option<&VecDeque<Record>>| -> Option<RateLimitDecision> {
+        let check_limit = |usage: usize,
+                           req_count: usize,
+                           quota: &QuotaConfig,
+                           records: Option<&VecDeque<Record>>|
+         -> Option<RateLimitDecision> {
             if usage + req_count > quota.limit as usize {
-                let reset = Self::calculate_reset(records.unwrap(), req.timestamp, quota.window_secs, quota.limit as usize, usage, req_count);
+                let reset = Self::calculate_reset(
+                    records.unwrap(),
+                    req.timestamp,
+                    quota.window_secs,
+                    quota.limit as usize,
+                    usage,
+                    req_count,
+                );
                 Some(RateLimitDecision::Exceeded {
                     reset_after_secs: reset,
                     limit: quota.limit,
@@ -98,14 +117,24 @@ impl OutboundRateLimiter {
         };
 
         if let Some(quota) = self.mailbox_limits.get(&req.sender) {
-            if let Some(exc) = check_limit(mb_usage, req.recipient_count, quota, state.mailbox_records.get(&req.sender)) {
+            if let Some(exc) = check_limit(
+                mb_usage,
+                req.recipient_count,
+                quota,
+                state.mailbox_records.get(&req.sender),
+            ) {
                 exceed_decision = Some(exc);
             }
         }
-        
+
         if exceed_decision.is_none() {
             if let Some(quota) = self.domain_limits.get(&domain) {
-                if let Some(exc) = check_limit(dom_usage, req.recipient_count, quota, state.domain_records.get(&domain)) {
+                if let Some(exc) = check_limit(
+                    dom_usage,
+                    req.recipient_count,
+                    quota,
+                    state.domain_records.get(&domain),
+                ) {
                     exceed_decision = Some(exc);
                 }
             }
@@ -117,16 +146,24 @@ impl OutboundRateLimiter {
 
         // 4. Record the request
         if self.mailbox_limits.contains_key(&req.sender) {
-            state.mailbox_records.get_mut(&req.sender).unwrap().push_back(Record {
-                timestamp: req.timestamp,
-                count: req.recipient_count,
-            });
+            state
+                .mailbox_records
+                .get_mut(&req.sender)
+                .unwrap()
+                .push_back(Record {
+                    timestamp: req.timestamp,
+                    count: req.recipient_count,
+                });
         }
         if self.domain_limits.contains_key(&domain) {
-            state.domain_records.get_mut(&domain).unwrap().push_back(Record {
-                timestamp: req.timestamp,
-                count: req.recipient_count,
-            });
+            state
+                .domain_records
+                .get_mut(&domain)
+                .unwrap()
+                .push_back(Record {
+                    timestamp: req.timestamp,
+                    count: req.recipient_count,
+                });
         }
 
         // 5. Calculate allow metrics
@@ -138,7 +175,11 @@ impl OutboundRateLimiter {
             if rem < min_remaining {
                 min_remaining = rem;
             }
-            let reset = Self::calculate_reset_for_allowed(state.mailbox_records.get(&req.sender).unwrap(), req.timestamp, quota.window_secs);
+            let reset = Self::calculate_reset_for_allowed(
+                state.mailbox_records.get(&req.sender).unwrap(),
+                req.timestamp,
+                quota.window_secs,
+            );
             if reset > max_reset {
                 max_reset = reset;
             }
@@ -149,14 +190,22 @@ impl OutboundRateLimiter {
             if rem < min_remaining {
                 min_remaining = rem;
             }
-            let reset = Self::calculate_reset_for_allowed(state.domain_records.get(&domain).unwrap(), req.timestamp, quota.window_secs);
+            let reset = Self::calculate_reset_for_allowed(
+                state.domain_records.get(&domain).unwrap(),
+                req.timestamp,
+                quota.window_secs,
+            );
             if reset > max_reset {
                 max_reset = reset;
             }
         }
 
         RateLimitDecision::Allowed {
-            remaining: if min_remaining == u32::MAX { u32::MAX } else { min_remaining },
+            remaining: if min_remaining == u32::MAX {
+                u32::MAX
+            } else {
+                min_remaining
+            },
             reset_after_secs: max_reset,
         }
     }
@@ -184,7 +233,7 @@ impl OutboundRateLimiter {
         if needed == 0 {
             return 0;
         }
-        
+
         for r in records {
             if r.count >= needed {
                 let expiration_time = r.timestamp + window;
@@ -193,15 +242,11 @@ impl OutboundRateLimiter {
                 needed -= r.count;
             }
         }
-        
+
         window
     }
 
-    fn calculate_reset_for_allowed(
-        records: &VecDeque<Record>,
-        now: u64,
-        window: u64,
-    ) -> u64 {
+    fn calculate_reset_for_allowed(records: &VecDeque<Record>, now: u64, window: u64) -> u64 {
         if let Some(front) = records.front() {
             let expiration_time = front.timestamp + window;
             expiration_time.saturating_sub(now)
@@ -212,7 +257,7 @@ impl OutboundRateLimiter {
 
     pub fn cleanup_all_expired(&self, now: u64) {
         let mut state = self.state.lock().unwrap();
-        
+
         let mut empty_mailboxes = Vec::new();
         for (mailbox, records) in state.mailbox_records.iter_mut() {
             if let Some(quota) = self.mailbox_limits.get(mailbox) {
@@ -225,7 +270,7 @@ impl OutboundRateLimiter {
         for mailbox in empty_mailboxes {
             state.mailbox_records.remove(&mailbox);
         }
-        
+
         let mut empty_domains = Vec::new();
         for (domain, records) in state.domain_records.iter_mut() {
             if let Some(quota) = self.domain_limits.get(domain) {

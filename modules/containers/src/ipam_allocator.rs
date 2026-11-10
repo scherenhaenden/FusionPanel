@@ -26,12 +26,15 @@ pub struct Ipv4Cidr {
 impl Ipv4Cidr {
     pub fn new(ip: Ipv4Addr, prefix: u8) -> Result<Self, IpamError> {
         if prefix > 32 {
-            return Err(IpamError::InvalidCidr(format!("Invalid prefix: {}", prefix)));
+            return Err(IpamError::InvalidCidr(format!(
+                "Invalid prefix: {}",
+                prefix
+            )));
         }
-        
+
         let ip_u32 = u32::from(ip);
         let mask = Self::mask(prefix);
-        
+
         // Ensure the IP is the network address (no host bits set)
         Ok(Self {
             ip: ip_u32 & mask,
@@ -48,12 +51,16 @@ impl Ipv4Cidr {
         let ip_str = parts[0];
         let prefix_str = parts[1];
 
-        let ip: Ipv4Addr = ip_str.parse().map_err(|_| IpamError::InvalidCidr("Invalid IP".into()))?;
-        let prefix: u8 = prefix_str.parse().map_err(|_| IpamError::InvalidCidr("Invalid prefix format".into()))?;
+        let ip: Ipv4Addr = ip_str
+            .parse()
+            .map_err(|_| IpamError::InvalidCidr("Invalid IP".into()))?;
+        let prefix: u8 = prefix_str
+            .parse()
+            .map_err(|_| IpamError::InvalidCidr("Invalid prefix format".into()))?;
 
         Self::new(ip, prefix)
     }
-    
+
     fn mask(prefix: u8) -> u32 {
         if prefix == 0 {
             0
@@ -96,13 +103,16 @@ pub struct IpamAllocator {
 impl IpamAllocator {
     pub fn new(pool_cidr: &str, alloc_prefix: u8) -> Result<Self, IpamError> {
         let pool = Ipv4Cidr::parse(pool_cidr)?;
-        
+
         if alloc_prefix < pool.prefix {
             return Err(IpamError::InvalidAllocationSize(alloc_prefix, pool.prefix));
         }
-        
+
         if alloc_prefix > 32 {
-            return Err(IpamError::InvalidCidr(format!("Invalid allocation prefix: {}", alloc_prefix)));
+            return Err(IpamError::InvalidCidr(format!(
+                "Invalid allocation prefix: {}",
+                alloc_prefix
+            )));
         }
 
         Ok(Self {
@@ -123,11 +133,11 @@ impl IpamAllocator {
         // Compute how many subnets we can have
         let shift_amount = self.alloc_prefix - self.pool.prefix;
         if shift_amount >= 32 {
-             // Extremely large pool vs alloc gap, unlikely but we handle it safely
-             return Err(IpamError::PoolExhausted);
+            // Extremely large pool vs alloc gap, unlikely but we handle it safely
+            return Err(IpamError::PoolExhausted);
         }
         let total_subnets: u32 = 1u32.checked_shl(shift_amount as u32).unwrap_or(u32::MAX);
-        
+
         let alloc_size: u32 = if self.alloc_prefix == 32 {
             1
         } else {

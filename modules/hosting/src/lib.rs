@@ -52,15 +52,24 @@ mod tests {
 pub mod acme;
 pub mod compression;
 pub mod brotli_static;
+pub mod brotli_level_tuner;
 pub mod config;
 pub mod error_pages;
 pub mod http2_push;
+pub mod http2_stream_graph;
+pub use http2_stream_graph::*;
 pub mod acme_cleanup;
 pub mod php_tuning;
 pub mod upstream;
 pub mod upstream_balancer;
 pub mod vhost;
 pub mod php_slowlog;
+pub mod fastcgi_keepalive;
+pub mod http3_quic;
+
+pub use http3_quic::*;
+pub mod fpm_profiler;
+pub use fpm_profiler::*;
 
 #[cfg(test)]
 mod user_tests {
@@ -101,3 +110,10 @@ mod user_tests {
 pub mod nginx;
 pub mod fastcgi_cache;
 pub mod tls_ticket_rotation;
+pub mod wildcard_cert;
+pub use wildcard_cert::*;
+pub mod modsecurity_rules;
+pub use modsecurity_rules::*;
+
+pub mod brotli_dynamic;
+pub use brotli_dynamic::*;
