@@ -32,6 +32,7 @@ pub mod rspamd_rules;
 pub mod sasl_submission;
 pub use sasl_submission::*;
 pub mod sieve;
+pub mod sieve_vacation;
 pub mod sieve_validator;
 pub mod spf_flatten;
 
