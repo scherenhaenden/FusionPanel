@@ -2,6 +2,7 @@
 
 pub mod azure_sas;
 pub mod checksum_verifier;
+pub mod restic_repo_guard;
 pub use azure_sas::*;
 pub mod health_probe;
 pub mod glacier_transition;
