@@ -109,6 +109,7 @@ mod user_tests {
 }
 pub mod nginx;
 pub mod fastcgi_cache;
+pub mod tls_ticket_rotation;
 pub mod wildcard_cert;
 pub use wildcard_cert::*;
 pub mod modsecurity_rules;
