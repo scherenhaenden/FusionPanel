@@ -12,6 +12,7 @@ pub mod dns_audit;
 pub mod dns_records;
 pub mod domain;
 pub mod error;
+pub mod fts_indexer;
 pub mod models;
 pub mod outbound_rate_limit;
 pub mod plan;
@@ -20,6 +21,8 @@ pub mod quota_dict;
 pub mod sieve;
 pub mod sieve_validator;
 pub mod spf_flatten;
+
+pub use fts_indexer::*;
 
 #[cfg(test)]
 mod tests;
