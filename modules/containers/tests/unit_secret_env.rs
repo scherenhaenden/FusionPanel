@@ -103,11 +103,8 @@ fn test_as_tuples() {
     vault.add_secret("A_KEY", "value_a").unwrap();
 
     let tuples = vault.as_tuples();
-    assert_eq!(
-        tuples,
-        vec![
-            ("A_KEY".to_string(), "value_a".to_string()),
-            ("B_KEY".to_string(), "value_b".to_string()),
-        ]
-    );
+    assert_eq!(tuples, vec![
+        ("A_KEY".to_string(), "value_a".to_string()),
+        ("B_KEY".to_string(), "value_b".to_string()),
+    ]);
 }
