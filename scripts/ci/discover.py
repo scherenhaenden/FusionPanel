@@ -3,29 +3,8 @@ import os
 import json
 import sys
 import subprocess
-import glob
-import tomllib
 
 EXCLUDE_DIRS = {".git", "target", "node_modules", "dist", "build", "docs", "__pycache__"}
-
-
-def root_workspace_members(repo_root):
-    """Find explicit members of the root workspace without resolving dependencies."""
-    manifest = os.path.join(repo_root, "Cargo.toml")
-    if not os.path.isfile(manifest):
-        return set()
-    with open(manifest, "rb") as f:
-        workspace = tomllib.load(f).get("workspace", {})
-
-    def expand(patterns):
-        return {
-            os.path.realpath(path)
-            for pattern in patterns
-            for path in glob.glob(os.path.join(repo_root, pattern), recursive=True)
-            if os.path.isfile(os.path.join(path, "Cargo.toml"))
-        }
-
-    return expand(workspace.get("members", [])) - expand(workspace.get("exclude", []))
 
 def main():
     cargo_manifests = []
@@ -33,7 +12,6 @@ def main():
     manifest_dirs = set()
 
     repo_root = os.path.abspath(".")
-    workspace_members = root_workspace_members(repo_root)
 
     # Discover all manifests excluding ignored directories
     for root, dirs, files in os.walk("."):
@@ -44,9 +22,8 @@ def main():
 
         if "Cargo.toml" in files:
             path = os.path.join(rel_root, "Cargo.toml").removeprefix("./")
-            # The root workspace job tests these members with --workspace.
-            if abs_root == repo_root or os.path.realpath(abs_root) not in workspace_members:
-                cargo_manifests.append(path)
+            # Don't add root workspace to individual package matrix if subcrates exist
+            cargo_manifests.append(path)
             if abs_root != repo_root:
                 manifest_dirs.add(abs_root)
 
@@ -94,9 +71,4 @@ def main():
         print(f"package_jsons={json.dumps(package_jsons)}")
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--root-workspace-members"]:
-        repo_root = os.path.abspath(".")
-        for member in sorted(root_workspace_members(repo_root)):
-            print(os.path.join(os.path.relpath(member, repo_root), "Cargo.toml"))
-    else:
-        main()
+    main()
