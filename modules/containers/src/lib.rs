@@ -13,9 +13,12 @@ pub mod ipam_allocator;
 pub mod log_rotator;
 pub mod logs;
 pub mod resources;
+pub mod seccomp_profile;
 pub mod secret_env;
 pub mod storage;
 pub mod supervisor;
+
+pub use seccomp_profile::*;
 pub mod traffic_shaper;
 
 pub use traffic_shaper::*;
