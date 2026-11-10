@@ -18,6 +18,9 @@ pub mod seccomp_profile;
 pub mod secret_env;
 pub mod storage;
 pub mod supervisor;
+pub mod volume_cloner;
+
+pub use volume_cloner::*;
 
 pub use overlay_pruner::*;
 pub use seccomp_profile::*;
