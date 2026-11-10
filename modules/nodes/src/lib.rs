@@ -9,6 +9,7 @@ pub mod revocation;
 pub mod state;
 pub mod task_retry;
 pub mod tls_expiry;
+pub mod tls_key_exchange;
 pub mod gossip_membership;
 pub use gossip_membership::*;
 
