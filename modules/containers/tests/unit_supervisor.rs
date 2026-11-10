@@ -7,25 +7,16 @@ use std::time::Duration;
 fn test_no_restart_policy() {
     let mut supervisor = ContainerHealthSupervisor::new(RestartPolicy::NoRestart);
 
-    assert!(matches!(
-        supervisor.transition(false),
-        SupervisorAction::None
-    ));
+    assert!(matches!(supervisor.transition(false), SupervisorAction::None));
     assert_eq!(supervisor.consecutive_failures, 1);
     assert_eq!(supervisor.restart_attempts, 0);
 
-    assert!(matches!(
-        supervisor.transition(false),
-        SupervisorAction::None
-    ));
+    assert!(matches!(supervisor.transition(false), SupervisorAction::None));
     assert_eq!(supervisor.consecutive_failures, 2);
     assert_eq!(supervisor.restart_attempts, 0);
 
     // Transition back to healthy resets counters
-    assert!(matches!(
-        supervisor.transition(true),
-        SupervisorAction::None
-    ));
+    assert!(matches!(supervisor.transition(true), SupervisorAction::None));
     assert_eq!(supervisor.consecutive_failures, 0);
     assert_eq!(supervisor.restart_attempts, 0);
 }
@@ -49,10 +40,7 @@ fn test_always_restart_policy() {
     assert_eq!(supervisor.restart_attempts, 2);
 
     // Transition back to healthy resets counters
-    assert!(matches!(
-        supervisor.transition(true),
-        SupervisorAction::None
-    ));
+    assert!(matches!(supervisor.transition(true), SupervisorAction::None));
     assert_eq!(supervisor.consecutive_failures, 0);
     assert_eq!(supervisor.restart_attempts, 0);
 }
@@ -99,19 +87,13 @@ fn test_on_failure_policy_backoff() {
     assert_eq!(supervisor.consecutive_failures, 4);
 
     // Attempt 4: max retries reached, no restart
-    assert!(matches!(
-        supervisor.transition(false),
-        SupervisorAction::None
-    ));
+    assert!(matches!(supervisor.transition(false), SupervisorAction::None));
     // restart_attempts stays at 4 since no restart was initiated
     assert_eq!(supervisor.restart_attempts, 4);
     assert_eq!(supervisor.consecutive_failures, 5);
 
     // Back to healthy
-    assert!(matches!(
-        supervisor.transition(true),
-        SupervisorAction::None
-    ));
+    assert!(matches!(supervisor.transition(true), SupervisorAction::None));
     assert_eq!(supervisor.consecutive_failures, 0);
     assert_eq!(supervisor.restart_attempts, 0);
 }
