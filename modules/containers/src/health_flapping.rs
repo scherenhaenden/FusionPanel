@@ -84,7 +84,8 @@ impl ContainerHealthFilter {
             }
         }
 
-        let is_in_grace_period = now.saturating_duration_since(self.start_time) <= self.grace_period;
+        let is_in_grace_period =
+            now.saturating_duration_since(self.start_time) <= self.grace_period;
 
         if self.flips.len() >= self.flap_threshold {
             FilteredStatus::Flapping
