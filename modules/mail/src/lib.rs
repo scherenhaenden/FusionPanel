@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod arc_seal_validator;
 pub mod clamav_scanner;
 pub use clamav_scanner::*;
 
