@@ -8,6 +8,8 @@ pub mod revocation;
 pub mod state;
 pub mod task_retry;
 pub mod tls_expiry;
+pub mod gossip_membership;
+pub use gossip_membership::*;
 
 pub use task_retry::*;
 pub mod raft_state;
