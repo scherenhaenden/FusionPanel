@@ -12,6 +12,8 @@ pub mod thermal;
 pub mod swap_thrashing;
 pub mod disk_saturation;
 pub mod procfs_collector;
+pub mod psi_parser;
+pub use psi_parser::*;
 
 #[cfg(test)]
 mod tests {
