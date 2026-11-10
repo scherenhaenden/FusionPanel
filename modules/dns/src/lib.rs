@@ -19,6 +19,8 @@ pub use route53_sync::*;
 pub mod ttl_timer;
 pub mod validation;
 pub mod zone_file;
+pub mod tsig_keyring;
+pub use tsig_keyring::*;
 
 pub use cloudflare_sync::*;
 pub use rpz_compiler::*;
