@@ -9,3 +9,6 @@ pub mod state;
 pub mod tls_expiry;
 
 pub use affinity_evaluator::*;
+pub mod wireguard_mesh;
+
+pub use wireguard_mesh::*;

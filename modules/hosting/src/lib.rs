@@ -61,6 +61,8 @@ pub mod upstream;
 pub mod upstream_balancer;
 pub mod vhost;
 pub mod php_slowlog;
+pub mod fpm_profiler;
+pub use fpm_profiler::*;
 
 #[cfg(test)]
 mod user_tests {
@@ -100,3 +102,6 @@ mod user_tests {
 }
 pub mod nginx;
 pub mod fastcgi_cache;
+
+pub mod brotli_dynamic;
+pub use brotli_dynamic::*;
