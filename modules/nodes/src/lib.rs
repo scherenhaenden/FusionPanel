@@ -6,3 +6,5 @@ pub mod placement;
 pub mod revocation;
 pub mod state;
 pub mod tls_expiry;
+pub mod gossip_membership;
+pub use gossip_membership::*;
