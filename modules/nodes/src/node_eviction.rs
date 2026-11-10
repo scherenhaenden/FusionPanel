@@ -59,7 +59,8 @@ impl NodeEvictionCoordinator {
     }
 
     pub fn start_drain(&mut self) -> Result<EvictionEvent, EvictionError> {
-        if self.state != NodeLifecycleState::Quarantined && self.state != NodeLifecycleState::Active {
+        if self.state != NodeLifecycleState::Quarantined && self.state != NodeLifecycleState::Active
+        {
             return Err(EvictionError::InvalidTransition {
                 from: self.state,
                 to: NodeLifecycleState::Draining,
@@ -82,7 +83,9 @@ impl NodeEvictionCoordinator {
         }
 
         if self.workloads > 0 {
-            return Err(EvictionError::WorkloadsRemaining { workloads: self.workloads });
+            return Err(EvictionError::WorkloadsRemaining {
+                workloads: self.workloads,
+            });
         }
 
         self.state = NodeLifecycleState::Evicted;
