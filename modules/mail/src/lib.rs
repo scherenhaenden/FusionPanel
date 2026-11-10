@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+pub mod clamav_scanner;
+pub use clamav_scanner::*;
+
 pub mod aliases;
 pub mod autodiscover;
 pub mod config;
@@ -17,6 +20,8 @@ pub mod outbound_rate_limit;
 pub mod plan;
 pub mod quota;
 pub mod quota_dict;
+pub mod sasl_submission;
+pub use sasl_submission::*;
 pub mod sieve;
 pub mod sieve_validator;
 pub mod spf_flatten;
