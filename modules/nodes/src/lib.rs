@@ -7,6 +7,8 @@ pub mod placement;
 pub mod revocation;
 pub mod state;
 pub mod tls_expiry;
+pub mod ping_matrix;
+pub use ping_matrix::*;
 
 pub use affinity_evaluator::*;
 pub mod wireguard_mesh;
