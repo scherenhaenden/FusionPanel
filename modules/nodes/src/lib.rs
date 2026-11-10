@@ -7,6 +7,9 @@ pub mod placement;
 pub mod revocation;
 pub mod state;
 pub mod tls_expiry;
+
+pub mod raft_state;
+pub use raft_state::*;
 pub mod ping_matrix;
 pub use ping_matrix::*;
 
