@@ -20,6 +20,7 @@ pub mod postgres_replication_lag;
 pub mod postgres_replication_slots;
 pub mod redis_cluster;
 pub mod slow_query;
+pub mod mysql_slow_log_parser;
 pub mod postgres_replication_slot;
 pub mod thread_pool_guard;
 pub use thread_pool_guard::*;
