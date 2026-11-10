@@ -9,6 +9,9 @@ pub use glacier_transition::*;
 pub mod local;
 pub mod retention_pruner;
 pub mod s3;
+pub mod presigned_url;
+pub use presigned_url::*;
+
 pub mod s3_multipart;
 pub mod s3_version_pruner;
 
