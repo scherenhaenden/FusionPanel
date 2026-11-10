@@ -11,6 +11,7 @@ pub mod ssh_whitelist;
 pub mod tls_audit;
 pub mod totp_auth;
 pub mod webroot_scanner;
+pub mod port_knocker;
 
 pub use authorized_keys::*;
 pub use bastion::*;
@@ -23,3 +24,4 @@ pub use ssh_whitelist::*;
 pub use tls_audit::*;
 pub use totp_auth::*;
 pub use webroot_scanner::*;
+pub use port_knocker::*;
