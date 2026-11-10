@@ -105,6 +105,8 @@ mod user_tests {
 }
 pub mod nginx;
 pub mod fastcgi_cache;
+pub mod wildcard_cert;
+pub use wildcard_cert::*;
 pub mod modsecurity_rules;
 pub use modsecurity_rules::*;
 
