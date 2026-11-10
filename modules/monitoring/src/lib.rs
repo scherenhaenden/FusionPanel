@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+pub mod bbr_advisor;
+pub use bbr_advisor::*;
+
 pub mod alert_notifier;
 pub mod webhook_retry;
 pub mod collector;
