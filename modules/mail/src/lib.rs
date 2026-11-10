@@ -15,6 +15,7 @@ pub mod dns_audit;
 pub mod dns_records;
 pub mod domain;
 pub mod error;
+pub mod fts_indexer;
 pub mod milter_rate_limit;
 pub mod maildir_flags;
 pub mod milter_headers;
@@ -34,6 +35,7 @@ pub mod sieve;
 pub mod sieve_validator;
 pub mod spf_flatten;
 
+pub use fts_indexer::*;
 pub use maildir_flags::*;
 pub use milter_headers::*;
 pub use relay_transport::*;
