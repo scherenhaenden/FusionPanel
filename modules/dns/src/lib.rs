@@ -17,6 +17,8 @@ pub mod provider;
 pub mod route53_sync;
 pub mod rpz_compiler;
 pub mod split_horizon;
+pub mod notify_engine;
+pub use notify_engine::*;
 pub use route53_sync::*;
 pub mod ttl_timer;
 pub mod validation;
