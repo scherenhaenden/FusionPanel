@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod apparmor_runtime;
 pub mod cgroups;
 pub mod circuit_breaker;
 pub mod compose;
