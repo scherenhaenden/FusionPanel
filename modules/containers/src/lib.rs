@@ -19,3 +19,8 @@ pub mod storage;
 pub mod supervisor;
 
 pub use seccomp_profile::*;
+pub mod traffic_shaper;
+
+pub use traffic_shaper::*;
+pub mod oom_priority;
+pub use oom_priority::*;
