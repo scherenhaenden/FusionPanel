@@ -15,6 +15,7 @@ pub mod dns_audit;
 pub mod dns_records;
 pub mod domain;
 pub mod error;
+pub mod milter_headers;
 pub mod lmtp_routing;
 pub mod models;
 
@@ -31,6 +32,7 @@ pub mod sieve;
 pub mod sieve_validator;
 pub mod spf_flatten;
 
+pub use milter_headers::*;
 pub use relay_transport::*;
 pub use rspamd_rules::*;
 
