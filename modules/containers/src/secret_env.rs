@@ -34,9 +34,7 @@ pub enum SecretEnvError {
 impl fmt::Display for SecretEnvError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidVariableName(name) => {
-                write!(f, "Invalid environment variable name: {}", name)
-            }
+            Self::InvalidVariableName(name) => write!(f, "Invalid environment variable name: {}", name),
         }
     }
 }
@@ -80,11 +78,7 @@ impl ContainerSecretVault {
     }
 
     /// Adds a secret to the vault. Validates that the variable name is POSIX compliant.
-    pub fn add_secret(
-        &mut self,
-        name: &str,
-        value: impl Into<String>,
-    ) -> Result<(), SecretEnvError> {
+    pub fn add_secret(&mut self, name: &str, value: impl Into<String>) -> Result<(), SecretEnvError> {
         if !is_valid_env_name(name) {
             return Err(SecretEnvError::InvalidVariableName(name.to_string()));
         }
@@ -95,8 +89,7 @@ impl ContainerSecretVault {
 
     /// Generates a Docker envfile format representation of the secrets.
     pub fn generate_envfile(&self) -> String {
-        let mut lines: Vec<String> = self
-            .secrets
+        let mut lines: Vec<String> = self.secrets
             .iter()
             .map(|(k, v)| format!("{}={}", k, v.value()))
             .collect();
@@ -110,8 +103,7 @@ impl ContainerSecretVault {
 
     /// Returns the secrets as key-value tuples.
     pub fn as_tuples(&self) -> Vec<(String, String)> {
-        let mut tuples: Vec<(String, String)> = self
-            .secrets
+        let mut tuples: Vec<(String, String)> = self.secrets
             .iter()
             .map(|(k, v)| (k.clone(), v.value().to_string()))
             .collect();
