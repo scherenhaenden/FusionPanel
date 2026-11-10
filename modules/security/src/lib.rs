@@ -2,6 +2,7 @@
 
 pub mod authorized_keys;
 pub mod bastion;
+pub mod bot_jail;
 pub mod csp;
 pub mod firewall;
 pub mod jail;
@@ -14,6 +15,7 @@ pub mod webroot_scanner;
 
 pub use authorized_keys::*;
 pub use bastion::*;
+pub use bot_jail::*;
 pub use csp::*;
 pub use firewall::*;
 pub use jail::*;
