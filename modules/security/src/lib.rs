@@ -1,7 +1,10 @@
 #![forbid(unsafe_code)]
 
+pub mod auditd_parser;
+pub mod apparmor_profile;
 pub mod authorized_keys;
 pub mod bastion;
+pub mod bot_jail;
 pub mod csp;
 pub mod firewall;
 pub mod jail;
@@ -11,9 +14,14 @@ pub mod ssh_whitelist;
 pub mod tls_audit;
 pub mod totp_auth;
 pub mod webroot_scanner;
+pub mod subnet_escalator;
+pub mod port_knocker;
 
+pub use auditd_parser::*;
+pub use apparmor_profile::*;
 pub use authorized_keys::*;
 pub use bastion::*;
+pub use bot_jail::*;
 pub use csp::*;
 pub use firewall::*;
 pub use jail::*;
@@ -23,3 +31,5 @@ pub use ssh_whitelist::*;
 pub use tls_audit::*;
 pub use totp_auth::*;
 pub use webroot_scanner::*;
+pub use subnet_escalator::*;
+pub use port_knocker::*;
