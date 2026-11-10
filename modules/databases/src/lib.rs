@@ -1,7 +1,12 @@
 #![forbid(unsafe_code)]
 
+pub mod gtid_monitor;
+pub use gtid_monitor::*;
+
 pub mod adapter;
 pub mod binlog_retention;
+pub mod innodb_advisor;
+pub use innodb_advisor::*;
 pub mod health;
 pub mod maintenance;
 pub mod mariadb;
@@ -16,3 +21,8 @@ pub mod slow_query;
 pub mod postgres_replication_lag;
 pub mod slow_query_analyzer;
 pub use slow_query_analyzer::*;
+pub mod postgres_freeze_guard;
+pub use postgres_freeze_guard::*;
+pub mod pgbouncer_config;
+
+pub use pgbouncer_config::*;
