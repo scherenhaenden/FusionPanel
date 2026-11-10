@@ -12,6 +12,7 @@ pub mod dns_audit;
 pub mod dns_records;
 pub mod domain;
 pub mod error;
+pub mod milter_rate_limit;
 pub mod models;
 pub mod outbound_rate_limit;
 pub mod plan;
