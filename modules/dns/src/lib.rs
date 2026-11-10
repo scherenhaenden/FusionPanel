@@ -10,6 +10,7 @@ pub mod cloudflare_sync;
 pub mod dnssec_mgr;
 pub mod domain;
 pub mod forwarders;
+pub mod idn_punycode;
 pub mod powerdns_sync;
 pub mod provider;
 pub mod route53_sync;
