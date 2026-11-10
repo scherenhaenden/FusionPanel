@@ -6,7 +6,9 @@ pub mod cron_guard;
 pub mod incident_manager;
 pub mod quota_guard;
 pub mod quotas;
+pub mod sysctl_tuner;
 pub mod teams;
 pub mod tenants;
 
+pub use sysctl_tuner::*;
 pub use cron_guard::*;
