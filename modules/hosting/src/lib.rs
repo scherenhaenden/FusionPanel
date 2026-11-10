@@ -52,6 +52,7 @@ mod tests {
 pub mod acme;
 pub mod compression;
 pub mod brotli_static;
+pub mod brotli_level_tuner;
 pub mod config;
 pub mod error_pages;
 pub mod http2_push;
