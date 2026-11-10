@@ -1,8 +1,6 @@
 #![forbid(unsafe_code)]
 
-pub mod azure_sas;
 pub mod checksum_verifier;
-pub use azure_sas::*;
 pub mod health_probe;
 pub mod local;
 pub mod retention_pruner;
