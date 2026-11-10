@@ -5,6 +5,8 @@ pub use gtid_monitor::*;
 
 pub mod adapter;
 pub mod binlog_retention;
+pub mod innodb_advisor;
+pub use innodb_advisor::*;
 pub mod health;
 pub mod maintenance;
 pub mod mariadb;
