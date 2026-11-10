@@ -55,6 +55,8 @@ pub mod brotli_static;
 pub mod config;
 pub mod error_pages;
 pub mod http2_push;
+pub mod http2_stream_graph;
+pub use http2_stream_graph::*;
 pub mod acme_cleanup;
 pub mod php_tuning;
 pub mod upstream;
