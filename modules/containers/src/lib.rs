@@ -11,6 +11,8 @@ pub mod health_flapping;
 pub mod image_verifier;
 pub mod ipam_allocator;
 pub mod log_rotator;
+pub mod readonly_guard;
+pub use readonly_guard::*;
 pub mod logs;
 pub mod resources;
 pub mod secret_env;
