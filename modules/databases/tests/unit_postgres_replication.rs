@@ -38,14 +38,27 @@ fn test_parse_pg_stat_replication_row() {
         "16/B374D848",
         "16/B374D848",
         "16/B374D848",
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(row.client_addr, "10.0.0.5");
     assert_eq!(row.state, "streaming");
-    assert_eq!(row.sent_lsn.value(), Lsn::from_str("16/B374D900").unwrap().value());
-    assert_eq!(row.write_lsn.value(), Lsn::from_str("16/B374D848").unwrap().value());
-    assert_eq!(row.flush_lsn.value(), Lsn::from_str("16/B374D848").unwrap().value());
-    assert_eq!(row.replay_lsn.value(), Lsn::from_str("16/B374D848").unwrap().value());
+    assert_eq!(
+        row.sent_lsn.value(),
+        Lsn::from_str("16/B374D900").unwrap().value()
+    );
+    assert_eq!(
+        row.write_lsn.value(),
+        Lsn::from_str("16/B374D848").unwrap().value()
+    );
+    assert_eq!(
+        row.flush_lsn.value(),
+        Lsn::from_str("16/B374D848").unwrap().value()
+    );
+    assert_eq!(
+        row.replay_lsn.value(),
+        Lsn::from_str("16/B374D848").unwrap().value()
+    );
 
     // lag is sent_lsn - replay_lsn = 0x16B374D900 - 0x16B374D848 = 184 bytes
     assert_eq!(row.byte_lag(), 184);
@@ -61,7 +74,8 @@ fn test_byte_lag_alert_thresholds() {
         "16/B374D848", // write
         "16/B374D848", // flush
         "16/B374D848", // replay
-    ).unwrap();
+    )
+    .unwrap();
     let lag_bytes = row_healthy.byte_lag();
     assert!(lag_bytes < 1024 * 1024 * 10); // Less than 10MB lag is healthy
 
@@ -72,19 +86,20 @@ fn test_byte_lag_alert_thresholds() {
         "16/B374D848", // write
         "16/B374D848", // flush
         "16/B374D848", // replay
-    ).unwrap();
+    )
+    .unwrap();
     let large_lag = row_unhealthy.byte_lag();
     assert!(large_lag > 1024 * 1024 * 100); // Greater than 100MB lag is unhealthy
 }
 
 #[test]
 fn test_wal_archive_status_parsing() {
-    let status = WalArchiveValidator::parse_status(
-        Some("0000000100000016000000B3"),
-        "0",
-        None,
-    ).unwrap();
-    assert_eq!(status.last_archived_wal.as_deref(), Some("0000000100000016000000B3"));
+    let status =
+        WalArchiveValidator::parse_status(Some("0000000100000016000000B3"), "0", None).unwrap();
+    assert_eq!(
+        status.last_archived_wal.as_deref(),
+        Some("0000000100000016000000B3")
+    );
     assert_eq!(status.failed_count, 0);
     assert_eq!(status.last_failed_wal, None);
     assert_eq!(status.is_failing(), false);
@@ -93,9 +108,13 @@ fn test_wal_archive_status_parsing() {
         Some("0000000100000016000000B3"),
         "5",
         Some("0000000100000016000000B4"),
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(failing_status.failed_count, 5);
-    assert_eq!(failing_status.last_failed_wal.as_deref(), Some("0000000100000016000000B4"));
+    assert_eq!(
+        failing_status.last_failed_wal.as_deref(),
+        Some("0000000100000016000000B4")
+    );
     assert_eq!(failing_status.is_failing(), true);
 
     let empty_failed = WalArchiveValidator::parse_status(None, "   ", None).unwrap();

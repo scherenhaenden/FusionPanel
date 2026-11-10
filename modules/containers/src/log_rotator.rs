@@ -95,8 +95,8 @@ impl LogRotator {
         let status = Command::new("gzip").arg("-f").arg(path).status()?;
 
         if !status.success() {
-            return Err(Error::new(
-                ErrorKind::Other,
+            return Err(Error::other(
+
                 format!("gzip failed with status: {}", status),
             ));
         }
