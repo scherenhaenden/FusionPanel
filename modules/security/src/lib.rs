@@ -23,3 +23,4 @@ pub use ssh_whitelist::*;
 pub use tls_audit::*;
 pub use totp_auth::*;
 pub use webroot_scanner::*;
+pub mod ssh_key_type_enforcer;
