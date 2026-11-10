@@ -19,6 +19,8 @@ pub mod seccomp_profile;
 pub mod secret_env;
 pub mod storage;
 pub mod supervisor;
+pub mod ephemeral_storage;
+pub use ephemeral_storage::*;
 pub use cpu_pinning::*;
 pub mod volume_cloner;
 
