@@ -21,5 +21,7 @@ pub mod sieve;
 pub mod sieve_validator;
 pub mod spf_flatten;
 
+pub mod dkim_prober;
 #[cfg(test)]
 mod tests;
+pub use dkim_prober::*;
