@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-use std::time::{Duration, Instant};
 use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CircuitBreakerState {
@@ -56,10 +56,10 @@ impl ContainerCrashCircuitBreaker {
                 if self.crashes.len() >= self.threshold {
                     self.trip(now, exit_code, oom_killed);
                 } else if self.state == CircuitBreakerState::HalfOpen {
-                     // In a real implementation, a success might be recorded to go back to Closed.
-                     // But here we just record crashes. If it crashes in HalfOpen, it could trip again if threshold is reached.
-                     // Or, some implementations trip immediately on one failure in HalfOpen. Let's trip immediately on failure in HalfOpen.
-                     self.trip(now, exit_code, oom_killed);
+                    // In a real implementation, a success might be recorded to go back to Closed.
+                    // But here we just record crashes. If it crashes in HalfOpen, it could trip again if threshold is reached.
+                    // Or, some implementations trip immediately on one failure in HalfOpen. Let's trip immediately on failure in HalfOpen.
+                    self.trip(now, exit_code, oom_killed);
                 }
             }
             CircuitBreakerState::Open => {
