@@ -4,6 +4,8 @@ pub mod azure_sas;
 pub mod checksum_verifier;
 pub use azure_sas::*;
 pub mod health_probe;
+pub mod glacier_transition;
+pub use glacier_transition::*;
 pub mod local;
 pub mod retention_pruner;
 pub mod s3;
