@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod cgroup_v2_pressure;
 pub mod cgroups;
 pub mod circuit_breaker;
 pub mod compose;
