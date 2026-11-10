@@ -15,7 +15,7 @@ fn test_health_score_deductions() {
 
     // CPU > 70 starts deducting (load - 70) * 0.5
     // RAM > 80 starts deducting (util - 80) * 1.0
-    
+
     // CPU 90 (deduct 10), RAM 90 (deduct 10)
     tracker.record_successful_heartbeat(90.0, 90.0);
     assert_eq!(tracker.health_score(), 80.0);
@@ -83,7 +83,7 @@ fn test_recovery_from_degraded() {
 fn test_recovery_from_unreachable() {
     let mut config = NodeHealthConfig::default();
     config.unreachable_missed_heartbeats = 2;
-    config.recovery_success_threshold = 3; 
+    config.recovery_success_threshold = 3;
 
     let mut tracker = NodeHealthTracker::new(config);
 
@@ -114,7 +114,7 @@ fn test_quarantine_no_auto_recovery() {
     for _ in 0..10 {
         tracker.record_successful_heartbeat(50.0, 50.0);
     }
-    
+
     // Status should remain Quarantined
     assert_eq!(tracker.status(), NodeStatus::Quarantined);
     assert_eq!(tracker.health_score(), 0.0);
@@ -124,7 +124,7 @@ fn test_quarantine_no_auto_recovery() {
 fn test_manual_quarantine() {
     let mut tracker = NodeHealthTracker::new(NodeHealthConfig::default());
     tracker.manual_quarantine();
-    
+
     assert_eq!(tracker.status(), NodeStatus::Quarantined);
     assert_eq!(tracker.health_score(), 0.0);
 }
@@ -134,7 +134,7 @@ fn test_escalation_and_partial_recovery() {
     let mut config = NodeHealthConfig::default();
     config.degraded_missed_heartbeats = 1;
     config.unreachable_missed_heartbeats = 3;
-    config.recovery_success_threshold = 3; 
+    config.recovery_success_threshold = 3;
 
     let mut tracker = NodeHealthTracker::new(config);
 
@@ -146,7 +146,7 @@ fn test_escalation_and_partial_recovery() {
     // One successful heartbeat -> not enough to recover
     tracker.record_successful_heartbeat(50.0, 50.0);
     assert_eq!(tracker.status(), NodeStatus::Unreachable);
-    
+
     // One more missed heartbeat -> Should remain Unreachable, NOT downgrade to Degraded
     tracker.record_missed_heartbeat();
     assert_eq!(tracker.status(), NodeStatus::Unreachable);
@@ -156,7 +156,7 @@ fn test_escalation_and_partial_recovery() {
 fn test_health_score_partial_recovery() {
     let mut config = NodeHealthConfig::default();
     config.degraded_missed_heartbeats = 2;
-    config.recovery_success_threshold = 3; 
+    config.recovery_success_threshold = 3;
 
     let mut tracker = NodeHealthTracker::new(config);
     tracker.record_missed_heartbeat();

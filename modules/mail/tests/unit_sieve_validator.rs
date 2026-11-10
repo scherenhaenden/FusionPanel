@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-use mail::sieve_validator::SieveValidator;
 use mail::error::MailError;
+use mail::sieve_validator::SieveValidator;
 
 #[test]
 fn test_valid_sieve_script() {
@@ -65,7 +65,9 @@ fn test_unterminated_quoted_string() {
     "#;
 
     let result = validator.validate(script);
-    assert!(matches!(result, Err(MailError::InvalidInput(ref msg)) if msg.contains("Unterminated quoted string")));
+    assert!(
+        matches!(result, Err(MailError::InvalidInput(ref msg)) if msg.contains("Unterminated quoted string"))
+    );
 }
 
 #[test]
@@ -77,7 +79,9 @@ fn test_unterminated_bracket_comment() {
     "#;
 
     let result = validator.validate(script);
-    assert!(matches!(result, Err(MailError::InvalidInput(ref msg)) if msg.contains("Unterminated bracket comment")));
+    assert!(
+        matches!(result, Err(MailError::InvalidInput(ref msg)) if msg.contains("Unterminated bracket comment"))
+    );
 }
 
 #[test]
@@ -88,7 +92,9 @@ fn test_self_redirect() {
     "#;
 
     let result = validator.validate(script);
-    assert!(matches!(result, Err(MailError::InvalidInput(ref msg)) if msg.contains("Self-redirect detected")));
+    assert!(
+        matches!(result, Err(MailError::InvalidInput(ref msg)) if msg.contains("Self-redirect detected"))
+    );
 }
 
 #[test]
@@ -99,7 +105,9 @@ fn test_case_insensitive_self_redirect() {
     "#;
 
     let result = validator.validate(script);
-    assert!(matches!(result, Err(MailError::InvalidInput(ref msg)) if msg.contains("Self-redirect detected")));
+    assert!(
+        matches!(result, Err(MailError::InvalidInput(ref msg)) if msg.contains("Self-redirect detected"))
+    );
 }
 
 #[test]
@@ -115,7 +123,9 @@ fn test_too_many_redirects() {
     "#;
 
     let result = validator.validate(script);
-    assert!(matches!(result, Err(MailError::InvalidInput(ref msg)) if msg.contains("Too many redirect targets")));
+    assert!(
+        matches!(result, Err(MailError::InvalidInput(ref msg)) if msg.contains("Too many redirect targets"))
+    );
 }
 
 #[test]

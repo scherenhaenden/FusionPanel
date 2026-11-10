@@ -38,7 +38,10 @@ impl ReplicationSlotMonitor {
         }
 
         if slot.wal_status == "extended" || slot.wal_status == "unreserved" {
-            return SlotHealth::Warning(format!("Slot '{}' has {} WAL status", slot.slot_name, slot.wal_status));
+            return SlotHealth::Warning(format!(
+                "Slot '{}' has {} WAL status",
+                slot.slot_name, slot.wal_status
+            ));
         }
 
         if !slot.active {
