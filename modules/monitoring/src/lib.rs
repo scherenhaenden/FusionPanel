@@ -12,6 +12,8 @@ pub mod thermal;
 pub mod swap_thrashing;
 pub mod disk_saturation;
 pub mod procfs_collector;
+pub mod io_psi;
+pub use io_psi::*;
 
 #[cfg(test)]
 mod tests {
