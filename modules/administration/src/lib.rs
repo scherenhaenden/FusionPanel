@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod etckeeper_guard;
 pub mod journald_tuner;
 pub use journald_tuner::*;
 
