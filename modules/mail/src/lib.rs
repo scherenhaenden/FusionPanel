@@ -15,6 +15,7 @@ pub mod dns_audit;
 pub mod dns_records;
 pub mod domain;
 pub mod error;
+pub mod milter_rate_limit;
 pub mod maildir_flags;
 pub mod milter_headers;
 pub mod lmtp_routing;
