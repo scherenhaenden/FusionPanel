@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod arc_seal_validator;
 pub mod aliases;
 pub mod autodiscover;
 pub mod config;
