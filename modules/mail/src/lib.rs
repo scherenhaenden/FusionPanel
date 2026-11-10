@@ -20,6 +20,8 @@ pub mod outbound_rate_limit;
 pub mod plan;
 pub mod quota;
 pub mod quota_dict;
+pub mod sasl_submission;
+pub use sasl_submission::*;
 pub mod sieve;
 pub mod sieve_validator;
 pub mod spf_flatten;
