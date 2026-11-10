@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+pub mod gtid_monitor;
+pub use gtid_monitor::*;
+
 pub mod adapter;
 pub mod binlog_retention;
 pub mod health;
@@ -16,3 +19,6 @@ pub mod slow_query;
 pub mod postgres_replication_lag;
 pub mod postgres_freeze_guard;
 pub use postgres_freeze_guard::*;
+pub mod pgbouncer_config;
+
+pub use pgbouncer_config::*;
