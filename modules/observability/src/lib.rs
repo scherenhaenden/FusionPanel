@@ -7,6 +7,3 @@ pub mod probes;
 pub mod store;
 pub mod synthetic_prober;
 pub mod webhook_retry;
-pub mod webhook_signer;
-
-pub use webhook_signer::*;
