@@ -90,7 +90,10 @@ pub fn is_valid_identifier(ident: &str) -> bool {
     true
 }
 
-pub fn generate_alter_role_connection_limit(role: &str, limit: i32) -> Result<String, &'static str> {
+pub fn generate_alter_role_connection_limit(
+    role: &str,
+    limit: i32,
+) -> Result<String, &'static str> {
     if !is_valid_identifier(role) {
         return Err("Invalid role identifier");
     }
