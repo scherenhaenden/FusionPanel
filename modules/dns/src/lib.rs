@@ -14,6 +14,7 @@ pub mod forwarders;
 pub mod idn_punycode;
 pub mod powerdns_sync;
 pub mod provider;
+pub mod rrl_config;
 pub mod route53_sync;
 pub mod rpz_compiler;
 pub mod split_horizon;
@@ -29,6 +30,8 @@ pub use tsig_keyring::*;
 pub use cloudflare_sync::*;
 pub use rpz_compiler::*;
 pub use powerdns_sync::*;
+
+pub use rrl_config::*;
 
 #[cfg(test)]
 mod tests;
