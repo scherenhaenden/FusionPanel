@@ -11,11 +11,13 @@ pub mod domain;
 pub mod forwarders;
 pub mod powerdns_sync;
 pub mod provider;
+pub mod rpz_compiler;
 pub mod split_horizon;
 pub mod ttl_timer;
 pub mod validation;
 pub mod zone_file;
 
+pub use rpz_compiler::*;
 pub use powerdns_sync::*;
 
 #[cfg(test)]
