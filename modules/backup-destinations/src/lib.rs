@@ -6,6 +6,9 @@ pub mod local;
 pub mod retention_pruner;
 pub mod s3;
 pub mod s3_multipart;
+pub mod s3_version_pruner;
+
+pub use s3_version_pruner::*;
 pub mod sftp;
 pub mod sftp_chroot;
 pub mod sync;
