@@ -7,6 +7,7 @@ pub mod docker;
 pub mod domain;
 pub mod engine;
 pub mod health;
+pub mod health_circuit_breaker;
 pub mod health_flapping;
 pub mod image_verifier;
 pub mod ipam_allocator;
