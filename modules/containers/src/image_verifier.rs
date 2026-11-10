@@ -12,9 +12,15 @@ impl std::fmt::Display for VerifyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             VerifyError::MalformedReference => write!(f, "Malformed image reference"),
-            VerifyError::IllegalCharacters => write!(f, "Image reference contains illegal characters"),
-            VerifyError::FloatingTagNotAllowed => write!(f, "Image reference must use an immutable digest pin"),
-            VerifyError::RegistryNotAllowed(r) => write!(f, "Registry '{}' is not in the allowed list", r),
+            VerifyError::IllegalCharacters => {
+                write!(f, "Image reference contains illegal characters")
+            }
+            VerifyError::FloatingTagNotAllowed => {
+                write!(f, "Image reference must use an immutable digest pin")
+            }
+            VerifyError::RegistryNotAllowed(r) => {
+                write!(f, "Registry '{}' is not in the allowed list", r)
+            }
         }
     }
 }
@@ -37,7 +43,9 @@ impl ImagePolicyVerifier {
 
     pub fn verify(&self, image: &str) -> Result<(), VerifyError> {
         // 1. Check for illegal characters
-        let illegal_chars = ['\0', '\n', '\r', '\t', '&', '|', ';', '$', '`', '<', '>', '\\', ' ', '"', '\''];
+        let illegal_chars = [
+            '\0', '\n', '\r', '\t', '&', '|', ';', '$', '`', '<', '>', '\\', ' ', '"', '\'',
+        ];
         if image.chars().any(|c| illegal_chars.contains(&c)) {
             return Err(VerifyError::IllegalCharacters);
         }

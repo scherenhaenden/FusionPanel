@@ -5,7 +5,8 @@ use std::time::{Duration, Instant};
 
 #[test]
 fn test_initial_state() {
-    let mut cb = ContainerCrashCircuitBreaker::new(5, Duration::from_secs(60), Duration::from_secs(300));
+    let mut cb =
+        ContainerCrashCircuitBreaker::new(5, Duration::from_secs(60), Duration::from_secs(300));
     let now = Instant::now();
     assert_eq!(cb.state(now), CircuitBreakerState::Closed);
     assert_eq!(cb.last_exit_code(), None);
@@ -14,7 +15,8 @@ fn test_initial_state() {
 
 #[test]
 fn test_does_not_trip_below_threshold() {
-    let mut cb = ContainerCrashCircuitBreaker::new(5, Duration::from_secs(60), Duration::from_secs(300));
+    let mut cb =
+        ContainerCrashCircuitBreaker::new(5, Duration::from_secs(60), Duration::from_secs(300));
     let mut now = Instant::now();
 
     for _ in 0..4 {
@@ -27,7 +29,8 @@ fn test_does_not_trip_below_threshold() {
 
 #[test]
 fn test_trips_at_threshold() {
-    let mut cb = ContainerCrashCircuitBreaker::new(3, Duration::from_secs(60), Duration::from_secs(300));
+    let mut cb =
+        ContainerCrashCircuitBreaker::new(3, Duration::from_secs(60), Duration::from_secs(300));
     let mut now = Instant::now();
 
     cb.record_crash(1, false, now);
@@ -43,7 +46,8 @@ fn test_trips_at_threshold() {
 
 #[test]
 fn test_sliding_window_eviction() {
-    let mut cb = ContainerCrashCircuitBreaker::new(3, Duration::from_secs(10), Duration::from_secs(300));
+    let mut cb =
+        ContainerCrashCircuitBreaker::new(3, Duration::from_secs(10), Duration::from_secs(300));
     let start = Instant::now();
     let mut now = start;
 
@@ -67,7 +71,8 @@ fn test_sliding_window_eviction() {
 
 #[test]
 fn test_reset_manual() {
-    let mut cb = ContainerCrashCircuitBreaker::new(2, Duration::from_secs(60), Duration::from_secs(300));
+    let mut cb =
+        ContainerCrashCircuitBreaker::new(2, Duration::from_secs(60), Duration::from_secs(300));
     let now = Instant::now();
 
     cb.record_crash(1, false, now);
@@ -82,7 +87,8 @@ fn test_reset_manual() {
 
 #[test]
 fn test_auto_half_open_transition() {
-    let mut cb = ContainerCrashCircuitBreaker::new(2, Duration::from_secs(60), Duration::from_secs(100));
+    let mut cb =
+        ContainerCrashCircuitBreaker::new(2, Duration::from_secs(60), Duration::from_secs(100));
     let mut now = Instant::now();
 
     cb.record_crash(1, false, now);
@@ -99,7 +105,8 @@ fn test_auto_half_open_transition() {
 
 #[test]
 fn test_half_open_failure_trips_again() {
-    let mut cb = ContainerCrashCircuitBreaker::new(2, Duration::from_secs(60), Duration::from_secs(100));
+    let mut cb =
+        ContainerCrashCircuitBreaker::new(2, Duration::from_secs(60), Duration::from_secs(100));
     let mut now = Instant::now();
 
     cb.record_crash(1, false, now);

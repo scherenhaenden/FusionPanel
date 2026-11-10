@@ -26,7 +26,10 @@ pub struct Ipv4Cidr {
 impl Ipv4Cidr {
     pub fn new(ip: Ipv4Addr, prefix: u8) -> Result<Self, IpamError> {
         if prefix > 32 {
-            return Err(IpamError::InvalidCidr(format!("Invalid prefix: {}", prefix)));
+            return Err(IpamError::InvalidCidr(format!(
+                "Invalid prefix: {}",
+                prefix
+            )));
         }
 
         let ip_u32 = u32::from(ip);
@@ -48,8 +51,12 @@ impl Ipv4Cidr {
         let ip_str = parts[0];
         let prefix_str = parts[1];
 
-        let ip: Ipv4Addr = ip_str.parse().map_err(|_| IpamError::InvalidCidr("Invalid IP".into()))?;
-        let prefix: u8 = prefix_str.parse().map_err(|_| IpamError::InvalidCidr("Invalid prefix format".into()))?;
+        let ip: Ipv4Addr = ip_str
+            .parse()
+            .map_err(|_| IpamError::InvalidCidr("Invalid IP".into()))?;
+        let prefix: u8 = prefix_str
+            .parse()
+            .map_err(|_| IpamError::InvalidCidr("Invalid prefix format".into()))?;
 
         Self::new(ip, prefix)
     }
@@ -102,7 +109,10 @@ impl IpamAllocator {
         }
 
         if alloc_prefix > 32 {
-            return Err(IpamError::InvalidCidr(format!("Invalid allocation prefix: {}", alloc_prefix)));
+            return Err(IpamError::InvalidCidr(format!(
+                "Invalid allocation prefix: {}",
+                alloc_prefix
+            )));
         }
 
         Ok(Self {
@@ -123,8 +133,8 @@ impl IpamAllocator {
         // Compute how many subnets we can have
         let shift_amount = self.alloc_prefix - self.pool.prefix;
         if shift_amount >= 32 {
-             // Extremely large pool vs alloc gap, unlikely but we handle it safely
-             return Err(IpamError::PoolExhausted);
+            // Extremely large pool vs alloc gap, unlikely but we handle it safely
+            return Err(IpamError::PoolExhausted);
         }
         let total_subnets: u32 = 1u32.checked_shl(shift_amount as u32).unwrap_or(u32::MAX);
 
