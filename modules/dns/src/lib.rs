@@ -9,6 +9,7 @@ pub mod caa_record;
 pub mod dns_over_tls;
 pub mod cloudflare_sync;
 pub mod dnssec_mgr;
+pub mod dnssec_key_rollover;
 pub mod domain;
 pub mod forwarders;
 pub mod idn_punycode;
