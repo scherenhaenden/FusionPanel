@@ -80,3 +80,15 @@ The [source audit](../audits/2026-11-01/SOURCE_AUDIT.md) records release-blockin
 ## README quickstart and status
 
 The `docs/readme-quickstart` documentation change updates the project overview, local API and CLI instructions, and qualification status. No primary issue applies because the scope spans the README and leaves package acceptance to the existing issues.
+
+## Sprint 2 execution PRs — 15 November 2026
+
+| PR | Scope | Primary issue | Evidence | Delivery / remaining |
+|---|---|---|---|---|
+| [#580](https://github.com/scherenhaenden/FusionPanel/pull/580) | Sprint 2 plan and handoff guide | None directly applies; this is sprint-wide planning documentation. The implementation PRs reference #24. | Documents the API, agent, UI task contracts and Sprint 2 close gate. | Open and approved; package check stopped at Git's safe-directory ownership check. PR #584 carries the workflow fix; neither PR is merged. |
+| [#581](https://github.com/scherenhaenden/FusionPanel/pull/581) | Node registration and jobs API/store | [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) | `RUST_MIN_STACK=33554432 cargo test --offline -p fusionpanel-api -p fusionpanel-jobs -p fusionpanel-control-store` passed: API 10, control-store 8, jobs 12. `git diff --check` passed. | Open and approved. Package job failed before compilation at safe-directory validation. Root `Cargo.lock` integration remains required for `--locked` tests/package; no live E2E or issue closure claimed. |
+| [#582](https://github.com/scherenhaenden/FusionPanel/pull/582) | HTTP agent job worker | [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) | Agent unit tests 9/9 and binary `cargo check --offline` passed. | Open and approved. Package job failed before compilation at safe-directory validation. Loopback integration tests were not run because local socket binding is denied in the sandbox; no live E2E or issue closure claimed. |
+| [#583](https://github.com/scherenhaenden/FusionPanel/pull/583) | Nodes and Jobs UI | [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) | `npm test -- --runInBand`: 6 suites / 24 tests passed; `npm run build` passed; `git diff --check` passed. | Open and approved. Package job failed before compilation at safe-directory validation; local frontend verification is not the Sprint 2 live E2E gate. |
+| [#584](https://github.com/scherenhaenden/FusionPanel/pull/584) | Mark package checkout as a safe Git directory | None directly applies; it fixes the package workflow failure observed in #580–#583. | Workflow YAML parsed and `git diff --check` passed; package check passed. | Open and approved; package workflow fix is not merged, so it does not yet change checks on the other PRs. |
+
+These atomic PRs remain unmerged. The issue stays open until the integrated Sprint 2 PR reaches `master` and the tracker records its merge SHA and final verification evidence.
