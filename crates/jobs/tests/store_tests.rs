@@ -4,6 +4,7 @@
 mod tests {
     use std::time::Duration;
 
+    use rusqlite::Connection;
     use serde_json::json;
 
     use fusionpanel_jobs::{JobState, JobStore, JobStoreError};
@@ -145,6 +146,88 @@ mod tests {
         let claim2 = store2.claim("worker2").unwrap();
         assert!(claim2.is_none());
 
+        std::fs::remove_file(db_path).unwrap();
+    }
+
+    #[test]
+    fn test_idempotent_create_and_worker_owned_logs() {
+        let db_path =
+            std::env::temp_dir().join(format!("test_jobs_logs_{}.db", uuid::Uuid::new_v4()));
+        let mut store = JobStore::new(&db_path).unwrap();
+        let request = json!({"operation": "system.info", "payload": {}});
+        let fingerprint = json!({"operation": "system.info", "payload": {}});
+        let (id, created) = store
+            .create_idempotent("agent_operation", &request, "key-1", &fingerprint)
+            .unwrap();
+        assert!(created);
+        let (retry_id, retry_created) = store
+            .create_idempotent("agent_operation", &request, "key-1", &fingerprint)
+            .unwrap();
+        assert!(!retry_created);
+        assert_eq!(id, retry_id);
+
+        let conflict = store.create_idempotent(
+            "agent_operation",
+            &request,
+            "key-1",
+            &json!({"operation": "site.validate", "payload": {}}),
+        );
+        assert!(matches!(conflict, Err(JobStoreError::IdempotencyConflict)));
+
+        assert_eq!(store.claim("node-1").unwrap().unwrap().id, id);
+        assert!(matches!(
+            store.append_log(&id, "node-2", "stdout", "not owned"),
+            Err(JobStoreError::WrongWorker)
+        ));
+        store
+            .append_log(&id, "node-1", "stdout", "system info ready")
+            .unwrap();
+        let logs = store.list_logs(&id).unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].text, "system info ready");
+        let chunk = "x".repeat(4096);
+        for _ in 0..255 {
+            store.append_log(&id, "node-1", "stderr", &chunk).unwrap();
+        }
+        assert!(matches!(
+            store.append_log(&id, "node-1", "stderr", &chunk),
+            Err(JobStoreError::LogLimitExceeded { .. })
+        ));
+
+        store
+            .transition_for_worker(&id, "node-1", JobState::Succeeded, None)
+            .unwrap();
+        assert!(matches!(
+            store.transition_for_worker(&id, "node-2", JobState::Failed, None),
+            Err(JobStoreError::WrongWorker)
+        ));
+        drop(store);
+        let reopened = JobStore::new(&db_path).unwrap();
+        assert_eq!(reopened.get(&id).unwrap().state, JobState::Succeeded);
+        assert_eq!(
+            reopened.list_logs(&id).unwrap()[0].text,
+            "system info ready"
+        );
+        drop(reopened);
+        std::fs::remove_file(db_path).unwrap();
+    }
+
+    #[test]
+    fn test_legacy_schema_migrates_for_idempotency_and_logs() {
+        let db_path =
+            std::env::temp_dir().join(format!("test_jobs_legacy_{}.db", uuid::Uuid::new_v4()));
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL, worker_id TEXT, error_text TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);",
+            )
+            .unwrap();
+        }
+        let store = JobStore::new(&db_path).unwrap();
+        let request = json!({"operation": "system.info"});
+        let id = store.create("legacy-compatible", &request).unwrap();
+        assert_eq!(store.get(&id).unwrap().payload, request);
+        drop(store);
         std::fs::remove_file(db_path).unwrap();
     }
 }

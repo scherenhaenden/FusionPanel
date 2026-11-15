@@ -8,13 +8,18 @@ license.workspace = true
 axum = "0.8.9"
 chrono = "0.4"
 fusionpanel-control-store = { path = "../control-store" }
+fusionpanel-agent-protocol = { path = "../agent-protocol" }
+fusionpanel-domain = { path = "../domain" }
+fusionpanel-jobs = { path = "../jobs" }
 identity = { path = "../../modules/identity" }
 integration-identity = { path = "../../integration/identity" }
+sha2 = "0.10"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 subtle = "2.6.1"
 tokio = { version = "1.54.1", features = ["full"] }
 tower-cookies = "0.11"
+uuid = { version = "1.29.0", features = ["v4"] }
 
 [dev-dependencies]
 http-body-util = "0.1.5"
