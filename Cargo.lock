@@ -583,17 +583,22 @@ version = "0.2.0-dev.1"
 dependencies = [
  "axum",
  "chrono",
+ "fusionpanel-agent-protocol",
  "fusionpanel-control-store",
+ "fusionpanel-domain",
+ "fusionpanel-jobs",
  "http-body-util",
  "identity",
  "integration-identity",
  "serde",
  "serde_json",
+ "sha2",
  "subtle",
  "tempfile",
  "tokio",
  "tower",
  "tower-cookies",
+ "uuid",
 ]
 
 [[package]]
@@ -1879,6 +1884,17 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "sha2"
+version = "0.10.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.2.17",
+ "digest",
 ]
 
 [[package]]
