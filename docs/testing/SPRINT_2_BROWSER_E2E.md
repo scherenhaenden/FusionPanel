@@ -13,7 +13,7 @@ The Docker Compose services use Linux host networking. The API binds only to `12
 
   ```sh
   cargo build --locked --manifest-path Cargo.toml -p fusionpanel-api -p fusionpanel-cli
-  cargo build --locked --manifest-path crates/agent/Cargo.toml --bin fusionpanel-agent
+  CARGO_TARGET_DIR="$PWD/target" cargo build --locked --manifest-path crates/agent/Cargo.toml --bin fusionpanel-agent
   (cd frontend && npm ci && npm run build)
   (cd tests/e2e/browser && npm ci && npx playwright install --with-deps chromium)
   ```
