@@ -23,6 +23,6 @@ test('operator sees the live agent and completes a System Info job', async ({ pa
 
   const details = page.getByRole('region', { name: 'Job details' });
   await expect(details).toBeVisible();
-  await expect(details.getByText('succeeded', { exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(details.getByText('succeeded', { exact: true }).first()).toBeVisible({ timeout: 60_000 });
   await expect(details.locator('ol')).toContainText('"operation":"system.info"');
 });
