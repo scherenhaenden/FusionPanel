@@ -1,10 +1,10 @@
 # Sprint 3 Plan & Handoff Guide — Websites & Reverse Proxy
 
-**Sprint branch**: `sprint-3` (currently based on `master` at `6b5adf5`)  
-**Dependency**: Sprint 2 release and its node/job API + agent worker contracts  
-**Target release**: `sprint-3` -> `master` only after the Sprint 3 close gate  
-**Docker**: Optional for local feature work; required for the disposable Nginx E2E gate  
-**Estimate**: L (8 story points)
+- **Sprint branch**: `sprint-3` (currently based on `master` at `6b5adf5`)
+- **Dependency**: Sprint 2 release and its node/job API + agent worker contracts
+- **Target release**: `sprint-3` -> `master` only after the Sprint 3 close gate
+- **Docker**: Optional for local feature work; required for the disposable Nginx E2E gate
+- **Estimate**: L (8 story points)
 
 > Sprint 2 is still in review. The current `sprint-3` branch is a planning base only. Before starting dependent implementation branches, refresh it from the verified Sprint 2 release on `master`; do not implement against guessed or unmerged agent/API interfaces.
 
