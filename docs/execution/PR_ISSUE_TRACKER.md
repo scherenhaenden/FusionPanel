@@ -91,20 +91,21 @@ The `docs/readme-quickstart` documentation change updates the project overview, 
 | [#583](https://github.com/scherenhaenden/FusionPanel/pull/583) | Nodes and Jobs UI | [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) | Head `83e746bf031158a60cbcf1aba38e24f09b6fa313`; fixed request-error/empty-state overlap and stale logs after job selection, with focused tests. `npm test -- --runInBand`: 6 suites / 26 tests passed; `npm run build` and package check passed; review approved. | Merged to `sprint-2` by regular merge `6f85d3d209329aa3ee5313eddcbe78734279b80f`. Keep #24 open. |
 | [#584](https://github.com/scherenhaenden/FusionPanel/pull/584) | Mark package checkout as a safe Git directory | No product issue applies; fixes the package workflow failure seen on atomic branches. | Head `8a57dde217f2c31cf2a5b6f0507985afca9d7fc8`; workflow fix and package check passed; review approved. | Merged to `sprint-2` by regular merge `816c30a0f79ed7470b693f00e1d722d494252ba9`. |
 | [#587](https://github.com/scherenhaenden/FusionPanel/pull/587) | Integration-owned API dependency lock update | None directly applies; required after #581 changed API dependencies. | Head `27eecae030a2941dde5744f6d77c69c829f15eab`; minimal root lock update, API locked/offline check passed, package check and review passed. | Merged to `sprint-2` by regular merge `5176e3c6ba77066f5dc1834151d0e1f0997607c8`. |
+| [#588](https://github.com/scherenhaenden/FusionPanel/pull/588) | Bump Cargo workspace package version for Sprint 2 | [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) | Head `5a0c599d16ea92216ae6fa89c8d1af878efa0272`; root workspace `0.2.0-dev.1` -> `0.3.0-dev.1`, with only five corresponding lock entries changed. No dependency versions changed. `cargo metadata --locked`, diff check, 63 selected unit tests, and package check passed. | Merged to `sprint-2` by regular merge `72b88a0a55e3c646579dda8f716eeb2daa43321a`. Keep #24 open. |
 
-All listed Sprint 2 code and plan PRs are merged to `sprint-2`; the final integration gate evidence is recorded below. Issue #24 remains open: no release PR to `master` or product-owner acceptance is recorded here.
+All listed Sprint 2 implementation, plan, lock, and version-bump PRs are merged to `sprint-2`; the final versioned integration gate evidence is recorded below. Issue #24 remains open pending the release PR and product-owner acceptance.
 
-## Sprint 2 integration gate — 15 November 2026
+## Sprint 2 versioned release gate — 15 November 2026
 
-Gate head: `sprint-2` at `55e1a1434a2c6be1fbb64477a7fb39eab242d1d3`.
+Gate head: `sprint-2` at `72b88a0a55e3c646579dda8f716eeb2daa43321a` (version bump PR #588).
 
-- `RUST_MIN_STACK=33554432 cargo test --locked --workspace` — **102/102 passed**. The first sandbox run could not bind local sockets for CLI wiremock tests; the identical command passed when rerun with local-network permission.
+- `RUST_MIN_STACK=33554432 cargo test --locked --workspace` — **102/102 passed**. Local loopback access was enabled for CLI wiremock tests.
 - `RUST_MIN_STACK=33554432 cargo test --locked --manifest-path crates/agent/Cargo.toml` — **25 passed**.
 - `cd frontend && npm test -- --runInBand` — **6 suites / 26 tests passed**; `npm run build` — **passed**.
-- Live E2E without Docker: a disposable SQLite operator authenticated via browser cookie; the UI showed a registered local HTTP agent online; a `system.info` job reached `succeeded` and emitted logs. After restarting API and agent, the same node, job/logs, and session remained available.
-- `bash packaging/build-package.sh 0.3.0-dev.1 /tmp/fp-sprint2-package.PZDdzK` — **passed**. Archive size 5,321,170 bytes; SHA-256 `f6b25d85ed0ef8afe41f6e096d5af620d1c0de5706ad3b083beb7de2109444e6`.
+- Live E2E without Docker was verified on implementation head `55e1a1434a2c6be1fbb64477a7fb39eab242d1d3`: a disposable SQLite operator authenticated via browser cookie; the UI showed a registered local HTTP agent online; a `system.info` job reached `succeeded` and emitted logs. After restarting API and agent, the same node, job/logs, and session remained available. The only later source change was Cargo workspace version/lock metadata, so E2E was not repeated on the versioned head.
+- `bash packaging/build-package.sh 0.3.0-dev.1 /tmp/fusionpanel-sprint2-final-package` — **passed on `72b88a0a`**. Archive size 5,321,299 bytes; SHA-256 `a1c8dd8982163633fcf8b6c1f729f984e568d4f69c835b7422a0e6291194e3a7`; `BUILD_INFO.txt` records the gate head.
 
-This evidence qualifies the local Sprint 2 workspace/API/agent/UI flow and restart persistence. It does not qualify remote-node transport, clean-host installation, or multi-node behavior. The package command used the requested package label; the workspace version bump and `sprint-2` -> `master` release PR remain pending. Keep issue [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) open until release and explicit acceptance.
+This evidence qualifies the local Sprint 2 workspace/API/agent/UI flow and restart persistence. It does not qualify remote-node transport, clean-host installation, or multi-node behavior. The Cargo workspace version is now `0.3.0-dev.1`; the single `sprint-2` -> `master` release PR remains the next step. Keep issue [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) open until release and explicit acceptance.
 
 ## Sprint 3 planning and tracker maintenance — 15 November 2026
 

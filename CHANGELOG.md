@@ -6,6 +6,13 @@ Release identities follow [the versioning policy](docs/engineering/VERSIONING.md
 
 - Adopt the date-and-hash release identity; preserve existing annotated SemVer tags as historical records. Cargo package versions remain internal.
 
+### Sprint 2 — Node Agent and Jobs Runtime
+
+- Added authenticated node registration, heartbeats, job queueing, and status/log retrieval through the API and Nodes/Jobs UI.
+- Added the local HTTP agent worker for typed `system.info` and `site.validate` jobs, with persisted execution history and logs.
+- Verified a local single-node flow and persistence across API/agent restarts. Remote-node transport, clean-host installation, and multi-node behavior remain unqualified.
+- Set the Cargo workspace package version to `0.3.0-dev.1`; the release PR and date/hash release tag are still pending.
+
 ## 0.1.0-dev.1 — Initial development snapshot
 
 ### Added

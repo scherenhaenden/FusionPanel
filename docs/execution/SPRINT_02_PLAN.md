@@ -1,7 +1,7 @@
 # Sprint 2 Plan & Handoff Guide — Node Agent & Jobs Runtime
 
 **Sprint Branch**: `sprint-2` (branched from `master` @ `6b5adf5`, `v0.2.0-dev.1`)  
-**Target Release**: `sprint-2` -> `master` after release review and workspace version bump; planned package version `0.3.0-dev.1`<br>
+**Target Release**: `sprint-2` -> `master` after release review; workspace package version `0.3.0-dev.1` was set by PR #588; release PR pending<br>
 **Docker Required**: **No** (runs natively with `fusionpanel-api`, `fusionpanel-agent`, `fusionpanel-cli`, and SQLite)  
 **Estimated Effort**: L (8 story points)  
 
@@ -72,7 +72,7 @@ Each branch **must** be developed independently from `sprint-2`, run **only loca
 
 ---
 
-## 4. Sprint 2 Close Gate (Run ONLY After All 3 PRs Are Merged into `sprint-2`)
+## 4. Sprint 2 Close Gate (Run After All Implementation PRs and the Version Bump Are Merged into `sprint-2`)
 
 1. Run full workspace tests + agent crate tests + frontend tests & production build:
    * `RUST_MIN_STACK=33554432 cargo test --locked --workspace`
@@ -80,16 +80,20 @@ Each branch **must** be developed independently from `sprint-2`, run **only loca
    * `cd frontend && npm test -- --runInBand && npm run build`
 2. Run **Live E2E** (no Docker required):
    * `fusionpanel-cli bootstrap operator` -> start `fusionpanel-api` + `fusionpanel-agent` -> browser/cookie login -> verify node appears online via `/v1/nodes` -> enqueue job via `/v1/jobs` -> verify agent executes & persists `succeeded` + logs -> restart both API & agent -> verify persisted node/job history.
-3. Bump workspace version (e.g., `0.3.0-dev.1`), build package with `bash packaging/build-package.sh`, update `docs/execution/SPRINTS.md`, and open the single release PR **`sprint-2` -> `master`**.
+3. Complete release preparation after the Sprint gate is green:
+   * The workspace version bump to `0.3.0-dev.1` is complete in PR #588.
+   * Build the package from the versioned `sprint-2` head with `bash packaging/build-package.sh`.
+   * Update `docs/execution/SPRINTS.md` with verified results, then open the single release PR **`sprint-2` -> `master`**.
 
 ### Verified Sprint 2 Results — 15 November 2026
 
-The implementation and documentation PRs are integrated on `sprint-2` at gate head `55e1a1434a2c6be1fbb64477a7fb39eab242d1d3`. Exact PR heads and regular merge commits are recorded in [PR_ISSUE_TRACKER.md](PR_ISSUE_TRACKER.md).
+The implementation, version bump, and evidence PRs are integrated on `sprint-2`. The final versioned gate ran on `72b88a0a55e3c646579dda8f716eeb2daa43321a`; exact PR heads and regular merge commits are recorded in [PR_ISSUE_TRACKER.md](PR_ISSUE_TRACKER.md).
 
-- Workspace/integration: `RUST_MIN_STACK=33554432 cargo test --locked --workspace` — **102/102 passed**. The sandbox initially denied local socket binding for CLI wiremock tests; rerunning the same command with local-network permission passed.
+- Version bump: PR #588 changed the Cargo workspace version from `0.2.0-dev.1` to `0.3.0-dev.1`; the lockfile changed only the five workspace packages that inherit that version. Merge commit: `72b88a0a55e3c646579dda8f716eeb2daa43321a`.
+- Workspace/integration: `RUST_MIN_STACK=33554432 cargo test --locked --workspace` — **102/102 passed** on the versioned head; local loopback access was enabled for CLI wiremock tests.
 - Agent crate: `RUST_MIN_STACK=33554432 cargo test --locked --manifest-path crates/agent/Cargo.toml` — **25 passed** (library and crate integration targets).
 - Frontend: `cd frontend && npm test -- --runInBand` — **6 suites / 26 tests passed**; `npm run build` — **passed**.
-- Live E2E, no Docker: bootstrapped a disposable SQLite operator, started the API and built SPA, logged in through the cookie session, registered a local HTTP agent, ran a `system.info` job to `succeeded`, then restarted both API and agent. The same node remained online and the succeeded job, logs, and authenticated session remained available in the UI/API after restart.
-- Package: `bash packaging/build-package.sh 0.3.0-dev.1 /tmp/fp-sprint2-package.PZDdzK` — **passed**. Archive: `fusionpanel-0.3.0-dev.1-debian-x86_64.tar.gz`, 5,321,170 bytes; SHA-256 `f6b25d85ed0ef8afe41f6e096d5af620d1c0de5706ad3b083beb7de2109444e6`. This is a package build; it does not record a workspace version bump.
+- Live E2E, no Docker: verified at implementation gate head `55e1a1434a2c6be1fbb64477a7fb39eab242d1d3`. A disposable SQLite operator logged in through the cookie session, registered a local HTTP agent, and ran `system.info` to `succeeded`; after restarting API and agent, the node, job, logs, and session remained available. The only later source changes were the Cargo workspace version and lockfile, so the runtime E2E was not repeated on the versioned head.
+- Package: `bash packaging/build-package.sh 0.3.0-dev.1 /tmp/fusionpanel-sprint2-final-package` — **passed** on `72b88a0a55e3c646579dda8f716eeb2daa43321a`. Archive: `fusionpanel-0.3.0-dev.1-debian-x86_64.tar.gz`, 5,321,299 bytes; SHA-256 `a1c8dd8982163633fcf8b6c1f729f984e568d4f69c835b7422a0e6291194e3a7`. `BUILD_INFO.txt` records the same source commit.
 
-**Remaining release work:** the workspace version bump and the single `sprint-2` -> `master` release PR have not been done. Issue [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) remains open pending release and product-owner acceptance. This local E2E does not qualify remote-node transport, clean-host installation, or multi-node operation.
+**Remaining release work:** open and review the single `sprint-2` -> `master` release PR, then obtain product-owner acceptance. Issue [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) remains open. The local E2E does not qualify remote-node transport, clean-host installation, or multi-node operation.
