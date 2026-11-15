@@ -1,7 +1,7 @@
 # Sprint 2 Plan & Handoff Guide — Node Agent & Jobs Runtime
 
 **Sprint Branch**: `sprint-2` (branched from `master` @ `6b5adf5`, `v0.2.0-dev.1`)  
-**Target Release**: `sprint-2` -> `master` after release review; workspace package version `0.3.0-dev.1` was set by PR #588; release PR pending<br>
+**Target Release**: PR [#590](https://github.com/scherenhaenden/FusionPanel/pull/590) from `sprint-2` to `master` is open for release review; Cargo workspace package version `0.3.0-dev.1` is internal metadata, and no date/hash release tag or published artifact is recorded.<br>
 **Docker Required**: **No** (runs natively with `fusionpanel-api`, `fusionpanel-agent`, `fusionpanel-cli`, and SQLite)  
 **Estimated Effort**: L (8 story points)  
 
@@ -15,6 +15,10 @@ Enable the FusionPanel control plane to **register a local node, enqueue jobs vi
 1. Local `fusionpanel-agent` registers with `fusionpanel-api` and sends periodic heartbeats.
 2. Authenticated operators (cookie session or Bearer token) can list nodes, enqueue a job, poll/view job status (`queued` -> `running` -> `succeeded` / `failed`), and inspect job logs from both the REST API and React UI.
 3. Restarting `fusionpanel-api` or `fusionpanel-agent` preserves node records, queued/completed jobs, and logs in `FUSIONPANEL_DATABASE_URL`.
+
+### Upgrade Compatibility
+
+The agent defaults to HTTP mode. Existing deployments that use the legacy WebSocket transport must set `FUSIONPANEL_AGENT_MODE=legacy-ws` before upgrading and retain `FUSIONPANEL_AGENT_URL` and `FUSIONPANEL_AGENT_SECRET`; `FUSIONPANEL_AGENT_HEARTBEAT_URL` remains optional. If any legacy WebSocket environment variable is present while the mode is unset, the agent exits with a configuration error rather than selecting WebSocket implicitly.
 
 ---
 
@@ -93,7 +97,7 @@ The implementation, version bump, and evidence PRs are integrated on `sprint-2`.
 - Workspace/integration: `RUST_MIN_STACK=33554432 cargo test --locked --workspace` — **102/102 passed** on the versioned head; local loopback access was enabled for CLI wiremock tests.
 - Agent crate: `RUST_MIN_STACK=33554432 cargo test --locked --manifest-path crates/agent/Cargo.toml` — **25 passed** (library and crate integration targets).
 - Frontend: `cd frontend && npm test -- --runInBand` — **6 suites / 26 tests passed**; `npm run build` — **passed**.
-- Live E2E, no Docker: verified at implementation gate head `55e1a1434a2c6be1fbb64477a7fb39eab242d1d3`. A disposable SQLite operator logged in through the cookie session, registered a local HTTP agent, and ran `system.info` to `succeeded`; after restarting API and agent, the node, job, logs, and session remained available. The only later source changes were the Cargo workspace version and lockfile, so the runtime E2E was not repeated on the versioned head.
+- Live E2E, no Docker: verified at implementation gate head `55e1a1434a2c6be1fbb64477a7fb39eab242d1d3`. A disposable SQLite operator logged in through the cookie session, registered a local HTTP agent, and ran `system.info` to `succeeded`; after restarting API and agent, the node, job, logs, and session remained available. No runtime source changed after that E2E. Follow-up commits changed Cargo version/lock metadata and sprint evidence documentation, so the runtime E2E was not repeated on the versioned head.
 - Package: `bash packaging/build-package.sh 0.3.0-dev.1 /tmp/fusionpanel-sprint2-final-package` — **passed** on `72b88a0a55e3c646579dda8f716eeb2daa43321a`. Archive: `fusionpanel-0.3.0-dev.1-debian-x86_64.tar.gz`, 5,321,299 bytes; SHA-256 `a1c8dd8982163633fcf8b6c1f729f984e568d4f69c835b7422a0e6291194e3a7`. `BUILD_INFO.txt` records the same source commit.
 
-**Remaining release work:** open and review the single `sprint-2` -> `master` release PR, then obtain product-owner acceptance. Issue [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) remains open. The local E2E does not qualify remote-node transport, clean-host installation, or multi-node operation.
+**Remaining release work:** complete release review and green checks on open PR [#590](https://github.com/scherenhaenden/FusionPanel/pull/590), then obtain product-owner acceptance. No date/hash release tag or published artifact is recorded. Issue [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) remains open. The local E2E does not qualify remote-node transport, clean-host installation, or multi-node operation.

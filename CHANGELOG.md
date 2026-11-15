@@ -11,7 +11,8 @@ Release identities follow [the versioning policy](docs/engineering/VERSIONING.md
 - Added authenticated node registration, heartbeats, job queueing, and status/log retrieval through the API and Nodes/Jobs UI.
 - Added the local HTTP agent worker for typed `system.info` and `site.validate` jobs, with persisted execution history and logs.
 - Verified a local single-node flow and persistence across API/agent restarts. Remote-node transport, clean-host installation, and multi-node behavior remain unqualified.
-- Set the Cargo workspace package version to `0.3.0-dev.1`; the release PR and date/hash release tag are still pending.
+- Set the internal Cargo workspace package version to `0.3.0-dev.1`. Release PR [#590](https://github.com/scherenhaenden/FusionPanel/pull/590) is open to `master`; no date/hash release tag or published release artifact is recorded.
+- Upgrade compatibility: the agent now defaults to HTTP mode. Existing deployments that use the legacy WebSocket transport must set `FUSIONPANEL_AGENT_MODE=legacy-ws` and retain `FUSIONPANEL_AGENT_URL` and `FUSIONPANEL_AGENT_SECRET` (the heartbeat URL remains optional). If legacy WebSocket environment variables are present without an explicit mode, the agent exits with a configuration error.
 
 ## 0.1.0-dev.1 — Initial development snapshot
 
