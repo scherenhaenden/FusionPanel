@@ -1,12 +1,13 @@
 {
-  "name": "variants-browser-e2e",
+  "name": "fusionpanel-browser-e2e",
   "version": "1.0.0",
-  "description": "Browser E2E tests for FusionPanel variants",
+  "description": "Browser E2E tests for FusionPanel feature acceptance",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "compile": "playwright test --list",
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:sprint2": "playwright test tests/nodes-jobs.spec.js"
   },
   "dependencies": {
     "@playwright/test": "^1.40.0"

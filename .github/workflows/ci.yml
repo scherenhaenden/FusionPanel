@@ -225,9 +225,8 @@ jobs:
               exit 0
             fi
 
-            echo "FULL SPRINT GATE: installing Chromium and executing Playwright E2E specs."
-            npx playwright install --with-deps chromium
-            npm test 2>&1 | tee "$LOG_DIR/test.log"
+            echo "COMPILE-ONLY: full-gate browser execution is handled by the dedicated Sprint 2 Docker E2E job."
+            exit 0
           else
             npm run build 2>&1 | tee "$LOG_DIR/compile.log"
             npm test 2>&1 | tee "$LOG_DIR/test.log"
@@ -257,3 +256,88 @@ jobs:
           path: |
             compile.log
             test.log
+
+  sprint2-browser-e2e:
+    name: Sprint 2 browser E2E (Docker)
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      (github.event_name == 'pull_request' && github.base_ref == 'master')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Identify full Sprint gate
+        id: gate
+        shell: bash
+        run: |
+          RUN_SPRINT2_E2E=false
+          if [[ "${GITHUB_EVENT_NAME:-}" == "push" && "${GITHUB_REF:-}" == "refs/heads/master" ]]; then
+            RUN_SPRINT2_E2E=true
+          elif [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" \
+              && "${GITHUB_BASE_REF:-}" == "master" \
+              && "${GITHUB_HEAD_REF:-}" =~ ^sprint-[0-9]+$ ]]; then
+            RUN_SPRINT2_E2E=true
+          fi
+          echo "run=$RUN_SPRINT2_E2E" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Rust
+        if: steps.gate.outputs.run == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-sprint2-e2e-${{ hashFiles('Cargo.lock', 'crates/agent/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-sprint2-e2e-
+            ${{ runner.os }}-cargo-
+
+      - name: Build actual API, CLI, and agent binaries
+        if: steps.gate.outputs.run == 'true'
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: |
+          cargo build --locked --manifest-path Cargo.toml -p fusionpanel-api -p fusionpanel-cli
+          cargo build --locked --manifest-path crates/agent/Cargo.toml --bin fusionpanel-agent
+
+      - name: Build frontend assets
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Install browser suite and Chromium
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          cd tests/e2e/browser
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run disposable Sprint 2 Docker fixture
+        if: steps.gate.outputs.run == 'true'
+        run: tests/e2e/browser/fixtures/sprint2/run.sh
+
+      - name: Upload bounded browser and service evidence
+        if: always() && steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprint2-browser-e2e-${{ github.run_id }}
+          path: |
+            tests/e2e/browser/playwright-report
+            tests/e2e/browser/test-results
+            ${{ runner.temp }}/fusionpanel-sprint2-compose-*.log
+          if-no-files-found: ignore
+          retention-days: 3
