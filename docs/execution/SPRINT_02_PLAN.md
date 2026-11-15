@@ -80,7 +80,10 @@ Each branch **must** be developed independently from `sprint-2`, run **only loca
    * `cd frontend && npm test -- --runInBand && npm run build`
 2. Run **Live E2E** (no Docker required):
    * `fusionpanel-cli bootstrap operator` -> start `fusionpanel-api` + `fusionpanel-agent` -> browser/cookie login -> verify node appears online via `/v1/nodes` -> enqueue job via `/v1/jobs` -> verify agent executes & persists `succeeded` + logs -> restart both API & agent -> verify persisted node/job history.
-3. Bump workspace version (e.g., `0.3.0-dev.1`), build package with `bash packaging/build-package.sh`, update `docs/execution/SPRINTS.md`, and open the single release PR **`sprint-2` -> `master`**.
+3. Complete release preparation after the Sprint gate is green:
+   * The workspace version bump to `0.3.0-dev.1` is complete in PR #588.
+   * Build the package from the versioned `sprint-2` head with `bash packaging/build-package.sh`.
+   * Update `docs/execution/SPRINTS.md` with verified results, then open the single release PR **`sprint-2` -> `master`**.
 
 ### Verified Sprint 2 Results — 15 November 2026
 
