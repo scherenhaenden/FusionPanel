@@ -92,3 +92,10 @@ The `docs/readme-quickstart` documentation change updates the project overview, 
 | [#584](https://github.com/scherenhaenden/FusionPanel/pull/584) | Mark package checkout as a safe Git directory | None directly applies; it fixes the package workflow failure observed in #580–#583. | Workflow YAML parsed and `git diff --check` passed; package check passed. | Open and approved; package workflow fix is not merged, so it does not yet change checks on the other PRs. |
 
 These atomic PRs remain unmerged. The issue stays open until the integrated Sprint 2 PR reaches `master` and the tracker records its merge SHA and final verification evidence.
+
+## Sprint 3 planning and tracker maintenance — 15 November 2026
+
+| PR | Scope | Primary issue | Evidence | Delivery / remaining |
+|---|---|---|---|---|
+| [#585](https://github.com/scherenhaenden/FusionPanel/pull/585) | Sprint 3 website and reverse-proxy handoff plan | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | Reviewed current hosting domain/config code and the Websites view; `git diff --check` passed. | Open documentation PR to `sprint-3`. It is a planning contract, not implementation or live Nginx acceptance. The branch must be refreshed after Sprint 2 is released to master. |
+| [#586](https://github.com/scherenhaenden/FusionPanel/pull/586) | Sprint 2 PR evidence and issue-link tracker update | None directly applies; this cross-cutting traceability change records package PRs that already reference #24 and the CI fix with its no-issue rationale. | PR targets, reviews, check results, and local test evidence checked against current GitHub state. | Open documentation PR to `sprint-2`; its package check is subject to the safe-directory workflow fix in #584. |
