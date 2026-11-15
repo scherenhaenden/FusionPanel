@@ -60,13 +60,13 @@ assert_line 'FUSIONPANEL_NODE_NAME=node-name-example' "$agent_env"
 
 secure_active_env_files "$TEST_DIR/config"
 assert_mode 600 "$api_env"
-assert_mode 640 "$agent_env"
+assert_mode 600 "$agent_env"
 if ! grep -Fqx "root:root $api_env" "$TEST_DIR/chown-calls"; then
     echo "FAIL: API environment file must be owned by root only" >&2
     exit 1
 fi
-if ! grep -Fqx "root:fusionpanel $agent_env" "$TEST_DIR/chown-calls"; then
-    echo "FAIL: agent environment file must be readable by the agent group" >&2
+if ! grep -Fqx "root:root $agent_env" "$TEST_DIR/chown-calls"; then
+    echo "FAIL: agent environment file must be root-owned" >&2
     exit 1
 fi
 
@@ -82,6 +82,29 @@ write_runtime_env_files "$TEST_DIR/stage/config" "9091" "synthetic-token-copy-te
 assert_mode 700 "$TEST_DIR/stage/config"
 assert_mode 600 "$TEST_DIR/stage/config/fusionpanel.env"
 assert_mode 600 "$TEST_DIR/stage/config/fusionpanel-agent.env"
+
+remote_agent_env="$TEST_DIR/existing-agent.env"
+printf 'FUSIONPANEL_AGENT_MODE=http\nFUSIONPANEL_API_URL=https://control.example.test\nFUSIONPANEL_NODE_ID=00000000-0000-4000-8000-000000000001\nFUSIONPANEL_NODE_TOKEN=scoped-node-secret\n' > "$remote_agent_env"
+chmod 0640 "$remote_agent_env"
+preserve_agent_env_file "$remote_agent_env" "$TEST_DIR/stage/config/fusionpanel-agent.env"
+assert_line 'FUSIONPANEL_API_URL=https://control.example.test' "$TEST_DIR/stage/config/fusionpanel-agent.env"
+assert_line 'FUSIONPANEL_NODE_ID=00000000-0000-4000-8000-000000000001' "$TEST_DIR/stage/config/fusionpanel-agent.env"
+assert_line 'FUSIONPANEL_NODE_TOKEN=scoped-node-secret' "$TEST_DIR/stage/config/fusionpanel-agent.env"
+assert_mode 600 "$TEST_DIR/stage/config/fusionpanel-agent.env"
+if grep -q '^FUSIONPANEL_ADMIN_TOKEN=' "$TEST_DIR/stage/config/fusionpanel-agent.env"; then
+    echo "FAIL: remote agent environment unexpectedly contains the admin token" >&2
+    exit 1
+fi
+if ! grep -Fqx "root:root $TEST_DIR/stage/config/fusionpanel-agent.env" "$TEST_DIR/chown-calls"; then
+    echo "FAIL: preserved agent environment must be made root-owned" >&2
+    exit 1
+fi
+
+ln -s "$remote_agent_env" "$TEST_DIR/symlink-agent.env"
+if preserve_agent_env_file "$TEST_DIR/symlink-agent.env" "$TEST_DIR/stage/config/fusionpanel-agent.env" 2>/dev/null; then
+    echo "FAIL: symlinked existing agent environment should be rejected" >&2
+    exit 1
+fi
 
 versions_dir="$TEST_DIR/versions"
 mkdir -p "$versions_dir"
