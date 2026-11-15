@@ -114,3 +114,9 @@ This evidence qualifies the local Sprint 2 workspace/API/agent/UI flow and resta
 |---|---|---|---|---|
 | [#585](https://github.com/scherenhaenden/FusionPanel/pull/585) | Sprint 3 website and reverse-proxy handoff plan | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | Reviewed current hosting domain/config code and the Websites view; `git diff --check` passed. | Open documentation PR to `sprint-3`. Its package check failed at the safe-directory step in its current base. The #584 workflow fix is merged to `sprint-2` and must be carried into `sprint-3` before a fresh package check. This remains a planning contract, not implementation or live Nginx acceptance. |
 | [#586](https://github.com/scherenhaenden/FusionPanel/pull/586) | Sprint 2 PR evidence and issue-link tracker update | None directly applies; cross-cutting traceability for PRs linked to #24 and integration maintenance. | This PR records the completed Sprint 2 gate and exact PR traceability. | Documentation-only change; no product issue closure or capability acceptance claimed. |
+
+## Sprint 2 browser E2E gate — 15 November 2026
+
+| PR | Scope | Primary issue | Evidence | Delivery / remaining |
+|---|---|---|---|---|
+| [#594](https://github.com/scherenhaenden/FusionPanel/pull/594) | Execute the existing Playwright package only at the full Sprint release gate | None directly applies; the workflow change is cross-cutting CI policy and the browser suite spans capabilities outside Sprint 2. | Workflow commit `bd28a0d`; `git diff --check` passed. No product test suite was run on the atomic branch. `actionlint` was unavailable. | Open atomic PR to `sprint-2`. The full gate installs Chromium and runs Playwright for a `sprint-N` -> `master` PR or `master` push. The browser suite still requires an owned disposable fixture (`FUSIONPANEL_E2E_DISPOSABLE`, API/frontend loopback URLs, site ID); this PR does not provision it, so no E2E pass is claimed. |

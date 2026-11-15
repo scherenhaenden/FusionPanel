@@ -202,6 +202,15 @@ jobs:
           DIR=$(dirname ${{ matrix.manifest }})
           LOG_DIR=$(pwd)
 
+          FULL_SPRINT_GATE=false
+          if [[ "${GITHUB_EVENT_NAME:-}" == "push" && "${GITHUB_REF:-}" == "refs/heads/master" ]]; then
+            FULL_SPRINT_GATE=true
+          elif [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" \
+              && "${GITHUB_BASE_REF:-}" == "master" \
+              && "${GITHUB_HEAD_REF:-}" =~ ^sprint-[0-9]+$ ]]; then
+            FULL_SPRINT_GATE=true
+          fi
+
           cd "$DIR"
           npm ci
           POLICY=$(node -p "require('./package.json').fusionpanel?.policy || 'unit'")
@@ -211,12 +220,18 @@ jobs:
               echo "::error::Compile-only package discovered zero tests in ${{ matrix.manifest }}. Tests are mandatory."
               exit 1
             fi
-            echo "COMPILE-ONLY: E2E specs were discovered; execution belongs to the full Sprint gate."
-            exit 0
-          fi
+            if [ "$FULL_SPRINT_GATE" != "true" ]; then
+              echo "COMPILE-ONLY: E2E specs were discovered; execution belongs to the full Sprint gate."
+              exit 0
+            fi
 
-          npm run build 2>&1 | tee "$LOG_DIR/compile.log"
-          npm test 2>&1 | tee "$LOG_DIR/test.log"
+            echo "FULL SPRINT GATE: installing Chromium and executing Playwright E2E specs."
+            npx playwright install --with-deps chromium
+            npm test 2>&1 | tee "$LOG_DIR/test.log"
+          else
+            npm run build 2>&1 | tee "$LOG_DIR/compile.log"
+            npm test 2>&1 | tee "$LOG_DIR/test.log"
+          fi
 
           if grep -q "Tests:.*0 total" "$LOG_DIR/test.log"; then
             echo "::error::Zero-test success detected in ${{ matrix.manifest }}. Tests are mandatory."
