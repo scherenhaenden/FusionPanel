@@ -2,16 +2,32 @@
 
 Source of truth for active local development progress. Updated at the close of each sprint.
 
-## Workflow Rules
+## Workflow Rules (Mandatory)
 
-1. **Sprint Integration Branch (`sprint-<N>`)**: Each sprint starts by creating `sprint-<N>` from `master` (and pushing `origin/sprint-<N>`).
-2. **Feature Branches (`feat/<topic>` -> `sprint-<N>`)**: Every feature or task within a sprint is developed on **its own branch created from `sprint-<N>`**.
-   - Run **only local unit tests** for the touched crate/module/view on the feature branch.
-   - Open a **PR against `sprint-<N>`** (never directly against `master`) so all sprint work accumulates in `sprint-<N>`.
-3. **Sprint Gate & Release to `master`**: Once all features for `sprint-<N>` are merged into `sprint-<N>`:
-   - Run full **integration tests + live E2E verification + quality gates** on `sprint-<N>`, and apply any fixes needed.
-   - Update this `SPRINTS.md` file with verification evidence.
-   - Only then open the **PR from `sprint-<N>` -> `master`**.
+```text
+master
+  └── sprint-<N>                      (sprint integration branch; NO direct feature commits)
+        ├── feat/<atomic-feature-1>   ──(unit tests only)──▶ PR into sprint-<N>
+        ├── feat/<atomic-feature-2>   ──(unit tests only)──▶ PR into sprint-<N>
+        └── fix/<atomic-fix>          ──(unit tests only)──▶ PR into sprint-<N>
+              │
+              ▼  [All sprint features merged into sprint-<N>]
+        Run integration + E2E + quality gates on sprint-<N> (+ fix PRs if needed)
+        Update docs/execution/SPRINTS.md & related docs
+              │
+              ▼
+        Single PR: sprint-<N> ──▶ master
+```
+
+1. **Sprint Integration Branch (`sprint-<N>`)**: Each sprint starts by creating `sprint-<N>` from `master` (and pushing `origin/sprint-<N>`). Do **not** commit feature changes directly onto `sprint-<N>`.
+2. **Atomic Feature Branches (`feat/<topic>`, `fix/<topic>`, `docs/<topic>`) -> `sprint-<N>`**:
+   - Every task/feature in a sprint is planned as an atomic branch created from `sprint-<N>`.
+   - On each atomic branch, run **only local unit tests** for the touched crate/module/view (avoid running full workspace/E2E suites for every small change).
+   - When unit tests pass, open an atomic PR **targeting `sprint-<N>`** (never directly targeting `master`).
+3. **Sprint Close, Quality Gates & PR to `master`**: Once all atomic PRs for `sprint-<N>` are merged into `sprint-<N>`:
+   - Run full **workspace integration tests + live E2E verification + quality gates** on `sprint-<N>`. If anything fails, land fix PRs into `sprint-<N>` until green.
+   - Update this `SPRINTS.md` file (and any related documentation) with exact verification evidence and current feature status.
+   - Only when `sprint-<N>` is 100% green and documented, open the single release PR **`sprint-<N>` -> `master`**.
 4. **Priority Scope**: Focus on 100% end-to-end usable core features first. PHP management is explicitly **not prioritized**.
 
 ---
