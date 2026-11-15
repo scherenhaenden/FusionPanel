@@ -1,7 +1,7 @@
 # Sprint 2 Plan & Handoff Guide — Node Agent & Jobs Runtime
 
 **Sprint Branch**: `sprint-2` (branched from `master` @ `6b5adf5`, `v0.2.0-dev.1`)  
-**Target Release**: `sprint-2` -> `master` (`0.3.0-dev.1` upon sprint gate pass)  
+**Target Release**: `sprint-2` -> `master` after release review and workspace version bump; planned package version `0.3.0-dev.1`<br>
 **Docker Required**: **No** (runs natively with `fusionpanel-api`, `fusionpanel-agent`, `fusionpanel-cli`, and SQLite)  
 **Estimated Effort**: L (8 story points)  
 
@@ -44,7 +44,7 @@ Each branch **must** be developed independently from `sprint-2`, run **only loca
   * `crates/agent/Cargo.toml`, `crates/agent/src/`
   * `crates/agent-protocol/` (only if shared request/response types need additions)
 * **Contract**:
-  * On startup (`FUSIONPANEL_API_URL`, `FUSIONPANEL_ADMIN_TOKEN`, `FUSIONPANEL_NODE_NAME`): register node -> start heartbeat loop -> poll `/v1/jobs/claim` -> execute supported core job types safely (e.g., `system.ping` / `system.info` / command allowlist, **no** `unsafe_code`, **no** arbitrary shell injection) -> report stdout/stderr summary + final status (`succeeded`/`failed`).
+  * On startup (`FUSIONPANEL_API_URL`, `FUSIONPANEL_ADMIN_TOKEN`, `FUSIONPANEL_NODE_NAME`): register node -> start heartbeat loop -> poll `/v1/jobs/claim` -> execute only the implemented `system.info` and `site.validate` job types (no arbitrary shell execution) -> report output summary + final status (`succeeded`/`failed`).
   * Keep `#![forbid(unsafe_code)]`.
 * **Unit Tests Only**:
   * `RUST_MIN_STACK=33554432 cargo test --offline --locked --manifest-path crates/agent/Cargo.toml --lib`
@@ -81,3 +81,15 @@ Each branch **must** be developed independently from `sprint-2`, run **only loca
 2. Run **Live E2E** (no Docker required):
    * `fusionpanel-cli bootstrap operator` -> start `fusionpanel-api` + `fusionpanel-agent` -> browser/cookie login -> verify node appears online via `/v1/nodes` -> enqueue job via `/v1/jobs` -> verify agent executes & persists `succeeded` + logs -> restart both API & agent -> verify persisted node/job history.
 3. Bump workspace version (e.g., `0.3.0-dev.1`), build package with `bash packaging/build-package.sh`, update `docs/execution/SPRINTS.md`, and open the single release PR **`sprint-2` -> `master`**.
+
+### Verified Sprint 2 Results — 15 November 2026
+
+The implementation and documentation PRs are integrated on `sprint-2` at gate head `55e1a1434a2c6be1fbb64477a7fb39eab242d1d3`. Exact PR heads and regular merge commits are recorded in [PR_ISSUE_TRACKER.md](PR_ISSUE_TRACKER.md).
+
+- Workspace/integration: `RUST_MIN_STACK=33554432 cargo test --locked --workspace` — **102/102 passed**. The sandbox initially denied local socket binding for CLI wiremock tests; rerunning the same command with local-network permission passed.
+- Agent crate: `RUST_MIN_STACK=33554432 cargo test --locked --manifest-path crates/agent/Cargo.toml` — **25 passed** (library and crate integration targets).
+- Frontend: `cd frontend && npm test -- --runInBand` — **6 suites / 26 tests passed**; `npm run build` — **passed**.
+- Live E2E, no Docker: bootstrapped a disposable SQLite operator, started the API and built SPA, logged in through the cookie session, registered a local HTTP agent, ran a `system.info` job to `succeeded`, then restarted both API and agent. The same node remained online and the succeeded job, logs, and authenticated session remained available in the UI/API after restart.
+- Package: `bash packaging/build-package.sh 0.3.0-dev.1 /tmp/fp-sprint2-package.PZDdzK` — **passed**. Archive: `fusionpanel-0.3.0-dev.1-debian-x86_64.tar.gz`, 5,321,170 bytes; SHA-256 `f6b25d85ed0ef8afe41f6e096d5af620d1c0de5706ad3b083beb7de2109444e6`. This is a package build; it does not record a workspace version bump.
+
+**Remaining release work:** the workspace version bump and the single `sprint-2` -> `master` release PR have not been done. Issue [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) remains open pending release and product-owner acceptance. This local E2E does not qualify remote-node transport, clean-host installation, or multi-node operation.

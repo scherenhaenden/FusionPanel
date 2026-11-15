@@ -58,11 +58,12 @@ master                                (verified sprint releases only)
 
 ---
 
-## 3. Completed Sprints
+## 3. Verified Sprint Gates
 
 | Sprint | Branch / PR | Scope (100% E2E Goal) | Status | Quality & Verification Gate |
 | :--- | :--- | :--- | :--- | :--- |
 | **Sprint 1** | `sprint-1` -> `master` ([#574](https://github.com/scherenhaenden/FusionPanel/pull/574)) | **P0 + P1 + Mail DKIM Prober**: Workspace recovery (PR #513 modules), unified `fusionpanel-api` + SQLite auth/RBAC + `/v1/auth/me` + static SPA serving, sprint governance docs, and `dkim_prober` merge (`dac4ab4`). | **DONE (100% E2E)** | - `cargo test --locked --workspace`: all crates PASS (`fusionpanel-api` 7/7, `integration-identity` 22/22, `identity` 22/22, `fusionpanel-cli` 11/11, `fusionpanel-agent-protocol` 14/14, `fusionpanel-control-store` 6/6, `fusionpanel-domain` 2/2, `fusionpanel-jobs` OK)<br>- `modules/mail`: unit + local integration PASS (`unit_dkim_prober` 6/6; 1 SMTP/IMAP live network test `ignored` pending Postfix/Dovecot container)<br>- Frontend: 5 suites / 17 tests PASS + `vite build` PASS<br>- Live E2E (no Docker): CLI `bootstrap operator` -> API + SPA `/` & `/login` -> cookie login -> `/v1/auth/me` (`SuperAdmin`) -> `/v1/capabilities` -> API restart preserving SQLite session -> `logout` revocation (`401`) |
+| **Sprint 2** | `sprint-2` (release PR to `master` pending) | Node registration, local agent job execution, Nodes/Jobs UI, and persisted status/logs. | **Integration, workspace, frontend, local E2E, and package build verified on `55e1a143`; release prep pending** | - `RUST_MIN_STACK=33554432 cargo test --locked --workspace`: 102/102 passed (local socket binding required an elevated rerun)<br>- Agent crate tests: 25 passed<br>- Frontend: 6 suites / 26 tests + `npm run build` PASS<br>- Live E2E (no Docker): cookie login, local HTTP agent online, `system.info` job succeeds, then API/agent restart preserves node, job/logs, and session<br>- Package `0.3.0-dev.1`: 5,321,170 bytes; SHA-256 `f6b25d85ed0ef8afe41f6e096d5af620d1c0de5706ad3b083beb7de2109444e6`<br>- Workspace version bump and release PR remain pending; issue #24 remains open. See [Sprint 2 plan](SPRINT_02_PLAN.md) and [PR evidence tracker](PR_ISSUE_TRACKER.md). |
 
 ---
 
@@ -96,10 +97,6 @@ master                                (verified sprint releases only)
 
 ---
 
-## 6. Next Sprint Backlog Ready to Start (Sprint 2: Node Agent & Jobs Runtime)
+## 6. Next Sprint Backlog Ready to Start (Sprint 3: Websites & Reverse Proxy)
 
-Once `sprint-1` ([#574](https://github.com/scherenhaenden/FusionPanel/pull/574)) is merged into `master`, create `sprint-2` from `master` and execute these three atomic branches targeting `sprint-2`:
-
-1. `feat/sprint-2-node-jobs-api`: Mount `/v1/nodes` and `/v1/jobs` in `fusionpanel-api` backed by `ControlStore` and `fusionpanel-jobs` (unit tests only).
-2. `feat/sprint-2-agent-job-worker`: Wire `crates/agent` node registration, heartbeat loop, atomic job claim, execution, and log reporting against `fusionpanel-api` (unit tests only).
-3. `feat/sprint-2-nodes-jobs-ui`: Wire React Dashboard/Nodes/Jobs views to live `/v1/nodes` and `/v1/jobs` endpoints (unit tests only).
+Sprint 2 implementation and integration gates are documented above. The Sprint 3 handoff plan is in [PR #585](https://github.com/scherenhaenden/FusionPanel/pull/585), which targets `sprint-3`; it is planning documentation only, not website/proxy implementation or live Nginx acceptance. Sprint 3 implementation remains a separate set of atomic PRs to `sprint-3`.
