@@ -14,7 +14,7 @@ test('operator sees the live agent and completes a System Info job', async ({ pa
   await expect(page).toHaveURL('/');
 
   await page.getByRole('link', { name: 'Nodes', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Nodes' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Nodes', exact: true })).toBeVisible();
   await expect(page.getByText('sprint2-disposable-agent', { exact: true })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText('online', { exact: true })).toBeVisible();
 
