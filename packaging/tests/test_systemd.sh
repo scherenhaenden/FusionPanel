@@ -32,8 +32,12 @@ if ! grep -q '^After=network.target fusionpanel.service$' "${SYSTEMD_DIR}/fusion
     echo "FAIL: agent must start after the API service."
     exit 1
 fi
-if ! grep -q '^Requires=fusionpanel.service$' "${SYSTEMD_DIR}/fusionpanel-agent.service"; then
-    echo "FAIL: agent must require the API service."
+if ! grep -q '^Wants=fusionpanel.service$' "${SYSTEMD_DIR}/fusionpanel-agent.service"; then
+    echo "FAIL: agent should request startup of the API service without coupling its restart lifecycle."
+    exit 1
+fi
+if grep -q '^Requires=fusionpanel.service$' "${SYSTEMD_DIR}/fusionpanel-agent.service"; then
+    echo "FAIL: agent must remain independently restartable when the API restarts."
     exit 1
 fi
 
