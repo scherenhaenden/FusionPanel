@@ -4,7 +4,7 @@ use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::post,
+    routing::{get, post},
     Json, Router,
 };
 use identity::{password::PasswordManager, session::Session, types::TenantId, SqliteIdentityStore};
@@ -40,9 +40,11 @@ pub fn auth_routes(state: AuthState) -> Router {
         .route("/v1/auth/login", post(login_handler))
         .route("/v1/auth/refresh", post(refresh_handler))
         .route("/v1/auth/logout", post(logout_handler))
+        .route("/v1/auth/me", get(me_handler))
         .route("/api/v1/auth/login", post(login_handler))
         .route("/api/v1/auth/refresh", post(refresh_handler))
         .route("/api/v1/auth/logout", post(logout_handler))
+        .route("/api/v1/auth/me", get(me_handler))
         .with_state(state)
 }
 
@@ -98,9 +100,13 @@ async fn login_handler(
         });
     }
 
+    let cookie_secure = std::env::var("FUSIONPANEL_COOKIE_SECURE")
+        .map(|v| v != "false" && v != "0")
+        .unwrap_or(true);
+
     let mut cookie = Cookie::new("SESSION_ID", session.id().to_string());
     cookie.set_http_only(true);
-    cookie.set_secure(true);
+    cookie.set_secure(cookie_secure);
     cookie.set_same_site(tower_cookies::cookie::SameSite::Strict);
     cookie.set_path("/");
 
@@ -155,4 +161,74 @@ async fn logout_handler(
     cookies.add(cookie);
 
     Ok(StatusCode::OK)
+}
+
+#[derive(Serialize)]
+pub struct MeResponse {
+    pub user_id: String,
+    pub tenant_id: String,
+    pub roles: Vec<String>,
+}
+
+async fn me_handler(
+    State(state): State<AuthState>,
+    cookies: Cookies,
+) -> Result<Json<MeResponse>, ErrorResponse> {
+    let session_id_str = cookies
+        .get("SESSION_ID")
+        .or_else(|| cookies.get("session_id"))
+        .map(|c| c.value().to_string());
+    let session_id = match session_id_str {
+        Some(s) => s.parse().map_err(|_| ErrorResponse {
+            error: "Invalid session cookie format".into(),
+        })?,
+        None => {
+            return Err(ErrorResponse {
+                error: "No session cookie".into(),
+            })
+        }
+    };
+
+    let store = state.store.lock().await;
+    let mut session = store
+        .get_session(session_id)
+        .map_err(|_| ErrorResponse {
+            error: "Internal error reading session".into(),
+        })?
+        .ok_or_else(|| ErrorResponse {
+            error: "Session not found".into(),
+        })?;
+
+    if store.is_revoked(&session).unwrap_or(true) {
+        return Err(ErrorResponse {
+            error: "Session revoked".into(),
+        });
+    }
+
+    let now = chrono::Utc::now();
+    if session.validate_and_touch(now).is_err() {
+        return Err(ErrorResponse {
+            error: "Session expired".into(),
+        });
+    }
+
+    if store.update_session_touch(session_id, now).is_err() {
+        return Err(ErrorResponse {
+            error: "Session expired or revoked".into(),
+        });
+    }
+
+    let bindings = store
+        .get_user_role_bindings(session.user_id())
+        .unwrap_or_default();
+    let roles = bindings
+        .into_iter()
+        .map(|b| format!("{:?}", b.role.role_type))
+        .collect();
+
+    Ok(Json(MeResponse {
+        user_id: session.user_id().to_string(),
+        tenant_id: session.tenant_id().to_string(),
+        roles,
+    }))
 }
