@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { api } from '../api';
 import { JobRecord, NodeRecord } from '../types';
@@ -40,6 +40,10 @@ const apiMock = jest.mocked(api);
 describe('Nodes and Jobs views', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('shows registered node status and heartbeat time', async () => {
@@ -96,5 +100,33 @@ describe('Nodes and Jobs views', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Agent API unavailable');
     expect(apiMock.getJob).not.toHaveBeenCalled();
+  });
+
+  it('retries transient job detail failures and updates the history status', async () => {
+    const queuedJob = { ...job, state: 'queued' as const, worker_id: null };
+    apiMock.getJobs.mockResolvedValue([queuedJob]);
+    apiMock.getJob
+      .mockRejectedValueOnce(new Error('Temporary API error'))
+      .mockResolvedValueOnce(job);
+    apiMock.getJobLogs.mockResolvedValue([]);
+    jest.useFakeTimers();
+
+    render(<JobsView />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Temporary API error');
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(5000);
+    });
+    expect(apiMock.getJob).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('row', { name: /job-1/ })).toHaveTextContent('succeeded');
   });
 });

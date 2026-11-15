@@ -13,6 +13,8 @@ const formatDate = (value: string): string => {
 };
 
 const activeStates: JobState[] = ['queued', 'running'];
+const POLL_INTERVAL_MS = 3000;
+const RETRY_INTERVAL_MS = 5000;
 
 const stateStyles: Record<JobState, string> = {
   queued: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
@@ -70,13 +72,24 @@ export const JobsView: React.FC = () => {
         ]);
         if (!current) return;
         setSelectedJob(job);
+        setJobs((currentJobs) => {
+          const alreadyListed = currentJobs.some((currentJob) => currentJob.id === job.id);
+          return alreadyListed
+            ? currentJobs.map((currentJob) => (currentJob.id === job.id ? job : currentJob))
+            : [job, ...currentJobs];
+        });
         setLogs(jobLogs);
         setDetailsError(null);
         if (activeStates.includes(job.state)) {
-          timer = setTimeout(() => void poll(), 3000);
+          timer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
         }
       } catch (loadError) {
-        if (current) setDetailsError(messageFromError(loadError));
+        if (current) {
+          setDetailsError(messageFromError(loadError));
+          if (!selectedJob || activeStates.includes(selectedJob.state)) {
+            timer = setTimeout(() => void poll(), RETRY_INTERVAL_MS);
+          }
+        }
       } finally {
         if (current) setDetailsLoading(false);
       }
@@ -98,6 +111,7 @@ export const JobsView: React.FC = () => {
       const job = await api.createSystemInfoJob();
       setSelectedJob(job);
       setSelectedJobId(job.id);
+      setJobs((currentJobs) => [job, ...currentJobs.filter((currentJob) => currentJob.id !== job.id)]);
       setLogs([]);
       await loadJobs();
     } catch (createJobError) {
