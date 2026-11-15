@@ -33,8 +33,10 @@ Each branch **must** be developed independently from `sprint-2`, run **only loca
   * `POST /v1/jobs` (enqueue job with idempotency key), `GET /v1/jobs`, `GET /v1/jobs/:id`
   * `POST /v1/jobs/claim` (atomic lease claim for agent), `POST /v1/jobs/:id/complete` (or `/logs` + `/fail`)
 * **Unit Tests Only**:
-  * `RUST_MIN_STACK=33554432 cargo test --locked -p fusionpanel-api`
-  * (Plus `cargo test --locked -p fusionpanel-jobs` / `-p fusionpanel-control-store` if edited)
+  * `RUST_MIN_STACK=33554432 cargo test --offline -p fusionpanel-api --bin fusionpanel-api`
+  * `RUST_MIN_STACK=33554432 cargo test --offline -p fusionpanel-jobs --lib`
+  * `RUST_MIN_STACK=33554432 cargo test --offline -p fusionpanel-control-store --lib`
+  * Keep these target filters on the atomic branch; package-wide test commands may also run integration tests. The root `Cargo.lock` is integration-owned: do not commit a lock change from this branch. After integration updates it for the API dependencies, rerun these unit targets with `--locked` on `sprint-2`.
 * **PR Target**: `feat/sprint-2-node-jobs-api` -> `sprint-2`
 
 ### Task 2.2 — `feat/sprint-2-agent-job-worker` (`crates/agent` Runner & Heartbeat)
@@ -45,7 +47,8 @@ Each branch **must** be developed independently from `sprint-2`, run **only loca
   * On startup (`FUSIONPANEL_API_URL`, `FUSIONPANEL_ADMIN_TOKEN`, `FUSIONPANEL_NODE_NAME`): register node -> start heartbeat loop -> poll `/v1/jobs/claim` -> execute supported core job types safely (e.g., `system.ping` / `system.info` / command allowlist, **no** `unsafe_code`, **no** arbitrary shell injection) -> report stdout/stderr summary + final status (`succeeded`/`failed`).
   * Keep `#![forbid(unsafe_code)]`.
 * **Unit Tests Only**:
-  * `RUST_MIN_STACK=33554432 cargo test --locked --manifest-path crates/agent/Cargo.toml`
+  * `RUST_MIN_STACK=33554432 cargo test --offline --locked --manifest-path crates/agent/Cargo.toml --lib`
+  * `cargo check --offline --locked --manifest-path crates/agent/Cargo.toml --bin fusionpanel-agent`
 * **PR Target**: `feat/sprint-2-agent-job-worker` -> `sprint-2`
 
 ### Task 2.3 — `feat/sprint-2-nodes-jobs-ui` (Frontend Nodes & Jobs Views)
