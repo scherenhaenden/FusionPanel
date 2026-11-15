@@ -2,9 +2,20 @@
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DictCommand {
-    Lookup { path: String, username: String },
-    Set { path: String, username: String, value: String },
-    Inc { path: String, username: String, diff: i64 },
+    Lookup {
+        path: String,
+        username: String,
+    },
+    Set {
+        path: String,
+        username: String,
+        value: String,
+    },
+    Inc {
+        path: String,
+        username: String,
+        diff: i64,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -110,7 +121,9 @@ impl DovecotQuotaDictProtocol {
                 check_injection(username)?;
                 check_injection(diff_str)?;
 
-                let diff = diff_str.parse::<i64>().map_err(|_| DictProtocolError::InvalidDiff)?;
+                let diff = diff_str
+                    .parse::<i64>()
+                    .map_err(|_| DictProtocolError::InvalidDiff)?;
 
                 Ok(DictCommand::Inc {
                     path: path.to_string(),

@@ -6,8 +6,10 @@ pub mod hardlink_pruner;
 pub mod models;
 pub mod restore;
 pub mod retention;
+pub mod retention_tiers;
 
 pub use hardlink_pruner::*;
+pub use retention_tiers::*;
 
 #[cfg(test)]
 mod tests {

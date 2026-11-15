@@ -192,3 +192,70 @@ async fn test_frontend_contract_routes() {
     let response_logout = app.clone().oneshot(request_logout).await.unwrap();
     assert_eq!(response_logout.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+async fn test_auth_me_endpoint() {
+    let store = setup_store();
+    let app = setup_app(store.clone());
+
+    // Unauthenticated /v1/auth/me -> 401
+    let unauth_req = Request::builder()
+        .method("GET")
+        .uri("/v1/auth/me")
+        .body(Body::empty())
+        .unwrap();
+    let unauth_resp = app.clone().oneshot(unauth_req).await.unwrap();
+    assert_eq!(unauth_resp.status(), StatusCode::UNAUTHORIZED);
+
+    // Login
+    let body = serde_json::json!({
+        "username": "testuser",
+        "password": "password123"
+    });
+    let login_req = Request::builder()
+        .method("POST")
+        .uri("/v1/auth/login")
+        .header("Content-Type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let login_resp = app.clone().oneshot(login_req).await.unwrap();
+    assert_eq!(login_resp.status(), StatusCode::OK);
+
+    let set_cookie = login_resp
+        .headers()
+        .get("set-cookie")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let cookie_val = set_cookie.split(';').next().unwrap();
+
+    // Authenticated /v1/auth/me -> 200 with user_id, tenant_id, roles
+    let me_req = Request::builder()
+        .method("GET")
+        .uri("/v1/auth/me")
+        .header("Cookie", cookie_val)
+        .body(Body::empty())
+        .unwrap();
+    let me_resp = app.clone().oneshot(me_req).await.unwrap();
+    assert_eq!(me_resp.status(), StatusCode::OK);
+
+    // Logout
+    let logout_req = Request::builder()
+        .method("POST")
+        .uri("/v1/auth/logout")
+        .header("Cookie", cookie_val)
+        .body(Body::empty())
+        .unwrap();
+    let logout_resp = app.clone().oneshot(logout_req).await.unwrap();
+    assert_eq!(logout_resp.status(), StatusCode::OK);
+
+    // Revoked session -> /v1/auth/me returns 401
+    let me_revoked_req = Request::builder()
+        .method("GET")
+        .uri("/v1/auth/me")
+        .header("Cookie", cookie_val)
+        .body(Body::empty())
+        .unwrap();
+    let me_revoked_resp = app.clone().oneshot(me_revoked_req).await.unwrap();
+    assert_eq!(me_revoked_resp.status(), StatusCode::UNAUTHORIZED);
+}

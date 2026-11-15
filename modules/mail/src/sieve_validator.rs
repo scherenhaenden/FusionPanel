@@ -30,7 +30,9 @@ impl SieveValidator {
                 }
                 '}' => {
                     if brace_depth == 0 {
-                        return Err(MailError::InvalidInput("Unbalanced braces: extra '}'".to_string()));
+                        return Err(MailError::InvalidInput(
+                            "Unbalanced braces: extra '}'".to_string(),
+                        ));
                     }
                     brace_depth -= 1;
                     last_command.clear();
@@ -65,7 +67,9 @@ impl SieveValidator {
                             }
                         }
                         if !closed {
-                            return Err(MailError::InvalidInput("Unterminated bracket comment".to_string()));
+                            return Err(MailError::InvalidInput(
+                                "Unterminated bracket comment".to_string(),
+                            ));
                         }
                     }
                 }
@@ -88,18 +92,25 @@ impl SieveValidator {
                         }
                     }
                     if !closed {
-                        return Err(MailError::InvalidInput("Unterminated quoted string".to_string()));
+                        return Err(MailError::InvalidInput(
+                            "Unterminated quoted string".to_string(),
+                        ));
                     }
 
                     if last_command == "redirect" {
                         if s.eq_ignore_ascii_case(&self.user_email) {
-                            return Err(MailError::InvalidInput(format!("Self-redirect detected: {}", s)));
+                            return Err(MailError::InvalidInput(format!(
+                                "Self-redirect detected: {}",
+                                s
+                            )));
                         }
                         if !redirect_targets.contains(&s) {
                             redirect_targets.insert(s.clone());
                             redirect_count += 1;
                             if redirect_count > 5 {
-                                return Err(MailError::InvalidInput("Too many redirect targets".to_string()));
+                                return Err(MailError::InvalidInput(
+                                    "Too many redirect targets".to_string(),
+                                ));
                             }
                         }
                     }
@@ -115,12 +126,12 @@ impl SieveValidator {
                         }
                     }
                     let lower = word.to_lowercase();
-                    
+
                     if lower == "text" {
                         if let Some(&':') = chars.peek() {
                             chars.next(); // consume ':'
                             let mut newline_seen = true;
-                            
+
                             while let Some(ch) = chars.next() {
                                 if newline_seen && ch == '.' {
                                     let mut end = false;
@@ -142,7 +153,8 @@ impl SieveValidator {
                     }
 
                     match lower.as_str() {
-                        "require" | "if" | "elsif" | "else" | "keep" | "discard" | "redirect" | "fileinto" | "stop" => {
+                        "require" | "if" | "elsif" | "else" | "keep" | "discard" | "redirect"
+                        | "fileinto" | "stop" => {
                             last_command = lower;
                         }
                         _ => {}
@@ -155,7 +167,9 @@ impl SieveValidator {
         }
 
         if brace_depth > 0 {
-            return Err(MailError::InvalidInput("Unbalanced braces: missing '}'".to_string()));
+            return Err(MailError::InvalidInput(
+                "Unbalanced braces: missing '}'".to_string(),
+            ));
         }
 
         Ok(())

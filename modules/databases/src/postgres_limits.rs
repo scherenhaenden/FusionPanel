@@ -39,16 +39,25 @@ impl PostgresLimitManager {
         if limit < -1 {
             return Err(LimitError::InvalidLimit);
         }
-        Ok(format!("ALTER ROLE \"{}\" CONNECTION LIMIT {};", username, limit))
+        Ok(format!(
+            "ALTER ROLE \"{}\" CONNECTION LIMIT {};",
+            username, limit
+        ))
     }
 
     pub fn format_statement_timeout(username: &str, timeout_ms: u64) -> Result<String, LimitError> {
         Self::validate_username(username)?;
-        Ok(format!("ALTER ROLE \"{}\" SET statement_timeout = '{}ms';", username, timeout_ms))
+        Ok(format!(
+            "ALTER ROLE \"{}\" SET statement_timeout = '{}ms';",
+            username, timeout_ms
+        ))
     }
 
     pub fn format_reset_statement_timeout(username: &str) -> Result<String, LimitError> {
         Self::validate_username(username)?;
-        Ok(format!("ALTER ROLE \"{}\" RESET statement_timeout;", username))
+        Ok(format!(
+            "ALTER ROLE \"{}\" RESET statement_timeout;",
+            username
+        ))
     }
 }

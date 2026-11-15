@@ -4,13 +4,11 @@ use databases::binlog_retention::{BinlogFile, BinlogRetentionCalculator, Retenti
 
 #[test]
 fn test_minimum_kept_logs_guarantee() {
-    let logs = vec![
-        BinlogFile {
-            filename: "binlog.000001".to_string(),
-            size_bytes: 1000,
-            timestamp_seconds: 100,
-        },
-    ];
+    let logs = vec![BinlogFile {
+        filename: "binlog.000001".to_string(),
+        size_bytes: 1000,
+        timestamp_seconds: 100,
+    }];
 
     let rules = RetentionRules {
         max_total_size_bytes: Some(10), // normally would purge
@@ -25,9 +23,21 @@ fn test_minimum_kept_logs_guarantee() {
 #[test]
 fn test_size_based_purge() {
     let logs = vec![
-        BinlogFile { filename: "binlog.000001".to_string(), size_bytes: 100, timestamp_seconds: 100 },
-        BinlogFile { filename: "binlog.000002".to_string(), size_bytes: 100, timestamp_seconds: 200 },
-        BinlogFile { filename: "binlog.000003".to_string(), size_bytes: 100, timestamp_seconds: 300 },
+        BinlogFile {
+            filename: "binlog.000001".to_string(),
+            size_bytes: 100,
+            timestamp_seconds: 100,
+        },
+        BinlogFile {
+            filename: "binlog.000002".to_string(),
+            size_bytes: 100,
+            timestamp_seconds: 200,
+        },
+        BinlogFile {
+            filename: "binlog.000003".to_string(),
+            size_bytes: 100,
+            timestamp_seconds: 300,
+        },
     ];
 
     // we keep logs starting from newest until size exceeds max_total_size_bytes
@@ -51,9 +61,21 @@ fn test_size_based_purge() {
 #[test]
 fn test_age_based_purge() {
     let logs = vec![
-        BinlogFile { filename: "binlog.000001".to_string(), size_bytes: 10, timestamp_seconds: 100 },
-        BinlogFile { filename: "binlog.000002".to_string(), size_bytes: 10, timestamp_seconds: 200 },
-        BinlogFile { filename: "binlog.000003".to_string(), size_bytes: 10, timestamp_seconds: 300 },
+        BinlogFile {
+            filename: "binlog.000001".to_string(),
+            size_bytes: 10,
+            timestamp_seconds: 100,
+        },
+        BinlogFile {
+            filename: "binlog.000002".to_string(),
+            size_bytes: 10,
+            timestamp_seconds: 200,
+        },
+        BinlogFile {
+            filename: "binlog.000003".to_string(),
+            size_bytes: 10,
+            timestamp_seconds: 300,
+        },
     ];
 
     // we keep logs starting from newest.
@@ -79,9 +101,21 @@ fn test_age_based_purge() {
 #[test]
 fn test_minimum_kept_logs() {
     let logs = vec![
-        BinlogFile { filename: "binlog.000001".to_string(), size_bytes: 10, timestamp_seconds: 100 },
-        BinlogFile { filename: "binlog.000002".to_string(), size_bytes: 10, timestamp_seconds: 200 },
-        BinlogFile { filename: "binlog.000003".to_string(), size_bytes: 10, timestamp_seconds: 300 },
+        BinlogFile {
+            filename: "binlog.000001".to_string(),
+            size_bytes: 10,
+            timestamp_seconds: 100,
+        },
+        BinlogFile {
+            filename: "binlog.000002".to_string(),
+            size_bytes: 10,
+            timestamp_seconds: 200,
+        },
+        BinlogFile {
+            filename: "binlog.000003".to_string(),
+            size_bytes: 10,
+            timestamp_seconds: 300,
+        },
     ];
 
     let rules = RetentionRules {
@@ -101,8 +135,16 @@ fn test_minimum_kept_logs() {
 #[test]
 fn test_no_purge_needed() {
     let logs = vec![
-        BinlogFile { filename: "binlog.000001".to_string(), size_bytes: 10, timestamp_seconds: 100 },
-        BinlogFile { filename: "binlog.000002".to_string(), size_bytes: 10, timestamp_seconds: 200 },
+        BinlogFile {
+            filename: "binlog.000001".to_string(),
+            size_bytes: 10,
+            timestamp_seconds: 100,
+        },
+        BinlogFile {
+            filename: "binlog.000002".to_string(),
+            size_bytes: 10,
+            timestamp_seconds: 200,
+        },
     ];
 
     let rules = RetentionRules {

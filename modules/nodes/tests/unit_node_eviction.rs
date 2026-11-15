@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use nodes::node_eviction::{
-    NodeEvictionCoordinator, NodeLifecycleState, EvictionEvent, EvictionError,
+    EvictionError, EvictionEvent, NodeEvictionCoordinator, NodeLifecycleState,
 };
 
 #[test]

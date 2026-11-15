@@ -89,7 +89,7 @@ fn test_valid_identifier() {
     assert!(is_valid_identifier("valid_role"));
     assert!(is_valid_identifier("user123"));
     assert!(is_valid_identifier("_hidden"));
-    
+
     assert!(!is_valid_identifier("")); // Empty
     assert!(!is_valid_identifier("invalid role")); // Space
     assert!(!is_valid_identifier("invalid-role")); // Hyphen

@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use databases::slow_query::{SlowQueryLogEntry, SlowQueryLogParser, QueryRanker, normalize_query};
+use databases::slow_query::{normalize_query, QueryRanker, SlowQueryLogEntry, SlowQueryLogParser};
 
 #[test]
 fn test_slow_query_parser_basic() {
@@ -16,8 +16,14 @@ SELECT * FROM users WHERE id = 1;
     let mut parser = SlowQueryLogParser::new(cursor);
 
     let entry = parser.next_entry().unwrap().expect("Expected an entry");
-    assert_eq!(entry.timestamp.as_deref(), Some("2023-10-01T12:00:00.000000Z"));
-    assert_eq!(entry.user_host.as_deref(), Some("root[root] @ localhost [127.0.0.1]"));
+    assert_eq!(
+        entry.timestamp.as_deref(),
+        Some("2023-10-01T12:00:00.000000Z")
+    );
+    assert_eq!(
+        entry.user_host.as_deref(),
+        Some("root[root] @ localhost [127.0.0.1]")
+    );
     assert_eq!(entry.query_time, 1.2);
     assert_eq!(entry.lock_time, 0.0);
     assert_eq!(entry.rows_sent, 10);
@@ -48,7 +54,10 @@ SELECT COUNT(*) FROM logs WHERE created_at < '2023-01-01';
 
     let entry2 = parser.next_entry().unwrap().expect("Expected second entry");
     assert_eq!(entry2.query_time, 2.0);
-    assert_eq!(entry2.sql, "SELECT COUNT(*) FROM logs WHERE created_at < '2023-01-01';");
+    assert_eq!(
+        entry2.sql,
+        "SELECT COUNT(*) FROM logs WHERE created_at < '2023-01-01';"
+    );
 
     assert!(parser.next_entry().unwrap().is_none());
 }
@@ -72,10 +81,22 @@ WHERE id = 42;
 
 #[test]
 fn test_normalize_query() {
-    assert_eq!(normalize_query("SELECT * FROM users WHERE id = 1"), "select * from users where id = ?");
-    assert_eq!(normalize_query("SELECT * FROM users WHERE id = 42 AND status = 'active'"), "select * from users where id = ? and status = ?");
-    assert_eq!(normalize_query("SELECT * FROM items WHERE price > 10.50"), "select * from items where price > ?");
-    assert_eq!(normalize_query("INSERT INTO users (name, age) VALUES ('Alice', 30)"), "insert into users (name, age) values (?, ?)");
+    assert_eq!(
+        normalize_query("SELECT * FROM users WHERE id = 1"),
+        "select * from users where id = ?"
+    );
+    assert_eq!(
+        normalize_query("SELECT * FROM users WHERE id = 42 AND status = 'active'"),
+        "select * from users where id = ? and status = ?"
+    );
+    assert_eq!(
+        normalize_query("SELECT * FROM items WHERE price > 10.50"),
+        "select * from items where price > ?"
+    );
+    assert_eq!(
+        normalize_query("INSERT INTO users (name, age) VALUES ('Alice', 30)"),
+        "insert into users (name, age) values (?, ?)"
+    );
     // Note: The simplistic normalization logic may not be perfect for all SQL dialects,
     // but should handle literals (numbers, strings) as requirements generally expect.
     // Testing the current implementation:

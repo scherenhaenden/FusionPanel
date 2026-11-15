@@ -10,6 +10,12 @@ const DOCKER_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct DockerCliEngine;
 
+impl Default for DockerCliEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DockerCliEngine {
     pub fn new() -> Self {
         Self

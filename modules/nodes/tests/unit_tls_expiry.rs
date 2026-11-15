@@ -28,7 +28,7 @@ fn generate_cert(days: i64) -> String {
 fn test_valid_cert() {
     let pem = generate_cert(365);
     let info = TlsExpiryMonitor::parse_pem(&pem).expect("Should parse successfully");
-    
+
     let now = Utc::now() + Duration::days(1);
     assert_eq!(info.evaluate_status(now, 30), ExpirationStatus::Valid);
     assert!(info.remaining_duration(now).unwrap().as_secs() > 300 * 24 * 3600);
@@ -38,9 +38,12 @@ fn test_valid_cert() {
 fn test_expiring_soon_cert() {
     let pem = generate_cert(365);
     let info = TlsExpiryMonitor::parse_pem(&pem).expect("Should parse successfully");
-    
+
     let now = info.not_after - Duration::days(15);
-    assert_eq!(info.evaluate_status(now, 30), ExpirationStatus::ExpiringSoon);
+    assert_eq!(
+        info.evaluate_status(now, 30),
+        ExpirationStatus::ExpiringSoon
+    );
     assert_eq!(info.evaluate_status(now, 10), ExpirationStatus::Valid);
 }
 
@@ -48,7 +51,7 @@ fn test_expiring_soon_cert() {
 fn test_expired_cert() {
     let pem = generate_cert(365);
     let info = TlsExpiryMonitor::parse_pem(&pem).expect("Should parse successfully");
-    
+
     let now = info.not_after + Duration::days(1);
     assert_eq!(info.evaluate_status(now, 30), ExpirationStatus::Expired);
     assert!(info.remaining_duration(now).is_none());

@@ -19,7 +19,7 @@ impl RedisClusterRouter {
 
     pub fn get_hash_slot(key: &str) -> u16 {
         let mut hash_key = key.as_bytes();
-        
+
         if let Some(start) = hash_key.iter().position(|&b| b == b'{') {
             if let Some(end) = hash_key[start + 1..].iter().position(|&b| b == b'}') {
                 if end > 0 {
@@ -27,7 +27,7 @@ impl RedisClusterRouter {
                 }
             }
         }
-        
+
         Self::crc16(hash_key) & 0x3FFF
     }
 
@@ -48,6 +48,8 @@ impl RedisClusterRouter {
 
     pub fn route(&self, key: &str) -> Option<&ClusterNode> {
         let slot = Self::get_hash_slot(key);
-        self.nodes.iter().find(|n| slot >= n.start_slot && slot <= n.end_slot)
+        self.nodes
+            .iter()
+            .find(|n| slot >= n.start_slot && slot <= n.end_slot)
     }
 }

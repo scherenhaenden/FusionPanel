@@ -20,7 +20,10 @@ fn test_postgres_analysis_vacuum_needed() {
         page_size: None,
     };
 
-    assert_eq!(analyzer.analyze_postgres(&stats), MaintenanceRecommendation::Vacuum);
+    assert_eq!(
+        analyzer.analyze_postgres(&stats),
+        MaintenanceRecommendation::Vacuum
+    );
 }
 
 #[test]
@@ -38,7 +41,10 @@ fn test_postgres_analysis_vacuum_not_needed() {
         page_size: None,
     };
 
-    assert_eq!(analyzer.analyze_postgres(&stats), MaintenanceRecommendation::None);
+    assert_eq!(
+        analyzer.analyze_postgres(&stats),
+        MaintenanceRecommendation::None
+    );
 }
 
 #[test]
@@ -55,7 +61,10 @@ fn test_mysql_analysis_optimize_needed() {
         page_size: None,
     };
 
-    assert_eq!(analyzer.analyze_mysql(&stats), MaintenanceRecommendation::Optimize);
+    assert_eq!(
+        analyzer.analyze_mysql(&stats),
+        MaintenanceRecommendation::Optimize
+    );
 }
 
 #[test]
@@ -72,7 +81,10 @@ fn test_mysql_analysis_optimize_not_needed_due_to_size() {
         page_size: None,
     };
 
-    assert_eq!(analyzer.analyze_mysql(&stats), MaintenanceRecommendation::None);
+    assert_eq!(
+        analyzer.analyze_mysql(&stats),
+        MaintenanceRecommendation::None
+    );
 }
 
 #[test]
@@ -89,7 +101,10 @@ fn test_mysql_analysis_optimize_not_needed_due_to_ratio() {
         page_size: None,
     };
 
-    assert_eq!(analyzer.analyze_mysql(&stats), MaintenanceRecommendation::None);
+    assert_eq!(
+        analyzer.analyze_mysql(&stats),
+        MaintenanceRecommendation::None
+    );
 }
 
 #[test]
@@ -106,7 +121,10 @@ fn test_sqlite_analysis_vacuum_needed() {
         page_size: Some(4096),
     };
 
-    assert_eq!(analyzer.analyze_sqlite(&stats), MaintenanceRecommendation::Vacuum);
+    assert_eq!(
+        analyzer.analyze_sqlite(&stats),
+        MaintenanceRecommendation::Vacuum
+    );
 }
 
 #[test]
@@ -123,7 +141,10 @@ fn test_sqlite_analysis_vacuum_not_needed() {
         page_size: Some(4096),
     };
 
-    assert_eq!(analyzer.analyze_sqlite(&stats), MaintenanceRecommendation::None);
+    assert_eq!(
+        analyzer.analyze_sqlite(&stats),
+        MaintenanceRecommendation::None
+    );
 }
 
 #[test]
@@ -136,7 +157,16 @@ fn test_query_builders() {
     assert!(mysql_query.contains("data_free"));
     assert!(mysql_query.contains("table_schema = 'my_db'"));
 
-    assert_eq!(TableMaintenanceAnalyzer::build_sqlite_freelist_query(), "PRAGMA freelist_count;");
-    assert_eq!(TableMaintenanceAnalyzer::build_sqlite_page_size_query(), "PRAGMA page_size;");
-    assert_eq!(TableMaintenanceAnalyzer::build_sqlite_page_count_query(), "PRAGMA page_count;");
+    assert_eq!(
+        TableMaintenanceAnalyzer::build_sqlite_freelist_query(),
+        "PRAGMA freelist_count;"
+    );
+    assert_eq!(
+        TableMaintenanceAnalyzer::build_sqlite_page_size_query(),
+        "PRAGMA page_size;"
+    );
+    assert_eq!(
+        TableMaintenanceAnalyzer::build_sqlite_page_count_query(),
+        "PRAGMA page_count;"
+    );
 }

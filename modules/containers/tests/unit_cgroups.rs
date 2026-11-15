@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use containers::cgroups::{CgroupMemoryController, MemoryLimit, MemoryEvents};
+use containers::cgroups::{CgroupMemoryController, MemoryEvents, MemoryLimit};
 use std::fs;
 use tempfile::tempdir;
 
@@ -15,7 +15,9 @@ fn test_set_memory_max() {
     assert_eq!(content, "max");
 
     // Set bytes
-    controller.set_memory_max(MemoryLimit::Bytes(1024 * 1024)).unwrap();
+    controller
+        .set_memory_max(MemoryLimit::Bytes(1024 * 1024))
+        .unwrap();
     let content = fs::read_to_string(dir.path().join("memory.max")).unwrap();
     assert_eq!(content, "1048576");
 }
@@ -49,7 +51,9 @@ fn test_set_memory_swap_max() {
     let content = fs::read_to_string(dir.path().join("memory.swap.max")).unwrap();
     assert_eq!(content, "max");
 
-    controller.set_memory_swap_max(MemoryLimit::Bytes(2048)).unwrap();
+    controller
+        .set_memory_swap_max(MemoryLimit::Bytes(2048))
+        .unwrap();
     let content = fs::read_to_string(dir.path().join("memory.swap.max")).unwrap();
     assert_eq!(content, "2048");
 }

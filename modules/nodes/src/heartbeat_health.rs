@@ -55,7 +55,8 @@ impl NodeHealthTracker {
         self.last_cpu_load = cpu_load.clamp(0.0, 100.0);
         self.last_ram_utilization = ram_utilization.clamp(0.0, 100.0);
         self.consecutive_missed_heartbeats = 0;
-        self.consecutive_successful_heartbeats = self.consecutive_successful_heartbeats.saturating_add(1);
+        self.consecutive_successful_heartbeats =
+            self.consecutive_successful_heartbeats.saturating_add(1);
 
         self.update_status();
     }

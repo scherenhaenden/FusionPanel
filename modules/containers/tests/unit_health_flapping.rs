@@ -102,14 +102,8 @@ fn test_flapping_threshold() {
 fn test_flapping_recovery() {
     let start_time = Instant::now();
     let window = Duration::from_secs(60);
-    let mut filter = ContainerHealthFilter::new(
-        start_time,
-        Duration::from_secs(0),
-        3,
-        window,
-        1,
-        1,
-    );
+    let mut filter =
+        ContainerHealthFilter::new(start_time, Duration::from_secs(0), 3, window, 1, 1);
 
     let mut now = start_time;
 

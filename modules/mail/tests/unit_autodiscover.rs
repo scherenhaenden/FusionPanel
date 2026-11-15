@@ -50,11 +50,7 @@ fn test_generate_autodiscover() {
     let smtp_hostname = "smtp.example.com";
     let username = "user@example.com";
 
-    let xml = AutodiscoverGenerator::generate_autodiscover(
-        imap_hostname,
-        smtp_hostname,
-        username,
-    );
+    let xml = AutodiscoverGenerator::generate_autodiscover(imap_hostname, smtp_hostname, username);
 
     // Verify basic structure
     assert!(xml.contains(r#"<Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/responseschema/2006">"#));
@@ -105,14 +101,11 @@ fn test_xml_injection_sanitization() {
     assert!(!xml.contains(imap_hostname));
     assert!(!xml.contains(smtp_hostname));
     assert!(!xml.contains(username));
-    
+
     // Check Autodiscover XML injection handling
-    let ad_xml = AutodiscoverGenerator::generate_autodiscover(
-        imap_hostname,
-        smtp_hostname,
-        username,
-    );
-    
+    let ad_xml =
+        AutodiscoverGenerator::generate_autodiscover(imap_hostname, smtp_hostname, username);
+
     assert!(ad_xml.contains("imap&lt;.example.com"));
     assert!(ad_xml.contains("smtp&gt;.example.com"));
     assert!(ad_xml.contains("&lt;user&gt;"));

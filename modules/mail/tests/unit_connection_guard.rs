@@ -118,9 +118,15 @@ fn test_independent_tracking() {
 
     let _ip_token1 = guard.acquire_ip("ip1", now).unwrap();
     let _ip_token2 = guard.acquire_ip("ip2", now).unwrap();
-    assert_eq!(guard.acquire_ip("ip1", now).unwrap_err(), GuardError::TooManyConnections);
+    assert_eq!(
+        guard.acquire_ip("ip1", now).unwrap_err(),
+        GuardError::TooManyConnections
+    );
 
     let _user_token1 = guard.acquire_user("user1", now).unwrap();
     let _user_token2 = guard.acquire_user("user2", now).unwrap();
-    assert_eq!(guard.acquire_user("user1", now).unwrap_err(), GuardError::TooManyConnections);
+    assert_eq!(
+        guard.acquire_user("user1", now).unwrap_err(),
+        GuardError::TooManyConnections
+    );
 }

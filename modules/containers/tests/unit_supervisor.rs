@@ -6,7 +6,7 @@ use std::time::Duration;
 #[test]
 fn test_no_restart_policy() {
     let mut supervisor = ContainerHealthSupervisor::new(RestartPolicy::NoRestart);
-    
+
     assert!(matches!(supervisor.transition(false), SupervisorAction::None));
     assert_eq!(supervisor.consecutive_failures, 1);
     assert_eq!(supervisor.restart_attempts, 0);

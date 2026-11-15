@@ -23,6 +23,21 @@ impl MatchType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RelationalMatch {
+    GreaterOrEqual,
+    LessOrEqual,
+}
+
+impl RelationalMatch {
+    fn as_str(&self) -> &'static str {
+        match self {
+            RelationalMatch::GreaterOrEqual => "\"ge\"",
+            RelationalMatch::LessOrEqual => "\"le\"",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SieveCondition {
     Header {
         header: String,
@@ -35,6 +50,11 @@ pub enum SieveCondition {
     AnyOf(Vec<SieveCondition>),
     AllOf(Vec<SieveCondition>),
     Not(Box<SieveCondition>),
+    CurrentDate {
+        relational: RelationalMatch,
+        zone: String,
+        value: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,6 +126,14 @@ impl SieveScript {
             if Self::condition_requires_regex(&rule.condition) && !requires.contains(&"regex") {
                 requires.push("regex");
             }
+            if Self::condition_requires_date(&rule.condition) && !requires.contains(&"date") {
+                requires.push("date");
+            }
+            if Self::condition_requires_relational(&rule.condition)
+                && !requires.contains(&"relational")
+            {
+                requires.push("relational");
+            }
         }
         requires
     }
@@ -120,6 +148,28 @@ impl SieveScript {
                 conds.iter().any(Self::condition_requires_regex)
             }
             SieveCondition::Not(c) => Self::condition_requires_regex(c),
+            _ => false,
+        }
+    }
+
+    fn condition_requires_date(cond: &SieveCondition) -> bool {
+        match cond {
+            SieveCondition::CurrentDate { .. } => true,
+            SieveCondition::AnyOf(conds) | SieveCondition::AllOf(conds) => {
+                conds.iter().any(Self::condition_requires_date)
+            }
+            SieveCondition::Not(c) => Self::condition_requires_date(c),
+            _ => false,
+        }
+    }
+
+    fn condition_requires_relational(cond: &SieveCondition) -> bool {
+        match cond {
+            SieveCondition::CurrentDate { .. } => true,
+            SieveCondition::AnyOf(conds) | SieveCondition::AllOf(conds) => {
+                conds.iter().any(Self::condition_requires_relational)
+            }
+            SieveCondition::Not(c) => Self::condition_requires_relational(c),
             _ => false,
         }
     }
@@ -162,6 +212,18 @@ impl SieveScript {
                 }
             }
             SieveCondition::Not(c) => format!("not {}", Self::format_condition(c)),
+            SieveCondition::CurrentDate {
+                relational,
+                zone,
+                value,
+            } => {
+                format!(
+                    "currentdate :zone \"{}\" :value {} \"date\" \"{}\"",
+                    Self::escape_string(zone),
+                    relational.as_str(),
+                    Self::escape_string(value)
+                )
+            }
         }
     }
 

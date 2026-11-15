@@ -6,6 +6,20 @@ Read docs/FOUNDATION_CONTRACTS.md before implementation. Use safe Rust and forbi
 
 Write original implementation for the specified contracts. Preserve required license and copyright notices for any third-party material you introduce.
 
+## Sprint & Atomic Feature Workflow (Mandatory)
+
+All active development follows the Sprint workflow documented in [docs/execution/SPRINTS.md](docs/execution/SPRINTS.md):
+
+1. **Sprint integration branch (`sprint-<N>`)**: Created from `master` (`origin/sprint-<N>`). Never commit feature work directly onto `sprint-<N>`.
+2. **Atomic feature/fix branches (`feat/<topic>`, `fix/<topic>`, `docs/<topic>`)**:
+   - Branch **from `sprint-<N>`**, implement a single atomic change, and run **only the local unit tests** for the touched crate/module/view (do not run heavy workspace/E2E suites per atomic task unless specifically required).
+   - Open a PR **targeting `sprint-<N>`** (never directly targeting `master`).
+3. **Sprint close & Quality Gate (on `sprint-<N>`)**:
+   - Once all atomic feature PRs are merged into `sprint-<N>`, run full **integration tests + live E2E verification + quality gates** on `sprint-<N>` and apply any needed fixes via PRs to `sprint-<N>`.
+   - Update [docs/execution/SPRINTS.md](docs/execution/SPRINTS.md) (and any impacted docs) with the verified status and test evidence.
+   - Open the single sprint release PR **`sprint-<N>` -> `master`**.
+4. **Priorities**: Finish core E2E usable features completely first; PHP management is explicitly deprioritized.
+
 ## Execution-window rules
 
 The canonical branch is master. Read docs/execution/DELIVERY_PLAN.md and your task spec. Independent modules may edit only their assigned module and must use a standalone `[workspace]` until integration. The root-manifest prohibition applies except when your task explicitly assigns those files. Never remove a capability or user-visible mode to simplify implementation. Follow docs/engineering/FEATURE_PRESERVATION.md and docs/engineering/VARIANT_DESIGN.md. Read docs/testing/TEST_STRATEGY.md; no mocked success may qualify a real dependency or E2E journey. Missing prerequisites are BLOCKED, never PASS. Record actual tests, limits and unresolved gaps. Preserve required notices for reused material.

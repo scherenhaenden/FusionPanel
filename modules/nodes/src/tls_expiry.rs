@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 
 use chrono::{DateTime, NaiveDateTime, Utc};
-use std::process::{Command, Stdio};
 use std::io::Write;
+use std::process::{Command, Stdio};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -76,14 +76,14 @@ impl TlsExpiryMonitor {
         }
 
         let output = child.wait_with_output()?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             return Err(TlsExpiryError::OpenSslError(stderr));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        
+
         let mut not_before = None;
         let mut not_after = None;
 
@@ -100,7 +100,10 @@ impl TlsExpiryMonitor {
         }
 
         match (not_before, not_after) {
-            (Some(not_before), Some(not_after)) => Ok(TlsExpiryInfo { not_before, not_after }),
+            (Some(not_before), Some(not_after)) => Ok(TlsExpiryInfo {
+                not_before,
+                not_after,
+            }),
             _ => Err(TlsExpiryError::MissingDates),
         }
     }
