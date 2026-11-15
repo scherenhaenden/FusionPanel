@@ -204,6 +204,17 @@ jobs:
 
           cd "$DIR"
           npm ci
+          POLICY=$(node -p "require('./package.json').fusionpanel?.policy || 'unit'")
+          if [ "$POLICY" = "compile-only" ]; then
+            npm run compile 2>&1 | tee "$LOG_DIR/compile.log"
+            if ! grep -Eq '^Total: [1-9][0-9]* tests?($| )' "$LOG_DIR/compile.log"; then
+              echo "::error::Compile-only package discovered zero tests in ${{ matrix.manifest }}. Tests are mandatory."
+              exit 1
+            fi
+            echo "COMPILE-ONLY: E2E specs were discovered; execution belongs to the full Sprint gate."
+            exit 0
+          fi
+
           npm run build 2>&1 | tee "$LOG_DIR/compile.log"
           npm test 2>&1 | tee "$LOG_DIR/test.log"
 
