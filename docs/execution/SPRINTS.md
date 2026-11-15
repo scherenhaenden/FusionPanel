@@ -4,9 +4,14 @@ Source of truth for active local development progress. Updated at the close of e
 
 ## Workflow Rules
 
-1. **Branching**: Each sprint branches from `master` as `sprint-<N>` and opens a PR against `master`.
-2. **Fast Inner Loop**: While implementing a task, run **only** unit tests for the touched crate/module/view.
-3. **Sprint Gate**: Run full workspace integration tests + live E2E verification **only at sprint close**, before updating this file and opening/updating the sprint PR.
+1. **Sprint Integration Branch (`sprint-<N>`)**: Each sprint starts by creating `sprint-<N>` from `master` (and pushing `origin/sprint-<N>`).
+2. **Feature Branches (`feat/<topic>` -> `sprint-<N>`)**: Every feature or task within a sprint is developed on **its own branch created from `sprint-<N>`**.
+   - Run **only local unit tests** for the touched crate/module/view on the feature branch.
+   - Open a **PR against `sprint-<N>`** (never directly against `master`) so all sprint work accumulates in `sprint-<N>`.
+3. **Sprint Gate & Release to `master`**: Once all features for `sprint-<N>` are merged into `sprint-<N>`:
+   - Run full **integration tests + live E2E verification + quality gates** on `sprint-<N>`, and apply any fixes needed.
+   - Update this `SPRINTS.md` file with verification evidence.
+   - Only then open the **PR from `sprint-<N>` -> `master`**.
 4. **Priority Scope**: Focus on 100% end-to-end usable core features first. PHP management is explicitly **not prioritized**.
 
 ---
