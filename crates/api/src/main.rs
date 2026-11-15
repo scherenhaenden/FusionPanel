@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+mod node_jobs;
+
 use axum::{
     body::Body,
     extract::State,
@@ -31,6 +33,8 @@ use tower_cookies::CookieManagerLayer;
 struct AppState {
     admin_token: Arc<String>,
     identity_store: Arc<Mutex<SqliteIdentityStore>>,
+    control_store: Arc<Mutex<ControlStore>>,
+    jobs_store: Arc<Mutex<fusionpanel_jobs::JobStore>>,
     frontend_dir: Option<PathBuf>,
 }
 
@@ -64,6 +68,8 @@ impl IntoResponse for ErrorResponse {
         let status = match self.error.code {
             "unauthorized" => StatusCode::UNAUTHORIZED,
             "not_found" => StatusCode::NOT_FOUND,
+            "bad_request" => StatusCode::BAD_REQUEST,
+            "conflict" => StatusCode::CONFLICT,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(self)).into_response()
@@ -221,10 +227,8 @@ async fn try_serve_static(frontend_dir: &Path, uri_path: &str) -> Option<Respons
 
 async fn fallback_handler(State(state): State<AppState>, uri: Uri) -> Response {
     let path = uri.path();
-    let is_api_path = path == "/v1"
-        || path.starts_with("/v1/")
-        || path == "/api"
-        || path.starts_with("/api/");
+    let is_api_path =
+        path == "/v1" || path.starts_with("/v1/") || path == "/api" || path.starts_with("/api/");
 
     if !is_api_path {
         if let Some(frontend_dir) = &state.frontend_dir {
@@ -253,6 +257,7 @@ fn app(state: AppState) -> Router {
         .route("/api/v1/health", get(health_handler))
         .route("/v1/capabilities", get(capabilities_handler))
         .route("/api/v1/capabilities", get(capabilities_handler))
+        .merge(node_jobs::routes())
         .fallback(fallback_handler)
         .with_state(state)
         .merge(auth_router)
@@ -290,13 +295,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         env::var("FUSIONPANEL_DATABASE_URL").unwrap_or_else(|_| "./fusionpanel.db".to_string());
 
     // Ensure core control-store schema migrations are applied on the shared SQLite file
-    let _control_store = ControlStore::new(Path::new(&db_path))?;
+    let control_store = ControlStore::new(Path::new(&db_path))?;
+    let jobs_store = fusionpanel_jobs::JobStore::new(Path::new(&db_path))?;
     let identity_store = SqliteIdentityStore::open(&db_path)?;
     let frontend_dir = resolve_frontend_dir();
 
     let state = AppState {
         admin_token: Arc::new(admin_token),
         identity_store: Arc::new(Mutex::new(identity_store)),
+        control_store: Arc::new(Mutex::new(control_store)),
+        jobs_store: Arc::new(Mutex::new(jobs_store)),
         frontend_dir,
     };
 
@@ -351,6 +359,8 @@ mod tests {
         app(AppState {
             admin_token: Arc::new("test-secret-token".to_string()),
             identity_store: Arc::new(Mutex::new(store)),
+            control_store: Arc::new(Mutex::new(ControlStore::new_in_memory().unwrap())),
+            jobs_store: Arc::new(Mutex::new(fusionpanel_jobs::JobStore::in_memory().unwrap())),
             frontend_dir: None,
         })
     }
@@ -482,7 +492,8 @@ mod tests {
         let _control = ControlStore::new(&db_path).unwrap();
         {
             let store = SqliteIdentityStore::open(db_str).unwrap();
-            let password_hash = identity::PasswordManager::hash_password("secret-pass-123").unwrap();
+            let password_hash =
+                identity::PasswordManager::hash_password("secret-pass-123").unwrap();
             let user = identity::User::new(
                 "admin".to_string(),
                 "admin@example.com".to_string(),
@@ -497,6 +508,10 @@ mod tests {
             app(AppState {
                 admin_token: Arc::new("test-secret-token".to_string()),
                 identity_store: Arc::new(Mutex::new(store)),
+                control_store: Arc::new(Mutex::new(ControlStore::new(&db_path).unwrap())),
+                jobs_store: Arc::new(Mutex::new(
+                    fusionpanel_jobs::JobStore::new(&db_path).unwrap(),
+                )),
                 frontend_dir: None,
             })
         };
@@ -555,6 +570,32 @@ mod tests {
             .unwrap();
         assert_eq!(cap_resp.status(), StatusCode::OK);
 
+        let nodes_resp = app1
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/nodes")
+                    .header("Cookie", &cookie_pair)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(nodes_resp.status(), StatusCode::OK);
+
+        let jobs_resp = app1
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/jobs")
+                    .header("Cookie", &cookie_pair)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(jobs_resp.status(), StatusCode::OK);
+
         // Simulate API restart: reopen store from same SQLite DB
         let app2 = make_app();
         let cap_after_restart = app2
@@ -604,13 +645,19 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let dist = temp_dir.path().join("dist");
         std::fs::create_dir_all(dist.join("assets")).unwrap();
-        std::fs::write(dist.join("index.html"), "<html><body>FusionPanel</body></html>").unwrap();
+        std::fs::write(
+            dist.join("index.html"),
+            "<html><body>FusionPanel</body></html>",
+        )
+        .unwrap();
         std::fs::write(dist.join("assets/app.js"), "console.log('ok');").unwrap();
 
         let store = SqliteIdentityStore::in_memory().unwrap();
         let router = app(AppState {
             admin_token: Arc::new("test-secret-token".to_string()),
             identity_store: Arc::new(Mutex::new(store)),
+            control_store: Arc::new(Mutex::new(ControlStore::new_in_memory().unwrap())),
+            jobs_store: Arc::new(Mutex::new(fusionpanel_jobs::JobStore::in_memory().unwrap())),
             frontend_dir: Some(dist),
         });
 
