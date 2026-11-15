@@ -5,6 +5,15 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 INSTALL_SCRIPT="$SCRIPT_DIR/../install.sh"
 TEST_DIR=$(mktemp -d)
 trap 'rm -rf "$TEST_DIR"' EXIT HUP INT TERM
+export TEST_DIR
+mkdir -p "$TEST_DIR/bin"
+cat > "$TEST_DIR/bin/chown" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$TEST_DIR/chown-calls"
+EOF
+chmod +x "$TEST_DIR/bin/chown"
+PATH="$TEST_DIR/bin:$PATH"
+export PATH
 
 FUSIONPANEL_INSTALLER_NO_RUN=1
 export FUSIONPANEL_INSTALLER_NO_RUN
@@ -49,6 +58,18 @@ assert_line 'FUSIONPANEL_API_URL=http://127.0.0.1:9090' "$agent_env"
 assert_line 'FUSIONPANEL_ADMIN_TOKEN=synthetic-token-for-test' "$agent_env"
 assert_line 'FUSIONPANEL_NODE_NAME=node-name-example' "$agent_env"
 
+secure_active_env_files "$TEST_DIR/config"
+assert_mode 600 "$api_env"
+assert_mode 640 "$agent_env"
+if ! grep -Fqx "root:root $api_env" "$TEST_DIR/chown-calls"; then
+    echo "FAIL: API environment file must be owned by root only" >&2
+    exit 1
+fi
+if ! grep -Fqx "root:fusionpanel $agent_env" "$TEST_DIR/chown-calls"; then
+    echo "FAIL: agent environment file must be readable by the agent group" >&2
+    exit 1
+fi
+
 if grep -q '^FUSIONPANEL_AGENT_ENDPOINT=' "$agent_env"; then
     echo "FAIL: obsolete FUSIONPANEL_AGENT_ENDPOINT was generated" >&2
     exit 1
@@ -89,5 +110,13 @@ assert_mode 600 "$versions_dir/current/config/fusionpanel-agent.env"
 assert_mode 600 "$versions_dir/old-release/config/fusionpanel.env"
 assert_mode 600 "$versions_dir/old-release/config/fusionpanel-agent.env"
 assert_mode 644 "$TEST_DIR/external-config/fusionpanel.env"
+if ! grep -Fqx "root:root $versions_dir/old-release/config" "$TEST_DIR/chown-calls"; then
+    echo "FAIL: versioned config directories must be root-owned" >&2
+    exit 1
+fi
+if ! grep -Fqx "root:root $versions_dir/old-release/config/fusionpanel.env" "$TEST_DIR/chown-calls"; then
+    echo "FAIL: versioned API environment file must be root-owned" >&2
+    exit 1
+fi
 
 echo "Installer environment configuration tests passed."

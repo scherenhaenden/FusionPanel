@@ -153,6 +153,10 @@ secure_versioned_env_files() {
         [ -d "$config_dir" ] || continue
         [ ! -L "$config_dir" ] || continue
 
+        if ! chown root:root "$config_dir"; then
+            echo "Error: Could not make versioned configuration directory root-owned: $config_dir." >&2
+            return 1
+        fi
         if ! chmod 0700 "$config_dir"; then
             echo "Error: Could not restrict permissions on versioned configuration directory $config_dir." >&2
             return 1
@@ -162,12 +166,37 @@ secure_versioned_env_files() {
             [ -f "$env_file" ] || continue
             [ ! -L "$env_file" ] || continue
 
+            if ! chown root:root "$env_file"; then
+                echo "Error: Could not make versioned environment file root-owned: $env_file." >&2
+                return 1
+            fi
             if ! chmod 0600 "$env_file"; then
                 echo "Error: Could not secure versioned environment file $env_file." >&2
                 return 1
             fi
         done
     done
+}
+
+secure_active_env_files() {
+    local config_dir="$1"
+
+    if ! chown root:root "$config_dir/fusionpanel.env"; then
+        echo "Error: Could not restrict ownership of the API environment file." >&2
+        return 1
+    fi
+    if ! chmod 0600 "$config_dir/fusionpanel.env"; then
+        echo "Error: Could not restrict access to the API environment file." >&2
+        return 1
+    fi
+    if ! chown root:fusionpanel "$config_dir/fusionpanel-agent.env"; then
+        echo "Error: Could not grant the agent group access to its environment file." >&2
+        return 1
+    fi
+    if ! chmod 0640 "$config_dir/fusionpanel-agent.env"; then
+        echo "Error: Could not restrict access to the agent environment file." >&2
+        return 1
+    fi
 }
 
 install() {
@@ -307,8 +336,7 @@ install() {
     chown -R fusionpanel:fusionpanel /var/lib/fusionpanel /var/log/fusionpanel || echo "Warning: chown failed, running as non-root?"
     chmod 700 /var/lib/fusionpanel /var/log/fusionpanel
 
-    chown root:fusionpanel "$sysconfdir/fusionpanel.env" "$sysconfdir/fusionpanel-agent.env" || true
-    chmod 640 "$sysconfdir/fusionpanel.env" "$sysconfdir/fusionpanel-agent.env"
+    secure_active_env_files "$sysconfdir"
 
     # Install systemd services
     local systemd_dir="/etc/systemd/system"

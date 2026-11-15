@@ -48,7 +48,8 @@ Each branch **must** be developed independently from `sprint-2`, run **only loca
   * `crates/agent/Cargo.toml`, `crates/agent/src/`
   * `crates/agent-protocol/` (only if shared request/response types need additions)
 * **Contract**:
-  * On startup (`FUSIONPANEL_API_URL`, `FUSIONPANEL_ADMIN_TOKEN`, `FUSIONPANEL_NODE_NAME`): register node -> start heartbeat loop -> poll `/v1/jobs/claim` -> execute only the implemented `system.info` and `site.validate` job types (no arbitrary shell execution) -> report output summary + final status (`succeeded`/`failed`).
+  * On startup, a loopback agent (`FUSIONPANEL_API_URL`, `FUSIONPANEL_ADMIN_TOKEN`, `FUSIONPANEL_NODE_NAME`) self-registers, starts its heartbeat loop, polls `/v1/jobs/claim`, executes only the implemented `system.info` and `site.validate` job types (no arbitrary shell execution), and reports output summary plus final status (`succeeded`/`failed`).
+  * A remote agent must use `FUSIONPANEL_API_URL=https://...` with pre-provisioned `FUSIONPANEL_NODE_ID` and `FUSIONPANEL_NODE_TOKEN`; it rejects `FUSIONPANEL_ADMIN_TOKEN` and does not self-register. Register it once from a trusted operator host through `POST /v1/nodes/register`, save the returned node ID/token in the remote agent environment, and keep the admin token only on the operator host. The scoped node token authenticates heartbeat/claim/log/completion operations.
   * Keep bearer credentials on protected transport: allow plain HTTP only for `localhost` or a loopback IP; require HTTPS for remote API URLs, typically through a TLS-terminating reverse proxy while the API's plain-TCP listener stays loopback-only.
   * Keep `#![forbid(unsafe_code)]`.
 * **Unit Tests Only**:

@@ -37,7 +37,8 @@ impl WorkerError {
             Self::Transport => "API transport failed; retrying is safe".to_string(),
             Self::InvalidResponse => "API returned an invalid response".to_string(),
             Self::InvalidConfiguration => {
-                "Agent configuration is invalid; remote endpoints require TLS".to_string()
+                "Agent configuration is invalid; check endpoint and bootstrap credentials"
+                    .to_string()
             }
         }
     }
@@ -69,6 +70,7 @@ pub fn validate_legacy_websocket_urls(
 struct ApiClient {
     base_url: Url,
     client: Client,
+    is_local: bool,
 }
 
 impl ApiClient {
@@ -77,7 +79,8 @@ impl ApiClient {
         if !matches!(base_url.scheme(), "http" | "https") || base_url.host_str().is_none() {
             return Err(WorkerError::InvalidConfiguration);
         }
-        let is_local_http = base_url.scheme() == "http" && is_loopback_or_localhost(&base_url);
+        let is_local = is_loopback_or_localhost(&base_url);
+        let is_local_http = base_url.scheme() == "http" && is_local;
         if base_url.scheme() == "http" && !is_local_http {
             return Err(WorkerError::InvalidConfiguration);
         }
@@ -95,7 +98,11 @@ impl ApiClient {
         let client = client_builder
             .build()
             .map_err(|_| WorkerError::InvalidConfiguration)?;
-        Ok(Self { base_url, client })
+        Ok(Self {
+            base_url,
+            client,
+            is_local,
+        })
     }
 
     fn endpoint(&self, path: &str) -> Result<Url, WorkerError> {
@@ -158,6 +165,10 @@ impl ApiClient {
             node_id: registration.node_id,
             token: registration.token,
         })
+    }
+
+    fn is_local(&self) -> bool {
+        self.is_local
     }
 
     async fn heartbeat(&self, node: &NodeCredentials) -> Result<(), WorkerError> {
@@ -268,6 +279,16 @@ struct NodeCredentials {
     token: String,
 }
 
+/// Startup configuration. Remote agents use a pre-provisioned, node-scoped
+/// token; only loopback agents may self-register with the admin token.
+pub struct AgentWorkerConfig {
+    pub api_url: String,
+    pub admin_token: Option<String>,
+    pub node_name: Option<String>,
+    pub node_id: Option<String>,
+    pub node_token: Option<String>,
+}
+
 #[derive(Serialize)]
 struct RegisterRequest<'a> {
     name: &'a str,
@@ -370,8 +391,8 @@ impl OperationOutcome {
 
 pub struct AgentWorker {
     api: ApiClient,
-    admin_token: String,
-    node_name: String,
+    admin_token: Option<String>,
+    node_name: Option<String>,
     node: Option<NodeCredentials>,
     metrics: MetricsCollector,
     poll_interval: Duration,
@@ -380,14 +401,53 @@ pub struct AgentWorker {
 
 impl AgentWorker {
     pub fn new(api_url: &str, admin_token: String, node_name: String) -> Result<Self, WorkerError> {
-        if admin_token.trim().is_empty() || node_name.trim().is_empty() {
-            return Err(WorkerError::InvalidConfiguration);
-        }
+        Self::from_config(AgentWorkerConfig {
+            api_url: api_url.to_string(),
+            admin_token: Some(admin_token),
+            node_name: Some(node_name),
+            node_id: None,
+            node_token: None,
+        })
+    }
+
+    pub fn from_config(config: AgentWorkerConfig) -> Result<Self, WorkerError> {
+        let api = ApiClient::new(&config.api_url)?;
+        let node = match (config.node_id, config.node_token) {
+            (Some(node_id), Some(token)) if is_uuid(&node_id) && !token.trim().is_empty() => {
+                Some(NodeCredentials { node_id, token })
+            }
+            (None, None) => None,
+            _ => return Err(WorkerError::InvalidConfiguration),
+        };
+
+        let (admin_token, node_name) = match node {
+            Some(_) if config.admin_token.is_some() => {
+                // Do not retain a global credential in a remote agent process.
+                return Err(WorkerError::InvalidConfiguration);
+            }
+            Some(_) => (None, None),
+            None if !api.is_local() => {
+                // Remote agents may not bootstrap with the control-plane admin token.
+                return Err(WorkerError::InvalidConfiguration);
+            }
+            None => {
+                let admin_token = config
+                    .admin_token
+                    .filter(|token| !token.trim().is_empty())
+                    .ok_or(WorkerError::InvalidConfiguration)?;
+                let node_name = config
+                    .node_name
+                    .filter(|name| !name.trim().is_empty())
+                    .ok_or(WorkerError::InvalidConfiguration)?;
+                (Some(admin_token), Some(node_name))
+            }
+        };
+
         Ok(Self {
-            api: ApiClient::new(api_url)?,
+            api,
             admin_token,
             node_name,
-            node: None,
+            node,
             metrics: MetricsCollector::default(),
             poll_interval: POLL_INTERVAL,
             heartbeat_interval: HEARTBEAT_INTERVAL,
@@ -395,10 +455,18 @@ impl AgentWorker {
     }
 
     async fn register(&mut self) -> Result<(), WorkerError> {
-        let node = self
-            .api
-            .register(&self.admin_token, &self.node_name)
-            .await?;
+        if self.node.is_some() {
+            return Ok(());
+        }
+        let admin_token = self
+            .admin_token
+            .as_deref()
+            .ok_or(WorkerError::InvalidConfiguration)?;
+        let node_name = self
+            .node_name
+            .as_deref()
+            .ok_or(WorkerError::InvalidConfiguration)?;
+        let node = self.api.register(admin_token, node_name).await?;
         self.node = Some(node);
         Ok(())
     }
@@ -435,10 +503,11 @@ impl AgentWorker {
             Ok(operation) => execute_operation(operation, &mut self.metrics),
             Err(outcome) => outcome,
         };
-        let log_text = sanitize_bounded(
-            &outcome.log_text,
-            &[self.admin_token.as_str(), node.token.as_str()],
-        );
+        let mut secrets = vec![node.token.as_str()];
+        if let Some(admin_token) = self.admin_token.as_deref() {
+            secrets.push(admin_token);
+        }
+        let log_text = sanitize_bounded(&outcome.log_text, &secrets);
         if !log_text.is_empty() {
             if let Err(error) = self
                 .api
@@ -738,6 +807,90 @@ mod tests {
                 "expected {url} to be rejected"
             );
         }
+    }
+
+    #[test]
+    fn bootstrap_policy_keeps_admin_registration_on_loopback_only() {
+        let local = AgentWorker::from_config(AgentWorkerConfig {
+            api_url: "http://127.0.0.1:8080".to_string(),
+            admin_token: Some("local-admin-secret".to_string()),
+            node_name: Some("local-node".to_string()),
+            node_id: None,
+            node_token: None,
+        })
+        .unwrap();
+        assert_eq!(local.admin_token.as_deref(), Some("local-admin-secret"));
+        assert!(local.node.is_none());
+
+        for (admin_token, node_id, node_token) in [
+            (None, None, None),
+            (Some("admin-secret".to_string()), None, None),
+            (
+                Some("admin-secret".to_string()),
+                Some("00000000-0000-4000-8000-000000000001".to_string()),
+                Some("node-secret".to_string()),
+            ),
+            (
+                None,
+                Some("not-a-uuid".to_string()),
+                Some("node-secret".to_string()),
+            ),
+            (
+                None,
+                Some("00000000-0000-4000-8000-000000000001".to_string()),
+                None,
+            ),
+        ] {
+            assert_eq!(
+                AgentWorker::from_config(AgentWorkerConfig {
+                    api_url: "https://agent-control.example.test".to_string(),
+                    admin_token,
+                    node_name: Some("remote-node".to_string()),
+                    node_id,
+                    node_token,
+                })
+                .err(),
+                Some(WorkerError::InvalidConfiguration)
+            );
+        }
+    }
+
+    #[test]
+    fn remote_bootstrap_uses_only_the_preprovisioned_node_token() {
+        let node_id = "00000000-0000-4000-8000-000000000001";
+        let worker = AgentWorker::from_config(AgentWorkerConfig {
+            api_url: "https://agent-control.example.test".to_string(),
+            admin_token: None,
+            node_name: None,
+            node_id: Some(node_id.to_string()),
+            node_token: Some("scoped-node-secret".to_string()),
+        })
+        .unwrap();
+
+        assert!(worker.admin_token.is_none());
+        assert_eq!(worker.node.as_ref().unwrap().node_id, node_id);
+        assert_eq!(worker.node.as_ref().unwrap().token, "scoped-node-secret");
+
+        let request = worker
+            .api
+            .json_request(
+                Method::POST,
+                "v1/jobs/claim",
+                &worker.node.as_ref().unwrap().token,
+                &ClaimRequest { node_id },
+            )
+            .unwrap();
+        assert_eq!(request.url().path(), "/v1/jobs/claim");
+        assert_eq!(
+            request
+                .headers()
+                .get(reqwest::header::AUTHORIZATION)
+                .unwrap(),
+            "Bearer scoped-node-secret"
+        );
+
+        // Pre-provisioned remote credentials bypass self-registration after startup.
+        assert!(worker.node.is_some());
     }
 
     #[test]
