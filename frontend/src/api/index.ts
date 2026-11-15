@@ -16,6 +16,11 @@ export const api = {
     await apiClient.post('/v1/auth/login', payload);
   },
 
+  getMe: async (): Promise<{ user_id: string; tenant_id: string; roles: string[] }> => {
+    const response = await apiClient.get<{ user_id: string; tenant_id: string; roles: string[] }>('/v1/auth/me');
+    return response.data;
+  },
+
   logout: async (): Promise<void> => {
     await apiClient.post('/v1/auth/logout');
   },
