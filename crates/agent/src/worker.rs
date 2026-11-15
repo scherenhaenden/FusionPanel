@@ -4,7 +4,7 @@ use crate::metrics::{MetricsCollector, SystemMetrics};
 use reqwest::{Client, Method, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{path::Path, time::Duration};
+use std::{net::IpAddr, path::Path, time::Duration};
 use tokio::time::{sleep, Instant};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -36,7 +36,9 @@ impl WorkerError {
             Self::ApiStatus(status) => format!("API returned HTTP status {status}"),
             Self::Transport => "API transport failed; retrying is safe".to_string(),
             Self::InvalidResponse => "API returned an invalid response".to_string(),
-            Self::InvalidConfiguration => "Agent configuration is invalid".to_string(),
+            Self::InvalidConfiguration => {
+                "Agent configuration is invalid; remote API URLs require HTTPS".to_string()
+            }
         }
     }
 }
@@ -53,12 +55,22 @@ impl ApiClient {
         if !matches!(base_url.scheme(), "http" | "https") || base_url.host_str().is_none() {
             return Err(WorkerError::InvalidConfiguration);
         }
+        let is_local_http = base_url.scheme() == "http" && is_loopback_or_localhost(&base_url);
+        if base_url.scheme() == "http" && !is_local_http {
+            return Err(WorkerError::InvalidConfiguration);
+        }
         if !base_url.path().ends_with('/') {
             let path = format!("{}/", base_url.path());
             base_url.set_path(&path);
         }
-        let client = Client::builder()
+        let mut client_builder = Client::builder()
             .timeout(REQUEST_TIMEOUT)
+            .redirect(reqwest::redirect::Policy::none());
+        if is_local_http {
+            // Never send local bearer credentials through a system HTTP proxy.
+            client_builder = client_builder.no_proxy();
+        }
+        let client = client_builder
             .build()
             .map_err(|_| WorkerError::InvalidConfiguration)?;
         Ok(Self { base_url, client })
@@ -212,6 +224,20 @@ impl ApiClient {
             .await?;
         ensure_success(&response)
     }
+}
+
+fn is_loopback_or_localhost(url: &Url) -> bool {
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    let host = host
+        .strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(host);
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
 }
 
 #[derive(Debug)]
@@ -663,6 +689,33 @@ mod tests {
         assert!(!WorkerError::Unauthorized
             .safe_message()
             .contains("admin-secret"));
+    }
+
+    #[test]
+    fn api_client_allows_local_http_and_remote_https_only() {
+        for url in [
+            "http://127.0.0.1:8080",
+            "http://[::1]:8080",
+            "http://localhost:8080",
+            "https://api.example.test",
+        ] {
+            assert!(ApiClient::new(url).is_ok(), "expected {url} to be allowed");
+        }
+    }
+
+    #[test]
+    fn api_client_rejects_remote_http_and_lookalike_localhost_hosts() {
+        for url in [
+            "http://api.example.test",
+            "http://192.168.1.10:8080",
+            "http://localhost.example.test:8080",
+        ] {
+            assert_eq!(
+                ApiClient::new(url).err(),
+                Some(WorkerError::InvalidConfiguration),
+                "expected {url} to be rejected"
+            );
+        }
     }
 
     #[test]
