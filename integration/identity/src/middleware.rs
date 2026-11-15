@@ -73,7 +73,10 @@ pub async fn auth_middleware<S: IdentityStore>(
             if let Ok(cookie_str) = cookie_header.to_str() {
                 for cookie in cookie_str.split(';') {
                     let cookie = cookie.trim();
-                    if let Some(stripped) = cookie.strip_prefix("session_id=") {
+                    if let Some(stripped) = cookie
+                        .strip_prefix("SESSION_ID=")
+                        .or_else(|| cookie.strip_prefix("session_id="))
+                    {
                         token = Some(stripped.to_string());
                         break;
                     }
