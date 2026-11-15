@@ -20,6 +20,8 @@ The Docker Compose services use Linux host networking. The API binds only to `12
 
 Then run `tests/e2e/browser/fixtures/sprint2/run.sh` from the repository checkout. The script creates a unique Compose project/image and temporary SQLite directory, seeds the test operator, runs only `tests/nodes-jobs.spec.js`, captures redacted Compose logs, and removes the containers, image, and temporary database on exit. The runtime uses the Ubuntu 24.04 amd64 image pinned by digest.
 
+The artifact precondition can be checked without Docker using `bash tests/e2e/browser/fixtures/sprint2/preflight.test.sh`. CI also runs `bash -n` on the fixture scripts and this focused preflight check before any full-gate E2E lane.
+
 ## Scope and limits
 
 - This is real browser-to-API-to-agent coverage for the Sprint 2 Nodes/Jobs workflow. It uses no mocked HTTP responses. SQLite and credentials are disposable synthetic data.

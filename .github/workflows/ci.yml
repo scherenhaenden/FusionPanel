@@ -57,6 +57,13 @@ jobs:
       - name: Check Mock Bypasses
         run: ./scripts/ci/check_mock_bypasses.sh
 
+      - name: Check Sprint 2 E2E fixture shell and preflight
+        run: |
+          bash -n tests/e2e/browser/fixtures/sprint2/run.sh
+          bash -n tests/e2e/browser/fixtures/sprint2/preflight.sh
+          bash -n tests/e2e/browser/fixtures/sprint2/preflight.test.sh
+          bash tests/e2e/browser/fixtures/sprint2/preflight.test.sh
+
   dependency-lane:
     runs-on: ubuntu-latest
     needs: [discovery, validation]
