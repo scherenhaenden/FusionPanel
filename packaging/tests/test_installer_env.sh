@@ -31,6 +31,16 @@ assert_line() {
     fi
 }
 
+assert_mode() {
+    expected="$1"
+    file="$2"
+    actual=$(stat -c '%a' "$file")
+    if [ "$actual" != "$expected" ]; then
+        echo "FAIL: expected mode $expected for $file, got $actual" >&2
+        exit 1
+    fi
+}
+
 assert_line 'FUSIONPANEL_LISTEN=127.0.0.1:9090' "$api_env"
 assert_line 'FUSIONPANEL_DATABASE_URL=/var/lib/fusionpanel/fusionpanel.db' "$api_env"
 assert_line 'FUSIONPANEL_ADMIN_TOKEN=synthetic-token-for-test' "$api_env"
@@ -43,5 +53,41 @@ if grep -q '^FUSIONPANEL_AGENT_ENDPOINT=' "$agent_env"; then
     echo "FAIL: obsolete FUSIONPANEL_AGENT_ENDPOINT was generated" >&2
     exit 1
 fi
+
+# The installer later changes the staging directory to 0755 and copies it with cp -a.
+# Explicit 0600 modes must keep both token-bearing files private through that path.
+umask 000
+write_runtime_env_files "$TEST_DIR/stage/config" "9091" "synthetic-token-copy-test" "stage-node"
+assert_mode 700 "$TEST_DIR/stage/config"
+assert_mode 600 "$TEST_DIR/stage/config/fusionpanel.env"
+assert_mode 600 "$TEST_DIR/stage/config/fusionpanel-agent.env"
+
+versions_dir="$TEST_DIR/versions"
+mkdir -p "$versions_dir"
+chmod 0755 "$TEST_DIR/stage"
+cp -a "$TEST_DIR/stage" "$versions_dir/current"
+assert_mode 700 "$versions_dir/current/config"
+assert_mode 600 "$versions_dir/current/config/fusionpanel.env"
+assert_mode 600 "$versions_dir/current/config/fusionpanel-agent.env"
+
+# A normal upgrade must harden token files persisted by older installer versions.
+mkdir -p "$versions_dir/old-release/config"
+printf 'FUSIONPANEL_ADMIN_TOKEN=old-synthetic-token\n' > "$versions_dir/old-release/config/fusionpanel.env"
+printf 'FUSIONPANEL_ADMIN_TOKEN=old-synthetic-agent-token\n' > "$versions_dir/old-release/config/fusionpanel-agent.env"
+chmod 0644 "$versions_dir/old-release/config/fusionpanel.env" "$versions_dir/old-release/config/fusionpanel-agent.env"
+
+# Do not follow a replaced config directory into an unrelated path while sweeping versions.
+mkdir -p "$versions_dir/symlink-release" "$TEST_DIR/external-config"
+printf 'FUSIONPANEL_ADMIN_TOKEN=external-synthetic-token\n' > "$TEST_DIR/external-config/fusionpanel.env"
+chmod 0644 "$TEST_DIR/external-config/fusionpanel.env"
+ln -s "$TEST_DIR/external-config" "$versions_dir/symlink-release/config"
+
+secure_versioned_env_files "$versions_dir"
+assert_mode 700 "$versions_dir/old-release/config"
+assert_mode 600 "$versions_dir/current/config/fusionpanel.env"
+assert_mode 600 "$versions_dir/current/config/fusionpanel-agent.env"
+assert_mode 600 "$versions_dir/old-release/config/fusionpanel.env"
+assert_mode 600 "$versions_dir/old-release/config/fusionpanel-agent.env"
+assert_mode 644 "$TEST_DIR/external-config/fusionpanel.env"
 
 echo "Installer environment configuration tests passed."
