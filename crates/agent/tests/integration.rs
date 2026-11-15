@@ -67,6 +67,7 @@ async fn test_agent_child_process_integration() {
     cmd.arg("run")
         .arg("--bin")
         .arg("fusionpanel-agent")
+        .env("FUSIONPANEL_AGENT_MODE", "legacy-ws")
         .env("FUSIONPANEL_AGENT_URL", "ws://127.0.0.1:0") // Port 0 to intentionally fail connection quickly, testing reconnect backoff
         .env("FUSIONPANEL_AGENT_HEARTBEAT_URL", "ws://127.0.0.1:0")
         .env("FUSIONPANEL_AGENT_SECRET", "test-secret")
@@ -83,7 +84,7 @@ async fn test_agent_child_process_integration() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("Protocol loop error"),
+        stderr.contains("Legacy WebSocket request failed"),
         "Agent should attempt to connect and log an error"
     );
 }
@@ -106,6 +107,7 @@ async fn test_agent_child_process_handshake() {
     cmd.arg("run")
         .arg("--bin")
         .arg("fusionpanel-agent")
+        .env("FUSIONPANEL_AGENT_MODE", "legacy-ws")
         .env("FUSIONPANEL_AGENT_URL", url.clone())
         .env("FUSIONPANEL_AGENT_HEARTBEAT_URL", "ws://127.0.0.1:0")
         .env("FUSIONPANEL_AGENT_SECRET", "test-secret")
