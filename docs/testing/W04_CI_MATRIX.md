@@ -9,10 +9,11 @@
 - Enforce one authoritative dependency lock strategy (e.g., top-level `Cargo.lock` and `package-lock.json`).
 
 ## Compile + Unit Lane
-- Matrix across all discovered manifests.
-- For each manifest, run compile (e.g., `cargo build` or `npm run build`).
-- For each manifest, run tests (e.g., `cargo test` or `npm test`).
-- Ensure no zero-test success condition exists.
+- Matrix across all discovered manifests. Cargo manifests use their Rust build and unit-test checks.
+- NPM manifests default to the `unit` policy: run `npm run build` and `npm test`.
+- An NPM manifest may declare `"fusionpanel": { "policy": "compile-only" }` when its scripts describe end-to-end tests that must not execute in an atomic branch check. It must provide `npm run compile`, which lists the test cases and fails if none are discovered; this lane does not execute those tests.
+- Execute browser/integration suites only on the Sprint integration branch or `master` release gate, where their required services and broader environment are available.
+- Ensure no zero-test success condition exists in either policy.
 - Reports PASS/FAIL/BLOCKED/NOT_RUN.
 
 ## Stale Base Merge Detection
