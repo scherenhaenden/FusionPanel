@@ -139,6 +139,35 @@ write_runtime_env_files() {
     fi
 }
 
+preserve_agent_env_file() {
+    local existing_env="$1"
+    local staged_env="$2"
+
+    if [ -L "$existing_env" ]; then
+        echo "Error: Refusing to preserve a symlinked agent environment file." >&2
+        return 1
+    fi
+    if [ ! -e "$existing_env" ]; then
+        return 0
+    fi
+    if [ ! -f "$existing_env" ]; then
+        echo "Error: Existing agent environment is not a regular file." >&2
+        return 1
+    fi
+    if ! cp "$existing_env" "$staged_env"; then
+        echo "Error: Could not preserve the existing agent environment file." >&2
+        return 1
+    fi
+    if ! chown root:root "$staged_env"; then
+        echo "Error: Could not make the staged agent environment root-owned." >&2
+        return 1
+    fi
+    if ! chmod 0600 "$staged_env"; then
+        echo "Error: Could not restrict access to the staged agent environment." >&2
+        return 1
+    fi
+}
+
 secure_versioned_env_files() {
     local versions_dir="$1"
     local version_dir config_dir env_file
@@ -153,6 +182,10 @@ secure_versioned_env_files() {
         [ -d "$config_dir" ] || continue
         [ ! -L "$config_dir" ] || continue
 
+        if ! chown root:root "$config_dir"; then
+            echo "Error: Could not make versioned configuration directory root-owned: $config_dir." >&2
+            return 1
+        fi
         if ! chmod 0700 "$config_dir"; then
             echo "Error: Could not restrict permissions on versioned configuration directory $config_dir." >&2
             return 1
@@ -162,12 +195,37 @@ secure_versioned_env_files() {
             [ -f "$env_file" ] || continue
             [ ! -L "$env_file" ] || continue
 
+            if ! chown root:root "$env_file"; then
+                echo "Error: Could not make versioned environment file root-owned: $env_file." >&2
+                return 1
+            fi
             if ! chmod 0600 "$env_file"; then
                 echo "Error: Could not secure versioned environment file $env_file." >&2
                 return 1
             fi
         done
     done
+}
+
+secure_active_env_files() {
+    local config_dir="$1"
+
+    if ! chown root:root "$config_dir/fusionpanel.env"; then
+        echo "Error: Could not restrict ownership of the API environment file." >&2
+        return 1
+    fi
+    if ! chmod 0600 "$config_dir/fusionpanel.env"; then
+        echo "Error: Could not restrict access to the API environment file." >&2
+        return 1
+    fi
+    if ! chown root:root "$config_dir/fusionpanel-agent.env"; then
+        echo "Error: Could not restrict ownership of the agent environment file." >&2
+        return 1
+    fi
+    if ! chmod 0600 "$config_dir/fusionpanel-agent.env"; then
+        echo "Error: Could not restrict access to the agent environment file." >&2
+        return 1
+    fi
 }
 
 install() {
@@ -271,6 +329,7 @@ install() {
     local node_name
     node_name=$(normalize_node_name "$(uname -n 2>/dev/null || true)")
     write_runtime_env_files "$TMP_DIR/config" "$PORT" "$admin_token" "$node_name"
+    preserve_agent_env_file "$sysconfdir/fusionpanel-agent.env" "$TMP_DIR/config/fusionpanel-agent.env"
 
     # Atomic move logic: copy to temporary path in final destination, then rename to ensure no incomplete installs.
     mkdir -p "$versions_dir"
@@ -307,8 +366,7 @@ install() {
     chown -R fusionpanel:fusionpanel /var/lib/fusionpanel /var/log/fusionpanel || echo "Warning: chown failed, running as non-root?"
     chmod 700 /var/lib/fusionpanel /var/log/fusionpanel
 
-    chown root:fusionpanel "$sysconfdir/fusionpanel.env" "$sysconfdir/fusionpanel-agent.env" || true
-    chmod 640 "$sysconfdir/fusionpanel.env" "$sysconfdir/fusionpanel-agent.env"
+    secure_active_env_files "$sysconfdir"
 
     # Install systemd services
     local systemd_dir="/etc/systemd/system"

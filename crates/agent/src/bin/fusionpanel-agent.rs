@@ -6,7 +6,7 @@ use agent::{
     metrics::MetricsCollector,
     mode::{select_mode, AgentMode},
     protocol::{AgentError, AgentRequest, AgentResponse},
-    worker::{sanitize_bounded, AgentWorker},
+    worker::{sanitize_bounded, validate_legacy_websocket_urls, AgentWorker, AgentWorkerConfig},
 };
 use futures_util::{SinkExt, StreamExt};
 use hmac::{Hmac, Mac};
@@ -48,16 +48,19 @@ async fn main() {
 async fn run_http_worker() -> Result<(), String> {
     let api_url =
         env::var("FUSIONPANEL_API_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
-    let admin_token = match env::var("FUSIONPANEL_ADMIN_TOKEN") {
-        Ok(token) if !token.trim().is_empty() => token,
-        _ => return Err("FUSIONPANEL_ADMIN_TOKEN is required".to_string()),
-    };
-    let node_name = match env::var("FUSIONPANEL_NODE_NAME") {
-        Ok(name) if !name.trim().is_empty() => name,
-        _ => return Err("FUSIONPANEL_NODE_NAME is required".to_string()),
+    let worker_config = AgentWorkerConfig {
+        api_url,
+        admin_token: env::var("FUSIONPANEL_ADMIN_TOKEN")
+            .ok()
+            .filter(|token| !token.trim().is_empty()),
+        node_name: env::var("FUSIONPANEL_NODE_NAME").ok(),
+        node_id: env::var("FUSIONPANEL_NODE_ID").ok(),
+        node_token: env::var("FUSIONPANEL_NODE_TOKEN")
+            .ok()
+            .filter(|token| !token.trim().is_empty()),
     };
     let mut worker =
-        AgentWorker::new(&api_url, admin_token, node_name).map_err(|error| error.safe_message())?;
+        AgentWorker::from_config(worker_config).map_err(|error| error.safe_message())?;
     worker.run().await.map_err(|error| error.safe_message())
 }
 
@@ -70,6 +73,9 @@ async fn run_legacy_websocket() -> Result<(), String> {
         .ok_or_else(|| "FUSIONPANEL_AGENT_SECRET is required in legacy-ws mode".to_string())?;
     let heartbeat_url = env::var("FUSIONPANEL_AGENT_HEARTBEAT_URL")
         .unwrap_or_else(|_| "ws://127.0.0.1:8080/heartbeat".to_string());
+    validate_legacy_websocket_urls(&url, &heartbeat_url).map_err(|_| {
+        "legacy-ws remote endpoints must use WSS; WS is allowed only for loopback".to_string()
+    })?;
     let transport = HmacWsTransport::new(heartbeat_url, secret.as_bytes().to_vec());
     let daemon = AgentDaemon::new(
         transport,
