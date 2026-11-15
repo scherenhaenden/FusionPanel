@@ -14,6 +14,8 @@ That tag is an example; use an actual published tag. Each release uses a fixed a
 
 The installer writes `/etc/fusionpanel/fusionpanel.env` and `/etc/fusionpanel/fusionpanel-agent.env` with mode `0640` for the `root:fusionpanel` group. The API binds to loopback and stores SQLite data at `/var/lib/fusionpanel/fusionpanel.db`. The local HTTP agent uses that loopback API URL, the generated admin token, and a sanitized node name derived from the system hostname. The agent unit starts after the API and requests it when started directly; it remains active across API restarts and retries transient API failures. Remote agent API endpoints must use HTTPS.
 
+The installer keeps token-bearing environment copies in versioned release directories at mode `0600` and reapplies that permission to copies from earlier versions during upgrades.
+
 To build locally, provide a non-release label and an output directory. The standalone agent lockfile is required:
 
 ```sh

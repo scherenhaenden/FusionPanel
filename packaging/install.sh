@@ -120,6 +120,10 @@ write_runtime_env_files() {
     node_name=$(normalize_node_name "$4")
 
     mkdir -p "$config_dir"
+    if ! chmod 0700 "$config_dir"; then
+        echo "Error: Could not restrict permissions on staged FusionPanel configuration." >&2
+        return 1
+    fi
     printf 'FUSIONPANEL_LISTEN=127.0.0.1:%s\n' "$port" > "$config_dir/fusionpanel.env"
     printf 'FUSIONPANEL_DATABASE_URL=/var/lib/fusionpanel/fusionpanel.db\n' >> "$config_dir/fusionpanel.env"
     printf 'FUSIONPANEL_ADMIN_TOKEN=%s\n' "$admin_token" >> "$config_dir/fusionpanel.env"
@@ -128,6 +132,42 @@ write_runtime_env_files() {
     printf 'FUSIONPANEL_API_URL=http://127.0.0.1:%s\n' "$port" >> "$config_dir/fusionpanel-agent.env"
     printf 'FUSIONPANEL_ADMIN_TOKEN=%s\n' "$admin_token" >> "$config_dir/fusionpanel-agent.env"
     printf 'FUSIONPANEL_NODE_NAME=%s\n' "$node_name" >> "$config_dir/fusionpanel-agent.env"
+
+    if ! chmod 0600 "$config_dir/fusionpanel.env" "$config_dir/fusionpanel-agent.env"; then
+        echo "Error: Could not restrict permissions on staged FusionPanel environment files." >&2
+        return 1
+    fi
+}
+
+secure_versioned_env_files() {
+    local versions_dir="$1"
+    local version_dir config_dir env_file
+
+    [ -d "$versions_dir" ] || return 0
+
+    for version_dir in "$versions_dir"/*; do
+        [ -d "$version_dir" ] || continue
+        [ ! -L "$version_dir" ] || continue
+
+        config_dir="$version_dir/config"
+        [ -d "$config_dir" ] || continue
+        [ ! -L "$config_dir" ] || continue
+
+        if ! chmod 0700 "$config_dir"; then
+            echo "Error: Could not restrict permissions on versioned configuration directory $config_dir." >&2
+            return 1
+        fi
+
+        for env_file in "$config_dir/fusionpanel.env" "$config_dir/fusionpanel-agent.env"; do
+            [ -f "$env_file" ] || continue
+            [ ! -L "$env_file" ] || continue
+
+            if ! chmod 0600 "$env_file"; then
+                echo "Error: Could not secure versioned environment file $env_file." >&2
+                return 1
+            fi
+        done
+    done
 }
 
 install() {
@@ -141,6 +181,11 @@ install() {
     fi
 
     local version_file="/var/lib/fusionpanel/.version"
+    local versions_dir="/usr/local/lib/fusionpanel/versions"
+    local install_dir="${versions_dir}/${VERSION}"
+
+    # Harden existing copies even when the requested version is already installed.
+    secure_versioned_env_files "$versions_dir"
 
     if [ -f "/usr/local/bin/fusionpanel-api" ]; then
         if [ -f "$version_file" ]; then
@@ -228,9 +273,10 @@ install() {
     write_runtime_env_files "$TMP_DIR/config" "$PORT" "$admin_token" "$node_name"
 
     # Atomic move logic: copy to temporary path in final destination, then rename to ensure no incomplete installs.
-    local versions_dir="/usr/local/lib/fusionpanel/versions"
-    local install_dir="${versions_dir}/${VERSION}"
     mkdir -p "$versions_dir"
+
+    # Older releases also contain environment-file copies. Secure them before staging opens up its parent directory.
+    secure_versioned_env_files "$versions_dir"
 
     if [ -d "$install_dir" ]; then
         rm -rf "$install_dir"
@@ -239,6 +285,9 @@ install() {
     chmod 755 "$TMP_DIR"
     cp -a "$TMP_DIR" "${install_dir}.tmp"
     mv "${install_dir}.tmp" "$install_dir"
+
+    # Keep the new versioned copies root-only as well; the active copies are installed under /etc below.
+    secure_versioned_env_files "$versions_dir"
 
     # Now set up symlinks for binaries
     mkdir -p /usr/local/bin
