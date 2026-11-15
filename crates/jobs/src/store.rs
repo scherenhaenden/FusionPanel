@@ -18,6 +18,18 @@ pub struct JobStore {
 }
 
 impl JobStore {
+    fn has_column(
+        tx: &rusqlite::Transaction<'_>,
+        column_name: &str,
+    ) -> Result<bool, JobStoreError> {
+        let mut statement = tx.prepare("PRAGMA table_info(jobs)")?;
+        let columns = statement.query_map([], |row| row.get::<_, String>(1))?;
+        let has_column = columns
+            .filter_map(Result::ok)
+            .any(|column| column == column_name);
+        Ok(has_column)
+    }
+
     /// Create a new persistent job store at the given path.
     pub fn new(path: impl AsRef<Path>) -> Result<Self, JobStoreError> {
         let conn = Connection::open(path)?;
@@ -53,14 +65,7 @@ impl JobStore {
             "#,
             [],
         )?;
-        let has_idempotency_key = {
-            let mut statement = tx.prepare("PRAGMA table_info(jobs)")?;
-            let columns = statement.query_map([], |row| row.get::<_, String>(1))?;
-            let has_column = columns
-                .filter_map(Result::ok)
-                .any(|column| column == "idempotency_key");
-            has_column
-        };
+        let has_idempotency_key = Self::has_column(&tx, "idempotency_key")?;
         if !has_idempotency_key {
             tx.execute("ALTER TABLE jobs ADD COLUMN idempotency_key TEXT", [])?;
         }
@@ -68,14 +73,7 @@ impl JobStore {
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_idempotency_key ON jobs (idempotency_key) WHERE idempotency_key IS NOT NULL",
             [],
         )?;
-        let has_idempotency_fingerprint = {
-            let mut statement = tx.prepare("PRAGMA table_info(jobs)")?;
-            let columns = statement.query_map([], |row| row.get::<_, String>(1))?;
-            let has_column = columns
-                .filter_map(Result::ok)
-                .any(|column| column == "idempotency_fingerprint");
-            has_column
-        };
+        let has_idempotency_fingerprint = Self::has_column(&tx, "idempotency_fingerprint")?;
         if !has_idempotency_fingerprint {
             tx.execute(
                 "ALTER TABLE jobs ADD COLUMN idempotency_fingerprint TEXT",
