@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { api } from '../api';
 import { JobRecord, NodeRecord } from '../types';
@@ -64,8 +64,18 @@ describe('Nodes and Jobs views', () => {
     render(<NodesView />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Node API unavailable');
+    expect(screen.queryByText('No nodes registered yet.')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('No nodes registered yet.')).toBeInTheDocument();
+  });
+
+  it('does not show an empty job history when the initial request fails', async () => {
+    apiMock.getJobs.mockRejectedValue(new Error('Job API unavailable'));
+
+    render(<JobsView />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Job API unavailable');
+    expect(screen.queryByText('No jobs yet.')).not.toBeInTheDocument();
   });
 
   it('queues a real system info request and displays its returned status and logs', async () => {
@@ -128,5 +138,33 @@ describe('Nodes and Jobs views', () => {
     });
     expect(apiMock.getJob).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('row', { name: /job-1/ })).toHaveTextContent('succeeded');
+  });
+
+  it('clears previous job logs when another job detail request fails', async () => {
+    const secondJob = { ...job, id: 'job-2' };
+    apiMock.getJobs.mockResolvedValue([job, secondJob]);
+    apiMock.getJob.mockImplementation(async (jobId) => {
+      if (jobId === job.id) return job;
+      throw new Error('Job details unavailable');
+    });
+    apiMock.getJobLogs.mockImplementation(async (jobId) => {
+      if (jobId === job.id) {
+        return [{ sequence: 1, stream: 'stdout', text: 'previous job log', created_at: job.updated_at }];
+      }
+      throw new Error('Job logs unavailable');
+    });
+
+    render(<JobsView />);
+
+    const detailButtons = await screen.findAllByRole('button', { name: 'View details' });
+    fireEvent.click(detailButtons[0]);
+    expect(await screen.findByText('previous job log')).toBeInTheDocument();
+
+    const secondJobRow = screen.getByRole('row', { name: /job-2/ });
+    fireEvent.click(within(secondJobRow).getByRole('button', { name: 'View details' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Job details unavailable');
+    expect(screen.queryByText('previous job log')).not.toBeInTheDocument();
+    expect(screen.queryByText('No logs have been reported for this job.')).not.toBeInTheDocument();
   });
 });

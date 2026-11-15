@@ -124,6 +124,9 @@ export const JobsView: React.FC = () => {
   const selectJob = (job: JobRecord) => {
     setSelectedJob(job);
     setSelectedJobId(job.id);
+    setLogs([]);
+    setDetailsLoading(true);
+    setDetailsError(null);
   };
 
   return (
@@ -169,7 +172,7 @@ export const JobsView: React.FC = () => {
         </div>
         {isLoading && jobs.length === 0 ? (
           <p role="status" className="p-6 text-gray-600 dark:text-gray-300">Loading jobs…</p>
-        ) : jobs.length === 0 ? (
+        ) : jobsError && jobs.length === 0 ? null : jobs.length === 0 ? (
           <div className="p-6">
             <p className="font-medium text-gray-900 dark:text-white">No jobs yet.</p>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">Use “Run System Info Job” to enqueue a supported operation.</p>
@@ -238,7 +241,7 @@ export const JobsView: React.FC = () => {
 
               <div>
                 <h3 className="text-sm font-medium text-gray-900 dark:text-white">Execution logs</h3>
-                {detailsLoading && logs.length === 0 ? (
+                {detailsError ? null : detailsLoading && logs.length === 0 ? (
                   <p role="status" className="mt-2 text-sm text-gray-600 dark:text-gray-300">Loading logs…</p>
                 ) : logs.length === 0 ? (
                   <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">No logs have been reported for this job.</p>

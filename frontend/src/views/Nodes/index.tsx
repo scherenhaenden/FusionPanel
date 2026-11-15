@@ -65,7 +65,7 @@ export const NodesView: React.FC = () => {
         <h2 id="nodes-list-heading" className="sr-only">Registered nodes</h2>
         {isLoading && nodes.length === 0 ? (
           <p role="status" className="p-6 text-gray-600 dark:text-gray-300">Loading nodes…</p>
-        ) : nodes.length === 0 ? (
+        ) : error && nodes.length === 0 ? null : nodes.length === 0 ? (
           <div className="p-6">
             <p className="font-medium text-gray-900 dark:text-white">No nodes registered yet.</p>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
