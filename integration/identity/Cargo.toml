@@ -4,8 +4,6 @@ version = "0.1.0"
 edition = "2021"
 license = "AGPL-3.0-only"
 
-[workspace]
-
 [dependencies]
 axum = "0.8.9"
 serde = { version = "1.0", features = ["derive"] }

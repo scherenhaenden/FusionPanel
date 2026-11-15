@@ -1,13 +1,13 @@
 # Current readiness milestone
 
-Latest focused review [7 November 2026](READINESS_SNAPSHOT_2026-11-07.md), baseline `56ea5a18fbd215ad1085a1bb1c753bbdd5688fa1`.
+> **Active Sprint & Feature Status Board**: See [SPRINTS.md](SPRINTS.md) for current sprint progress, quality gates, and what works end-to-end today.
 
-The priority-1 browser journey remains unqualified. Identity routes and the dashboard have progressed, but the main API still does not mount the identity router. Standalone frontend and identity route tests passed in the focused review.
+Latest [10 November 2026 snapshot](READINESS_SNAPSHOT_2026-11-10.md), source baseline `3e7862c5edbed38c50d04ff88beb43e5c7233a91`. This is the handoff reference for local development from 11 November.
 
-The last complete scored catalog is the [6 November snapshot](READINESS_SNAPSHOT_2026-11-06.json). Its 8.02% feature and 43.49% package scores and 3/63 accepted packages describe that earlier baseline. The 7 November review does not recalculate those values.
+The main API still exposes health and capabilities. Browser login and the tenant database journey require router integration. The current snapshot records missing source paths and reverted CI controls after PR #513. An earlier PR run produced an API and agent package, and GitHub had no published releases at capture.
 
-[Product priorities](PRODUCT_DELIVERY_PLAN.md) · [7 November review](READINESS_SNAPSHOT_2026-11-07.md)
+The last complete scored catalog is the [6 November snapshot](READINESS_SNAPSHOT_2026-11-06.json). Its 8.02% feature score, 43.49% package score and 3 of 63 accepted packages apply to that earlier baseline.
 
-[Full feature and Arbeitspaket tables](READINESS_CATALOG_2026-11-07.md) · [Machine-readable catalog](READINESS_SNAPSHOT_2026-11-07.json)
+[Full feature and Arbeitspaket tables](READINESS_CATALOG_2026-11-10.md) · [Machine-readable snapshot](READINESS_SNAPSHOT_2026-11-10.json)
 
-[162 individual feature evidence sheets](FEATURES_2026-11-07.md)
+[Product priorities](PRODUCT_DELIVERY_PLAN.md) · [Historical individual feature sheets](FEATURES_2026-11-07.md)
