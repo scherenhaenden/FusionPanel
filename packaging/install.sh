@@ -102,6 +102,34 @@ setup_users() {
     fi
 }
 
+normalize_node_name() {
+    local node_name
+    node_name=$(printf '%s' "$1" | LC_ALL=C tr -c 'A-Za-z0-9._-' '-')
+    node_name=$(printf '%s' "$node_name" | sed 's/^[.-]*//; s/[.-]*$//')
+    if [ -z "$node_name" ]; then
+        node_name="fusionpanel-node"
+    fi
+    printf '%s' "$node_name"
+}
+
+write_runtime_env_files() {
+    local config_dir="$1"
+    local port="$2"
+    local admin_token="$3"
+    local node_name
+    node_name=$(normalize_node_name "$4")
+
+    mkdir -p "$config_dir"
+    printf 'FUSIONPANEL_LISTEN=127.0.0.1:%s\n' "$port" > "$config_dir/fusionpanel.env"
+    printf 'FUSIONPANEL_DATABASE_URL=/var/lib/fusionpanel/fusionpanel.db\n' >> "$config_dir/fusionpanel.env"
+    printf 'FUSIONPANEL_ADMIN_TOKEN=%s\n' "$admin_token" >> "$config_dir/fusionpanel.env"
+
+    printf 'FUSIONPANEL_AGENT_MODE=http\n' > "$config_dir/fusionpanel-agent.env"
+    printf 'FUSIONPANEL_API_URL=http://127.0.0.1:%s\n' "$port" >> "$config_dir/fusionpanel-agent.env"
+    printf 'FUSIONPANEL_ADMIN_TOKEN=%s\n' "$admin_token" >> "$config_dir/fusionpanel-agent.env"
+    printf 'FUSIONPANEL_NODE_NAME=%s\n' "$node_name" >> "$config_dir/fusionpanel-agent.env"
+}
+
 install() {
     echo "Installing FusionPanel $VERSION (Port: $PORT) on $OS ($ARCH)"
 
@@ -195,10 +223,9 @@ install() {
          chmod 0600 "$sysconfdir/initial-credentials.txt"
     fi
 
-    echo "FUSIONPANEL_LISTEN=127.0.0.1:$PORT" > "$TMP_DIR/config/fusionpanel.env"
-    echo "FUSIONPANEL_ADMIN_TOKEN=$admin_token" >> "$TMP_DIR/config/fusionpanel.env"
-
-    echo "FUSIONPANEL_AGENT_ENDPOINT=http://127.0.0.1:$PORT" > "$TMP_DIR/config/fusionpanel-agent.env"
+    local node_name
+    node_name=$(normalize_node_name "$(uname -n 2>/dev/null || true)")
+    write_runtime_env_files "$TMP_DIR/config" "$PORT" "$admin_token" "$node_name"
 
     # Atomic move logic: copy to temporary path in final destination, then rename to ensure no incomplete installs.
     local versions_dir="/usr/local/lib/fusionpanel/versions"
