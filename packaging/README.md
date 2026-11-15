@@ -12,6 +12,8 @@ To install a published prerelease, specify its **complete** tag:
 
 That tag is an example; use an actual published tag. Each release uses a fixed asset name such as `fusionpanel-debian-x86_64.tar.gz`, and the installer falls back to the historical versioned filename. GitHub's `releases/latest` endpoint excludes prereleases, so `--version latest` does not select these development packages.
 
+The installer writes `/etc/fusionpanel/fusionpanel.env` and `/etc/fusionpanel/fusionpanel-agent.env` with mode `0640` for the `root:fusionpanel` group. The API binds to loopback and stores SQLite data at `/var/lib/fusionpanel/fusionpanel.db`. The local HTTP agent uses that loopback API URL, the generated admin token, and a sanitized node name derived from the system hostname. The agent unit starts after and requires the API unit. Remote agent API endpoints must use HTTPS.
+
 To build locally, provide a non-release label and an output directory. The standalone agent lockfile is required:
 
 ```sh
