@@ -49,7 +49,7 @@ Each branch **must** be developed independently from `sprint-2`, run **only loca
   * `crates/agent-protocol/` (only if shared request/response types need additions)
 * **Contract**:
   * On startup (`FUSIONPANEL_API_URL`, `FUSIONPANEL_ADMIN_TOKEN`, `FUSIONPANEL_NODE_NAME`): register node -> start heartbeat loop -> poll `/v1/jobs/claim` -> execute only the implemented `system.info` and `site.validate` job types (no arbitrary shell execution) -> report output summary + final status (`succeeded`/`failed`).
-  * Keep bearer credentials on protected transport: allow plain HTTP only for `localhost` or a loopback IP; require HTTPS for remote API URLs.
+  * Keep bearer credentials on protected transport: allow plain HTTP only for `localhost` or a loopback IP; require HTTPS for remote API URLs, typically through a TLS-terminating reverse proxy while the API's plain-TCP listener stays loopback-only.
   * Keep `#![forbid(unsafe_code)]`.
 * **Unit Tests Only**:
   * `RUST_MIN_STACK=33554432 cargo test --offline --locked --manifest-path crates/agent/Cargo.toml --lib`
