@@ -85,4 +85,40 @@ describe('API Client', () => {
       await expect(api.login({ username: 'admin', password: 'admin' })).resolves.toBeUndefined();
     });
   });
+
+  describe('/v1/nodes and /v1/jobs', () => {
+    it('returns nodes from the authenticated API response', async () => {
+      const node = {
+        node_id: 'node-1',
+        name: 'local-node',
+        state: 'online' as const,
+        created_at: '2026-11-15T12:00:00Z',
+        last_heartbeat: '2026-11-15T12:01:00Z',
+      };
+      mockAdapter.onGet('/v1/nodes').reply(200, { nodes: [node] });
+
+      await expect(api.getNodes()).resolves.toEqual([node]);
+      expect(mockAdapter.history.get[0].withCredentials).toBe(true);
+    });
+
+    it('posts a system info operation with an idempotency key', async () => {
+      const job = {
+        id: 'job-1',
+        kind: 'agent_operation',
+        payload: { operation: 'system.info' },
+        state: 'queued' as const,
+        worker_id: null,
+        error_text: null,
+        created_at: '2026-11-15T12:00:00Z',
+        updated_at: '2026-11-15T12:00:00Z',
+      };
+      mockAdapter.onPost('/v1/jobs').reply(201, { job });
+
+      await expect(api.createSystemInfoJob()).resolves.toEqual(job);
+      const request = mockAdapter.history.post[0];
+      expect(request.headers?.['Idempotency-Key']).toBeTruthy();
+      expect(JSON.parse(request.data)).toEqual({ operation: 'system.info', payload: {} });
+      expect(request.withCredentials).toBe(true);
+    });
+  });
 });
