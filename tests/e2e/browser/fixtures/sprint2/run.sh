@@ -25,6 +25,8 @@ compose() {
   docker compose --project-name "$project_name" --file "$compose_file" "$@"
 }
 
+source "$fixture_dir/preflight.sh"
+
 cleanup() {
   result=$?
   trap - EXIT INT TERM
@@ -44,10 +46,7 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-if [ ! -x "$repo_root/target/debug/fusionpanel-api" \
-  || ! -x "$repo_root/target/debug/fusionpanel-cli" \
-  || ! -x "$repo_root/target/debug/fusionpanel-agent" \
-  || [ ! -f "$repo_root/frontend/dist/index.html" ]; then
+if sprint2_fixture_artifacts_missing "$repo_root"; then
   echo "Build the API, CLI, agent, and frontend before running this disposable fixture." >&2
   exit 2
 fi
