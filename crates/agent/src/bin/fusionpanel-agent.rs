@@ -6,7 +6,7 @@ use agent::{
     metrics::MetricsCollector,
     mode::{select_mode, AgentMode},
     protocol::{AgentError, AgentRequest, AgentResponse},
-    worker::{sanitize_bounded, AgentWorker},
+    worker::{sanitize_bounded, validate_legacy_websocket_urls, AgentWorker},
 };
 use futures_util::{SinkExt, StreamExt};
 use hmac::{Hmac, Mac};
@@ -70,6 +70,9 @@ async fn run_legacy_websocket() -> Result<(), String> {
         .ok_or_else(|| "FUSIONPANEL_AGENT_SECRET is required in legacy-ws mode".to_string())?;
     let heartbeat_url = env::var("FUSIONPANEL_AGENT_HEARTBEAT_URL")
         .unwrap_or_else(|_| "ws://127.0.0.1:8080/heartbeat".to_string());
+    validate_legacy_websocket_urls(&url, &heartbeat_url).map_err(|_| {
+        "legacy-ws remote endpoints must use WSS; WS is allowed only for loopback".to_string()
+    })?;
     let transport = HmacWsTransport::new(heartbeat_url, secret.as_bytes().to_vec());
     let daemon = AgentDaemon::new(
         transport,

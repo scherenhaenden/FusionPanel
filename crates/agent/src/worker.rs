@@ -37,10 +37,32 @@ impl WorkerError {
             Self::Transport => "API transport failed; retrying is safe".to_string(),
             Self::InvalidResponse => "API returned an invalid response".to_string(),
             Self::InvalidConfiguration => {
-                "Agent configuration is invalid; remote API URLs require HTTPS".to_string()
+                "Agent configuration is invalid; remote endpoints require TLS".to_string()
             }
         }
     }
+}
+
+/// Plaintext WebSocket is limited to loopback; remote endpoints must use WSS.
+pub fn validate_websocket_url(raw_url: &str) -> Result<(), WorkerError> {
+    let url = Url::parse(raw_url).map_err(|_| WorkerError::InvalidConfiguration)?;
+    if !matches!(url.scheme(), "ws" | "wss") || url.host_str().is_none() {
+        return Err(WorkerError::InvalidConfiguration);
+    }
+    if url.scheme() == "ws" && !is_loopback_or_localhost(&url) {
+        return Err(WorkerError::InvalidConfiguration);
+    }
+
+    Ok(())
+}
+
+/// Validates both legacy WebSocket endpoints before the agent opens either connection.
+pub fn validate_legacy_websocket_urls(
+    agent_url: &str,
+    heartbeat_url: &str,
+) -> Result<(), WorkerError> {
+    validate_websocket_url(agent_url)?;
+    validate_websocket_url(heartbeat_url)
 }
 
 #[derive(Clone)]
@@ -713,6 +735,54 @@ mod tests {
             assert_eq!(
                 ApiClient::new(url).err(),
                 Some(WorkerError::InvalidConfiguration),
+                "expected {url} to be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_websocket_urls_allow_loopback_ws_and_remote_wss() {
+        for url in [
+            "ws://127.0.0.1:8080/agent",
+            "ws://[::1]:8080/heartbeat",
+            "ws://localhost:8080/agent",
+            "wss://agent.example.test/agent",
+        ] {
+            assert!(
+                validate_legacy_websocket_urls(url, "ws://127.0.0.1:8080/heartbeat").is_ok(),
+                "expected {url} to be allowed"
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_websocket_urls_reject_remote_ws_for_either_endpoint() {
+        assert_eq!(
+            validate_legacy_websocket_urls(
+                "ws://agent.example.test/agent",
+                "wss://agent.example.test/heartbeat"
+            ),
+            Err(WorkerError::InvalidConfiguration)
+        );
+        assert_eq!(
+            validate_legacy_websocket_urls(
+                "wss://agent.example.test/agent",
+                "ws://agent.example.test/heartbeat"
+            ),
+            Err(WorkerError::InvalidConfiguration)
+        );
+    }
+
+    #[test]
+    fn legacy_websocket_urls_reject_missing_hosts_and_other_schemes() {
+        for url in [
+            "ws:///agent",
+            "ftp://agent.example.test/agent",
+            "http://localhost/agent",
+        ] {
+            assert_eq!(
+                validate_legacy_websocket_urls(url, "ws://127.0.0.1:8080/heartbeat"),
+                Err(WorkerError::InvalidConfiguration),
                 "expected {url} to be rejected"
             );
         }
