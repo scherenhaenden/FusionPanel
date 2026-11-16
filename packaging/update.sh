@@ -12,7 +12,7 @@ CONFIG_DIR="/etc/fusionpanel"
 BIN_DIR="/usr/local/bin"
 VERSION_LIB_DIR="/usr/local/lib/fusionpanel/versions"
 STATE_DIR="/var/lib/fusionpanel"
-HEALTH_URL="http://127.0.0.1:8080/v1/health"
+HEALTH_URL="${FUSIONPANEL_HEALTH_URL:-}"
 HEALTH_TIMEOUT=30
 
 # Allow isolated layout tests without touching host paths or services.
@@ -21,7 +21,6 @@ HEALTH_TIMEOUT=30
 [ -z "${FUSIONPANEL_TEST_BIN_DIR:-}" ] || BIN_DIR="$FUSIONPANEL_TEST_BIN_DIR"
 [ -z "${FUSIONPANEL_TEST_VERSION_LIB_DIR:-}" ] || VERSION_LIB_DIR="$FUSIONPANEL_TEST_VERSION_LIB_DIR"
 [ -z "${FUSIONPANEL_TEST_STATE_DIR:-}" ] || STATE_DIR="$FUSIONPANEL_TEST_STATE_DIR"
-[ -z "${FUSIONPANEL_HEALTH_URL:-}" ] || HEALTH_URL="$FUSIONPANEL_HEALTH_URL"
 
 detect_os() {
     if [ -n "${FUSIONPANEL_TEST_OS:-}" ]; then
@@ -51,6 +50,46 @@ detect_arch() {
         x86_64|aarch64) ;;
         *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
     esac
+}
+
+resolve_health_url() {
+    if [ -n "$HEALTH_URL" ]; then
+        return 0
+    fi
+
+    listen_addr=""
+    if [ -f "$CONFIG_DIR/fusionpanel.env" ]; then
+        listen_addr=$(sed -n 's/^FUSIONPANEL_LISTEN=//p' "$CONFIG_DIR/fusionpanel.env" | tail -n 1)
+    fi
+    if [ -z "$listen_addr" ]; then
+        HEALTH_URL="http://127.0.0.1:8080/v1/health"
+        return 0
+    fi
+
+    case "$listen_addr" in
+        \[*\]:*)
+            health_host=${listen_addr%%]*}
+            health_host=${health_host#\[}
+            health_port=${listen_addr##*:}
+            ;;
+        *:*)
+            health_host=${listen_addr%:*}
+            health_port=${listen_addr##*:}
+            ;;
+        *)
+            echo "Error: Invalid FUSIONPANEL_LISTEN value: $listen_addr" >&2
+            return 1
+            ;;
+    esac
+    case "$health_port" in
+        ""|*[!0-9]*) echo "Error: Invalid port in FUSIONPANEL_LISTEN: $listen_addr" >&2; return 1 ;;
+    esac
+    case "$health_host" in
+        ""|0.0.0.0|\*) health_host="127.0.0.1" ;;
+        ::) health_host="[::1]" ;;
+        *:*) health_host="[$health_host]" ;;
+    esac
+    HEALTH_URL="http://${health_host}:${health_port}/v1/health"
 }
 
 record_previous_release() {
@@ -94,6 +133,7 @@ for env_file in "$CONFIG_DIR/fusionpanel.env" "$CONFIG_DIR/fusionpanel-agent.env
         exit 1
     fi
 done
+resolve_health_url
 
 # Preserve the active state before any service or symlink is changed.
 rm -rf "$BACKUP_DIR"
@@ -109,7 +149,27 @@ mkdir -p "$VERSION_LIB_DIR"
 record_previous_release
 
 TMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TMP_DIR"' EXIT HUP INT TERM
+UPDATE_SERVICES_STOPPED=0
+UPDATE_SUCCEEDED=0
+ROLLBACK_ATTEMPTED=0
+cleanup_update() {
+    cleanup_status=$?
+    trap - EXIT HUP INT TERM
+    if [ "$UPDATE_SERVICES_STOPPED" -eq 1 ] && [ "$UPDATE_SUCCEEDED" -ne 1 ] && [ "$ROLLBACK_ATTEMPTED" -ne 1 ]; then
+        ROLLBACK_ATTEMPTED=1
+        echo "Update failed after stopping services; restoring the previous release." >&2
+        if [ "$cleanup_status" -eq 0 ]; then cleanup_status=1; fi
+        if ! "$SCRIPT_DIR/rollback.sh"; then
+            echo "Error: Automatic rollback failed; inspect $BACKUP_DIR and restore services manually." >&2
+        fi
+    fi
+    rm -rf "$TMP_DIR"
+    exit "$cleanup_status"
+}
+trap cleanup_update EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 LEGACY_DOWNLOAD_URL=""
 if [ "$VERSION" = "latest" ]; then
@@ -162,7 +222,12 @@ for env_file in "$TMP_DIR/release/config/fusionpanel.env" "$TMP_DIR/release/conf
 done
 
 echo "Stopping services..."
+UPDATE_SERVICES_STOPPED=1
 systemctl stop fusionpanel.service fusionpanel-agent.service || true
+if [ "${FUSIONPANEL_TEST_FAIL_AFTER_STOP:-0}" = 1 ]; then
+    echo "Synthetic failure requested after stopping services." >&2
+    exit 73
+fi
 
 install_dir="$VERSION_LIB_DIR/$VERSION"
 fusionpanel_publish_version_dir "$TMP_DIR/release" "$install_dir"
@@ -199,9 +264,11 @@ while true; do
 done
 
 if [ "$HEALTH_PASS" -eq 1 ]; then
+    UPDATE_SUCCEEDED=1
     echo "Update successful."
 else
     echo "Health check failed after $HEALTH_TIMEOUT seconds. Rolling back." >&2
+    ROLLBACK_ATTEMPTED=1
     "$SCRIPT_DIR/rollback.sh"
     exit 1
 fi

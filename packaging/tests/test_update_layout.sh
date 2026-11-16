@@ -28,7 +28,7 @@ EOF_NEW
 done
 printf '<html>old UI</html>\n' > "$TEST_DIR/versions/0.1.0/bin/frontend/dist/index.html"
 printf '<html>new UI</html>\n' > "$TEST_DIR/payload/frontend/dist/index.html"
-printf 'FUSIONPANEL_ADMIN_TOKEN=old-admin-secret\nFUSIONPANEL_FRONTEND_DIR=/old/ui\n' > "$TEST_DIR/config/fusionpanel.env"
+printf 'FUSIONPANEL_LISTEN=127.0.0.1:9090\nFUSIONPANEL_ADMIN_TOKEN=old-admin-secret\nFUSIONPANEL_FRONTEND_DIR=/old/ui\n' > "$TEST_DIR/config/fusionpanel.env"
 printf 'FUSIONPANEL_AGENT_MODE=http\nFUSIONPANEL_API_URL=https://control.example.test\nFUSIONPANEL_NODE_ID=00000000-0000-4000-8000-000000000001\nFUSIONPANEL_NODE_TOKEN=remote-node-secret\n' > "$TEST_DIR/config/fusionpanel-agent.env"
 cp -a "$TEST_DIR/config/." "$TEST_DIR/versions/0.1.0/config/"
 printf '0.1.0\n' > "$TEST_DIR/versions/0.1.0/.version"
@@ -52,6 +52,8 @@ if [ -n "$output" ]; then
     cp "$FUSIONPANEL_TEST_ARCHIVE" "$output"
     exit 0
 fi
+printf '%s\n' "$*" >> "$FUSIONPANEL_TEST_CURL_LOG"
+if [ "${FUSIONPANEL_TEST_FAIL_HEALTH:-0}" = 1 ]; then exit 22; fi
 exit 0
 SH
 cat > "$TEST_DIR/mock-bin/systemctl" <<'SH'
@@ -68,6 +70,7 @@ export PATH="$TEST_DIR/mock-bin:$PATH"
 export FUSIONPANEL_TEST_ARCHIVE="$TEST_DIR/package.tar.gz"
 export FUSIONPANEL_TEST_SYSTEMCTL_LOG="$TEST_DIR/logs/systemctl.log"
 export FUSIONPANEL_TEST_CHOWN_LOG="$TEST_DIR/logs/chown.log"
+export FUSIONPANEL_TEST_CURL_LOG="$TEST_DIR/logs/curl.log"
 export FUSIONPANEL_TEST_BACKUP_DIR="$TEST_DIR/backup"
 export FUSIONPANEL_TEST_CONFIG_DIR="$TEST_DIR/config"
 export FUSIONPANEL_TEST_BIN_DIR="$TEST_DIR/bin"
@@ -97,6 +100,7 @@ grep -Fxq 'FUSIONPANEL_NODE_TOKEN=remote-node-secret' "$TEST_DIR/config/fusionpa
 [[ "$(stat -c '%a' "$TEST_DIR/config/fusionpanel.env")" == '600' ]]
 grep -Fxq "root:root $TEST_DIR/config/fusionpanel.env" "$TEST_DIR/logs/chown.log"
 grep -Fxq "root:root $TEST_DIR/config/fusionpanel-agent.env" "$TEST_DIR/logs/chown.log"
+grep -Fxq -- '-sSLf http://127.0.0.1:9090/v1/health' "$TEST_DIR/logs/curl.log"
 
 sh "$ROOT_DIR/packaging/rollback.sh"
 [[ "$(readlink "$TEST_DIR/versions/current")" == '0.1.0' ]]
@@ -107,13 +111,34 @@ grep -Fxq 'FUSIONPANEL_FRONTEND_DIR=/old/ui' "$TEST_DIR/config/fusionpanel.env"
 grep -Fxq 'FUSIONPANEL_NODE_TOKEN=remote-node-secret' "$TEST_DIR/config/fusionpanel-agent.env"
 
 # Reinstalling the same version key must retain enough state for rollback too.
-sh "$ROOT_DIR/packaging/update.sh" 0.1.0
+: > "$TEST_DIR/logs/curl.log"
+FUSIONPANEL_HEALTH_URL=http://127.0.0.1:9191/v1/health \
+    sh "$ROOT_DIR/packaging/update.sh" 0.1.0
 [[ "$(readlink "$TEST_DIR/versions/current")" == '0.1.0' ]]
 [[ "$("$TEST_DIR/bin/fusionpanel-api")" == 'new-fusionpanel-api' ]]
 [[ "$(cat "$TEST_DIR/versions/current/bin/frontend/dist/index.html")" == '<html>new UI</html>' ]]
+grep -Fxq -- '-sSLf http://127.0.0.1:9191/v1/health' "$TEST_DIR/logs/curl.log"
 sh "$ROOT_DIR/packaging/rollback.sh"
 [[ "$(readlink "$TEST_DIR/versions/current")" == '0.1.0' ]]
 [[ "$("$TEST_DIR/bin/fusionpanel-api")" == 'old-fusionpanel-api' ]]
 [[ "$(cat "$TEST_DIR/versions/current/bin/frontend/dist/index.html")" == '<html>old UI</html>' ]]
+
+# Any deterministic error after stopping services must trigger one automatic rollback.
+: > "$TEST_DIR/logs/curl.log"
+: > "$TEST_DIR/logs/systemctl.log"
+set +e
+FUSIONPANEL_TEST_FAIL_AFTER_STOP=1 sh "$ROOT_DIR/packaging/update.sh" 0.2.0-test
+update_status=$?
+set -e
+if [[ "$update_status" -ne 73 ]]; then
+    echo "FAIL: expected synthetic post-stop failure status 73, got $update_status" >&2
+    exit 1
+fi
+[[ "$(readlink "$TEST_DIR/versions/current")" == '0.1.0' ]]
+[[ "$("$TEST_DIR/bin/fusionpanel-api")" == 'old-fusionpanel-api' ]]
+[[ "$(cat "$TEST_DIR/versions/current/bin/frontend/dist/index.html")" == '<html>old UI</html>' ]]
+[[ "$(cat "$TEST_DIR/state/.version")" == '0.1.0' ]]
+grep -Fxq 'FUSIONPANEL_LISTEN=127.0.0.1:9090' "$TEST_DIR/config/fusionpanel.env"
+[[ "$(grep -c '^start fusionpanel.service fusionpanel-agent.service$' "$TEST_DIR/logs/systemctl.log")" -eq 1 ]]
 
 echo 'Updater package-layout and rollback tests passed.'
