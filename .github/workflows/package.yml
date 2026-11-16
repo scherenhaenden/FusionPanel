@@ -4,6 +4,10 @@ on:
   pull_request:
     branches:
       - master
+    types:
+      - opened
+      - synchronize
+      - labeled
   push:
     tags:
       - '[0-9][0-9][0-9][0-9].*'
@@ -18,6 +22,12 @@ concurrency:
 
 jobs:
   package:
+    if: >-
+      github.event_name != 'pull_request' ||
+      (
+        contains(github.event.pull_request.labels.*.name, 'release-ready') &&
+        (github.event.action != 'labeled' || github.event.label.name == 'release-ready')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 45
     container: debian:bookworm
