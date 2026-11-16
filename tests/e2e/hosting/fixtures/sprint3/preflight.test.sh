@@ -237,16 +237,20 @@ if ! grep -Eq '^[[:space:]]+max-file: "([2-9]|[1-9][0-9]+)"$' \
   printf 'FAIL: Compose log rotation must retain at least two files for compressed Docker logs.\n' >&2
   exit 1
 fi
-if ! grep -Fq '/var/lib/nginx:rw,noexec,nosuid,nodev,size=16m,uid=0,gid=33,mode=2770' \
+if ! grep -Fq '/var/lib/nginx:rw,noexec,nosuid,nodev,size=16m,uid=33,gid=33,mode=2770' \
   "$fixture_dir/docker-compose.yml"; then
-  printf 'FAIL: the Nginx temp tmpfs must be owned by its root master and www-data group.\n' >&2
+  printf 'FAIL: the Nginx temp tmpfs must be owned by www-data and writable by group.\n' >&2
   exit 1
 fi
-if ! grep -Fq 'for temp_path in body fastcgi proxy scgi uwsgi; do' "$fixture_dir/start-node.sh" \
-  || ! grep -Fq 'chmod 0770 -- "$temp_dir"' "$fixture_dir/start-node.sh" \
-  || ! grep -Fq "test \"\$\$(stat -c '%u:%g:%a' /var/lib/nginx/body)\" = '0:33:770'" \
+if ! grep -A1 -F '    group_add:' "$fixture_dir/docker-compose.yml" | grep -Fq '      - "33"' \
+  || ! grep -Fq -- '--groups=33,2000' "$fixture_dir/start-node.sh" \
+  || ! grep -Fq -- '--reuid=33' "$fixture_dir/start-node.sh" \
+  || ! grep -Fq -- '--regid=33' "$fixture_dir/start-node.sh" \
+  || ! grep -Fq 'for temp_path in body fastcgi proxy scgi uwsgi; do' "$fixture_dir/start-node.sh" \
+  || ! grep -Fq 'chmod 2770 -- "$temp_dir"' "$fixture_dir/start-node.sh" \
+  || ! grep -Fq "test \"\$\$(stat -c '%u:%g:%a' /var/lib/nginx/body)\" = '33:33:2770'" \
     "$fixture_dir/docker-compose.yml"; then
-  printf 'FAIL: Nginx temp paths must be pre-created for the master and verified for the www-data worker.\n' >&2
+  printf 'FAIL: Nginx temp paths must be www-data-owned, writable to its workers, and excluded from the agent.\n' >&2
   exit 1
 fi
 printf 'PASS: Nginx temp paths are writable by the master and www-data workers, but not the agent.\n'
