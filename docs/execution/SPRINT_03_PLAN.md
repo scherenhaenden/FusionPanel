@@ -22,7 +22,7 @@ At Sprint 3 close:
 
 ## 2. Shared API and data contract
 
-The API task owns the request and response types and publishes them before the agent and UI tasks depend on them.
+The HTTP and agent payloads below are the shared contract for all three atomic tasks. The API implementation owns the backend request/response types; agent and UI implementations must match this contract without inventing parallel shapes.
 
 ### Create
 
@@ -57,6 +57,28 @@ The API returns `202 Accepted` with `{ "site": ..., "job": ... }`. A repeated id
 - `DELETE /v1/websites/:id` requires an idempotency key and returns `202 Accepted` with the deleting site and job.
 
 Each site record includes `id`, `domain`, `kind`, its kind-specific config, `state` (`provisioning`, `active`, `failed`, or `deleting`), `last_error`, `created_at`, and `updated_at`. The UI must display the server state; an enqueued job is not a successful site creation.
+
+### Agent operation envelope
+
+The API queues the existing version-1 `agent_operation` envelope with a typed operation and strict payload. `site.apply` carries `site_id`, `domain`, and a tagged `spec`:
+
+```json
+{
+  "version": 1,
+  "request_id": "<uuid>",
+  "operation": "site.apply",
+  "payload": {
+    "site_id": "<uuid>",
+    "domain": "app.local",
+    "spec": {
+      "kind": "static",
+      "document_root": "/srv/fusionpanel/sites/app.local"
+    }
+  }
+}
+```
+
+For a reverse proxy, `spec` is `{ "kind": "reverse_proxy", "upstream_url": "http://127.0.0.1:8080" }`. `site.delete` carries `{ "site_id": "<uuid>", "domain": "app.local" }`. Reject unknown fields and malformed operation shapes. The API marks a site active only after successful agent completion; a failed operation retains the site record and a safe error. A successful delete removes the site record after the agent confirms it removed the managed config.
 
 ### Input and ownership rules
 
