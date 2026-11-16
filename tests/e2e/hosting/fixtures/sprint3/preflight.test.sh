@@ -207,6 +207,11 @@ if ! grep -Fq 'FUSIONPANEL_S3_API_BUILD_CONTEXT' "$fixture_dir/docker-compose.ym
   printf 'FAIL: Compose does not use staged narrow image build contexts.\n' >&2
   exit 1
 fi
+if ! grep -Eq '^[[:space:]]+max-file: "([2-9]|[1-9][0-9]+)"$' \
+  "$fixture_dir/docker-compose.yml"; then
+  printf 'FAIL: Compose log rotation must retain at least two files for compressed Docker logs.\n' >&2
+  exit 1
+fi
 printf 'PASS: isolated BuildKit cache has a 512 MiB GC cap and no global prune.\n'
 
 if grep -Eq '^[[:space:]]*install -d.*[[:space:]](-o|--owner|-g|--group)([[:space:]=]|$)' \
