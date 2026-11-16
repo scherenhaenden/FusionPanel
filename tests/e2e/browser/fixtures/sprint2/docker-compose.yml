@@ -1,0 +1,67 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: "${FUSIONPANEL_E2E_IMAGE:?set unique fixture image}"
+    network_mode: host
+    user: "${FUSIONPANEL_E2E_UID:?set fixture UID}:${FUSIONPANEL_E2E_GID:?set fixture GID}"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      FUSIONPANEL_ADMIN_TOKEN: "${FUSIONPANEL_E2E_ADMIN_TOKEN:?set ephemeral admin token}"
+      FUSIONPANEL_DATABASE_URL: /state/fusionpanel.db
+      FUSIONPANEL_E2E_USERNAME: "${FUSIONPANEL_E2E_USERNAME:-e2e-admin}"
+      FUSIONPANEL_E2E_PASSWORD: "${FUSIONPANEL_E2E_PASSWORD:?set synthetic fixture password}"
+      FUSIONPANEL_FRONTEND_DIR: /app/frontend
+      FUSIONPANEL_LISTEN: "127.0.0.1:${FUSIONPANEL_E2E_PORT:?set fixture port}"
+    volumes:
+      - "${FUSIONPANEL_E2E_REPO_ROOT:?set repository root}/target/debug/fusionpanel-api:/usr/local/bin/fusionpanel-api:ro"
+      - "${FUSIONPANEL_E2E_REPO_ROOT}/target/debug/fusionpanel-cli:/usr/local/bin/fusionpanel-cli:ro"
+      - "${FUSIONPANEL_E2E_REPO_ROOT}/frontend/dist:/app/frontend:ro"
+      - "${FUSIONPANEL_E2E_STATE_DIR:?set temporary state directory}:/state"
+    healthcheck:
+      test:
+        - CMD
+        - /usr/local/bin/fusionpanel-cli
+        - --server
+        - "http://127.0.0.1:${FUSIONPANEL_E2E_PORT}"
+        - health
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: "${FUSIONPANEL_E2E_IMAGE:?set unique fixture image}"
+    network_mode: host
+    user: "${FUSIONPANEL_E2E_UID}:${FUSIONPANEL_E2E_GID}"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      api:
+        condition: service_healthy
+    entrypoint:
+      - /usr/local/bin/fusionpanel-agent
+    environment:
+      FUSIONPANEL_AGENT_MODE: http
+      FUSIONPANEL_API_URL: "http://127.0.0.1:${FUSIONPANEL_E2E_PORT}"
+      FUSIONPANEL_ADMIN_TOKEN: "${FUSIONPANEL_E2E_ADMIN_TOKEN}"
+      FUSIONPANEL_NODE_NAME: sprint2-disposable-agent
+    volumes:
+      - "${FUSIONPANEL_E2E_REPO_ROOT}/target/debug/fusionpanel-agent:/usr/local/bin/fusionpanel-agent:ro"

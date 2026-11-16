@@ -23,6 +23,14 @@ pub struct ResourceRecord {
     pub observed_state: Option<serde_json::Value>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeRecord {
+    pub node_id: Uuid,
+    pub name: String,
+    pub created_at: String,
+    pub last_heartbeat: String,
+}
+
 #[derive(Debug, Error)]
 pub enum StoreError {
     #[error("Database error: {0}")]
@@ -82,8 +90,110 @@ impl ControlStore {
             tx.pragma_update(None, "user_version", 1)?;
         }
 
+        if user_version < 2 {
+            tx.execute(
+                r#"
+                CREATE TABLE nodes (
+                    node_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    token_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    last_heartbeat TEXT NOT NULL
+                );
+                CREATE INDEX idx_nodes_name ON nodes (name);
+                "#,
+                [],
+            )?;
+            tx.pragma_update(None, "user_version", 2)?;
+        }
+
         tx.commit()?;
         Ok(())
+    }
+
+    pub fn register_node(
+        &mut self,
+        proposed_node_id: Uuid,
+        name: &str,
+        token_hash: &str,
+        now: &str,
+    ) -> Result<Uuid, StoreError> {
+        // Serialize lookup and insert/update so concurrent API instances using
+        // the same SQLite database cannot create duplicate rows for one name.
+        let tx = self
+            .conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let existing_id = tx
+            .query_row(
+                "SELECT node_id FROM nodes WHERE name = ?1 ORDER BY created_at, node_id LIMIT 1",
+                [name],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+
+        if let Some(existing_id) = existing_id {
+            let existing_id = Uuid::parse_str(&existing_id)
+                .map_err(|error| StoreError::Parse(error.to_string()))?;
+            tx.execute(
+                "UPDATE nodes SET token_hash = ?1, last_heartbeat = ?2 WHERE node_id = ?3",
+                params![token_hash, now, existing_id.to_string()],
+            )?;
+            tx.commit()?;
+            return Ok(existing_id);
+        }
+
+        tx.execute(
+            "INSERT INTO nodes (node_id, name, token_hash, created_at, last_heartbeat) VALUES (?1, ?2, ?3, ?4, ?4)",
+            params![proposed_node_id.to_string(), name, token_hash, now],
+        )?;
+        tx.commit()?;
+        Ok(proposed_node_id)
+    }
+
+    pub fn list_nodes(&self) -> Result<Vec<NodeRecord>, StoreError> {
+        let mut statement = self.conn.prepare(
+            "SELECT node_id, name, created_at, last_heartbeat FROM nodes ORDER BY created_at, node_id",
+        )?;
+        let rows = statement.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?;
+
+        let mut nodes = Vec::new();
+        for row in rows {
+            let (id, name, created_at, last_heartbeat) = row?;
+            nodes.push(NodeRecord {
+                node_id: Uuid::parse_str(&id)
+                    .map_err(|error| StoreError::Parse(error.to_string()))?,
+                name,
+                created_at,
+                last_heartbeat,
+            });
+        }
+        Ok(nodes)
+    }
+
+    pub fn node_token_hash(&self, node_id: Uuid) -> Result<Option<String>, StoreError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT token_hash FROM nodes WHERE node_id = ?1",
+                [node_id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+
+    pub fn touch_node(&mut self, node_id: Uuid, now: &str) -> Result<bool, StoreError> {
+        let changed = self.conn.execute(
+            "UPDATE nodes SET last_heartbeat = ?1 WHERE node_id = ?2",
+            params![now, node_id.to_string()],
+        )?;
+        Ok(changed == 1)
     }
 
     pub fn create_resource(
@@ -616,7 +726,7 @@ mod tests {
             let user_version: u32 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(user_version, 1);
+            assert_eq!(user_version, 2);
         }
     }
 
@@ -666,5 +776,66 @@ mod tests {
         // Tenant A deletes successfully
         store.delete_tenant_resource(tenant_a, resource_id).unwrap();
         assert!(store.get_tenant_resource(tenant_a, resource_id).is_err());
+    }
+
+    #[test]
+    fn test_node_registration_and_heartbeat_persist_without_listing_token_hash() {
+        let temp_dir = TempDir::new();
+        let db_path = temp_dir.path().join("nodes.db");
+        let node_id = Uuid::new_v4();
+        {
+            let mut store = ControlStore::new(&db_path).unwrap();
+            assert_eq!(
+                store
+                    .register_node(node_id, "worker-1", "stored-hash", "2026-11-15T12:00:00Z")
+                    .unwrap(),
+                node_id
+            );
+            assert_eq!(
+                store.node_token_hash(node_id).unwrap().as_deref(),
+                Some("stored-hash")
+            );
+            assert!(store.touch_node(node_id, "2026-11-15T12:00:02Z").unwrap());
+        }
+        let store = ControlStore::new(&db_path).unwrap();
+        let nodes = store.list_nodes().unwrap();
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].node_id, node_id);
+        assert_eq!(nodes[0].last_heartbeat, "2026-11-15T12:00:02Z");
+    }
+
+    #[test]
+    fn test_node_reregistration_keeps_identity_and_rotates_token_hash() {
+        let mut store = ControlStore::new_in_memory().unwrap();
+        let original_id = Uuid::new_v4();
+        let proposed_id = Uuid::new_v4();
+
+        assert_eq!(
+            store
+                .register_node(
+                    original_id,
+                    "worker-1",
+                    "first-hash",
+                    "2026-11-15T12:00:00Z"
+                )
+                .unwrap(),
+            original_id
+        );
+        assert_eq!(
+            store
+                .register_node(
+                    proposed_id,
+                    "worker-1",
+                    "second-hash",
+                    "2026-11-15T12:01:00Z"
+                )
+                .unwrap(),
+            original_id
+        );
+        assert_eq!(
+            store.node_token_hash(original_id).unwrap().as_deref(),
+            Some("second-hash")
+        );
+        assert_eq!(store.list_nodes().unwrap().len(), 1);
     }
 }

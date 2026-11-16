@@ -102,8 +102,155 @@ setup_users() {
     fi
 }
 
+normalize_node_name() {
+    local node_name
+    node_name=$(printf '%s' "$1" | LC_ALL=C tr -c 'A-Za-z0-9._-' '-')
+    node_name=$(printf '%s' "$node_name" | sed 's/^[.-]*//; s/[.-]*$//')
+    if [ -z "$node_name" ]; then
+        node_name="fusionpanel-node"
+    fi
+    printf '%s' "$node_name"
+}
+
+write_runtime_env_files() {
+    local config_dir="$1"
+    local port="$2"
+    local admin_token="$3"
+    local node_name
+    local frontend_dir="${5:-/usr/local/lib/fusionpanel/versions/current/bin/frontend/dist}"
+    node_name=$(normalize_node_name "$4")
+
+    mkdir -p "$config_dir"
+    if ! chmod 0700 "$config_dir"; then
+        echo "Error: Could not restrict permissions on staged FusionPanel configuration." >&2
+        return 1
+    fi
+    printf 'FUSIONPANEL_LISTEN=127.0.0.1:%s\n' "$port" > "$config_dir/fusionpanel.env"
+    printf 'FUSIONPANEL_DATABASE_URL=/var/lib/fusionpanel/fusionpanel.db\n' >> "$config_dir/fusionpanel.env"
+    printf 'FUSIONPANEL_ADMIN_TOKEN=%s\n' "$admin_token" >> "$config_dir/fusionpanel.env"
+    printf 'FUSIONPANEL_FRONTEND_DIR=%s\n' "$frontend_dir" >> "$config_dir/fusionpanel.env"
+
+    printf 'FUSIONPANEL_AGENT_MODE=http\n' > "$config_dir/fusionpanel-agent.env"
+    printf 'FUSIONPANEL_API_URL=http://127.0.0.1:%s\n' "$port" >> "$config_dir/fusionpanel-agent.env"
+    printf 'FUSIONPANEL_ADMIN_TOKEN=%s\n' "$admin_token" >> "$config_dir/fusionpanel-agent.env"
+    printf 'FUSIONPANEL_NODE_NAME=%s\n' "$node_name" >> "$config_dir/fusionpanel-agent.env"
+
+    if ! chmod 0600 "$config_dir/fusionpanel.env" "$config_dir/fusionpanel-agent.env"; then
+        echo "Error: Could not restrict permissions on staged FusionPanel environment files." >&2
+        return 1
+    fi
+}
+
+preserve_agent_env_file() {
+    local existing_env="$1"
+    local staged_env="$2"
+
+    if [ -L "$existing_env" ]; then
+        echo "Error: Refusing to preserve a symlinked agent environment file." >&2
+        return 1
+    fi
+    if [ ! -e "$existing_env" ]; then
+        return 0
+    fi
+    if [ ! -f "$existing_env" ]; then
+        echo "Error: Existing agent environment is not a regular file." >&2
+        return 1
+    fi
+    if fusionpanel_is_legacy_local_agent_env "$existing_env"; then
+        if [ "$#" -lt 4 ]; then
+            echo "Error: Legacy local agent configuration requires both existing and staged API configuration." >&2
+            return 1
+        fi
+        if ! fusionpanel_migrate_legacy_local_agent_env \
+            "$existing_env" "$3" "$4" "$staged_env"; then
+            return 1
+        fi
+    else
+        if ! cp "$existing_env" "$staged_env"; then
+            echo "Error: Could not preserve the existing agent environment file." >&2
+            return 1
+        fi
+    fi
+    if ! chown root:root "$staged_env"; then
+        echo "Error: Could not make the staged agent environment root-owned." >&2
+        return 1
+    fi
+    if ! chmod 0600 "$staged_env"; then
+        echo "Error: Could not restrict access to the staged agent environment." >&2
+        return 1
+    fi
+}
+
+secure_versioned_env_files() {
+    local versions_dir="$1"
+    local version_dir config_dir env_file
+
+    [ -d "$versions_dir" ] || return 0
+
+    for version_dir in "$versions_dir"/*; do
+        [ -d "$version_dir" ] || continue
+        [ ! -L "$version_dir" ] || continue
+
+        config_dir="$version_dir/config"
+        [ -d "$config_dir" ] || continue
+        [ ! -L "$config_dir" ] || continue
+
+        if ! chown root:root "$config_dir"; then
+            echo "Error: Could not make versioned configuration directory root-owned: $config_dir." >&2
+            return 1
+        fi
+        if ! chmod 0700 "$config_dir"; then
+            echo "Error: Could not restrict permissions on versioned configuration directory $config_dir." >&2
+            return 1
+        fi
+
+        for env_file in "$config_dir/fusionpanel.env" "$config_dir/fusionpanel-agent.env"; do
+            [ -f "$env_file" ] || continue
+            [ ! -L "$env_file" ] || continue
+
+            if ! chown root:root "$env_file"; then
+                echo "Error: Could not make versioned environment file root-owned: $env_file." >&2
+                return 1
+            fi
+            if ! chmod 0600 "$env_file"; then
+                echo "Error: Could not secure versioned environment file $env_file." >&2
+                return 1
+            fi
+        done
+    done
+}
+
+secure_active_env_files() {
+    local config_dir="$1"
+
+    if ! chown root:root "$config_dir/fusionpanel.env"; then
+        echo "Error: Could not restrict ownership of the API environment file." >&2
+        return 1
+    fi
+    if ! chmod 0600 "$config_dir/fusionpanel.env"; then
+        echo "Error: Could not restrict access to the API environment file." >&2
+        return 1
+    fi
+    if ! chown root:root "$config_dir/fusionpanel-agent.env"; then
+        echo "Error: Could not restrict ownership of the agent environment file." >&2
+        return 1
+    fi
+    if ! chmod 0600 "$config_dir/fusionpanel-agent.env"; then
+        echo "Error: Could not restrict access to the agent environment file." >&2
+        return 1
+    fi
+}
+
 install() {
     echo "Installing FusionPanel $VERSION (Port: $PORT) on $OS ($ARCH)"
+
+    local source_dir
+    source_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+    if [ ! -f "$source_dir/layout.sh" ] && [ -f "$source_dir/../layout.sh" ]; then
+        source_dir=$(CDPATH= cd -- "$source_dir/.." && pwd)
+    fi
+    # shellcheck source=packaging/layout.sh
+    . "$source_dir/layout.sh"
 
     if [ "$DRY_RUN" -eq 1 ]; then
         echo "[Dry-run] Would download and install FusionPanel $VERSION"
@@ -113,11 +260,19 @@ install() {
     fi
 
     local version_file="/var/lib/fusionpanel/.version"
+    local versions_dir="${FUSIONPANEL_VERSION_LIB_DIR:-/usr/local/lib/fusionpanel/versions}"
+    local install_dir="${versions_dir}/${VERSION}"
+    local bin_dir="${FUSIONPANEL_BIN_DIR:-/usr/local/bin}"
 
-    if [ -f "/usr/local/bin/fusionpanel-api" ]; then
+    # Harden existing copies even when the requested version is already installed.
+    secure_versioned_env_files "$versions_dir"
+
+    if [ -f "$bin_dir/fusionpanel-api" ]; then
         if [ -f "$version_file" ]; then
             INSTALLED_VERSION=$(cat "$version_file")
-            if [ "$INSTALLED_VERSION" = "$VERSION" ]; then
+            if [ "$INSTALLED_VERSION" = "$VERSION" ] \
+                && [ -x "$versions_dir/current/bin/fusionpanel-cli" ] \
+                && [ -f "$versions_dir/current/bin/frontend/dist/index.html" ]; then
                 echo "FusionPanel is already installed with version $VERSION."
                 echo "Idempotency guard triggered: skipping installation."
                 return 0
@@ -165,12 +320,11 @@ install() {
 
     rm -f "$TMP_DIR/fusionpanel.tar.gz"
 
-    if [ ! -f "$TMP_DIR/bin/fusionpanel-api" ] || [ ! -f "$TMP_DIR/bin/fusionpanel-agent" ]; then
-        echo "Error: Required binaries (fusionpanel-api, fusionpanel-agent) not found in archive" >&2
+    if ! fusionpanel_validate_payload "$TMP_DIR/bin"; then
         exit 1
     fi
 
-    chmod 755 "$TMP_DIR/bin/fusionpanel-api" "$TMP_DIR/bin/fusionpanel-agent"
+    chmod 755 "$TMP_DIR/bin/fusionpanel-api" "$TMP_DIR/bin/fusionpanel-agent" "$TMP_DIR/bin/fusionpanel-cli"
     echo "$VERSION" > "$TMP_DIR/.version"
 
     # Create configuration environment file with securely generated admin token if not exists
@@ -195,28 +349,28 @@ install() {
          chmod 0600 "$sysconfdir/initial-credentials.txt"
     fi
 
-    echo "FUSIONPANEL_LISTEN=127.0.0.1:$PORT" > "$TMP_DIR/config/fusionpanel.env"
-    echo "FUSIONPANEL_ADMIN_TOKEN=$admin_token" >> "$TMP_DIR/config/fusionpanel.env"
-
-    echo "FUSIONPANEL_AGENT_ENDPOINT=http://127.0.0.1:$PORT" > "$TMP_DIR/config/fusionpanel-agent.env"
+    local node_name
+    node_name=$(normalize_node_name "$(uname -n 2>/dev/null || true)")
+    write_runtime_env_files "$TMP_DIR/config" "$PORT" "$admin_token" "$node_name" \
+        "$versions_dir/current/bin/frontend/dist"
+    preserve_agent_env_file "$sysconfdir/fusionpanel-agent.env" "$TMP_DIR/config/fusionpanel-agent.env" \
+        "$sysconfdir/fusionpanel.env" "$TMP_DIR/config/fusionpanel.env"
 
     # Atomic move logic: copy to temporary path in final destination, then rename to ensure no incomplete installs.
-    local versions_dir="/usr/local/lib/fusionpanel/versions"
-    local install_dir="${versions_dir}/${VERSION}"
     mkdir -p "$versions_dir"
 
-    if [ -d "$install_dir" ]; then
-        rm -rf "$install_dir"
-    fi
+    # Older releases also contain environment-file copies. Secure them before staging opens up its parent directory.
+    secure_versioned_env_files "$versions_dir"
 
     chmod 755 "$TMP_DIR"
-    cp -a "$TMP_DIR" "${install_dir}.tmp"
-    mv "${install_dir}.tmp" "$install_dir"
+    fusionpanel_publish_version_dir "$TMP_DIR" "$install_dir"
+
+    # Keep the new versioned copies root-only as well; the active copies are installed under /etc below.
+    secure_versioned_env_files "$versions_dir"
 
     # Now set up symlinks for binaries
-    mkdir -p /usr/local/bin
-    ln -sfn "$install_dir/bin/fusionpanel-api" "/usr/local/bin/fusionpanel-api"
-    ln -sfn "$install_dir/bin/fusionpanel-agent" "/usr/local/bin/fusionpanel-agent"
+    fusionpanel_switch_current "$versions_dir" "$VERSION"
+    fusionpanel_link_runtime_binaries "$bin_dir" "$versions_dir"
 
     cp "$install_dir/config/fusionpanel.env" "$sysconfdir/"
     cp "$install_dir/config/fusionpanel-agent.env" "$sysconfdir/"
@@ -231,8 +385,7 @@ install() {
     chown -R fusionpanel:fusionpanel /var/lib/fusionpanel /var/log/fusionpanel || echo "Warning: chown failed, running as non-root?"
     chmod 700 /var/lib/fusionpanel /var/log/fusionpanel
 
-    chown root:fusionpanel "$sysconfdir/fusionpanel.env" "$sysconfdir/fusionpanel-agent.env" || true
-    chmod 640 "$sysconfdir/fusionpanel.env" "$sysconfdir/fusionpanel-agent.env"
+    secure_active_env_files "$sysconfdir"
 
     # Install systemd services
     local systemd_dir="/etc/systemd/system"
@@ -240,7 +393,6 @@ install() {
         systemd_dir="$FUSIONPANEL_SYSTEMD_DIR"
     fi
 
-    local source_dir="$(cd "$(dirname "$0")" && pwd)"
     mkdir -p "$systemd_dir"
 
     if [ -f "$source_dir/systemd/fusionpanel.service" ]; then
