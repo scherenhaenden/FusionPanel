@@ -27,7 +27,7 @@ impl AgentClient for MockAgentClient {
             Ok(Response {
                 version: 1,
                 request_id: request.request_id,
-                result: ResponseResult::Error(fusionpanel_agent_protocol::ErrorObject {
+                result: ResponseResult::Error(fusionpanel_agent_protocol::ResponseError {
                     code: "test_error".to_string(),
                     message: "Intentional failure".to_string(),
                 }),
