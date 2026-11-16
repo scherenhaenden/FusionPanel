@@ -8,7 +8,8 @@ use std::fs;
 use std::process::Stdio;
 use std::time::Duration;
 use tempfile::NamedTempFile;
-use tokio::time::sleep;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::time::timeout;
 
 #[tokio::test]
 async fn test_agent_protocol_integration() {
@@ -63,29 +64,50 @@ async fn test_agent_files_real_ops() {
 
 #[tokio::test]
 async fn test_agent_child_process_integration() {
-    let mut cmd = tokio::process::Command::new("cargo");
-    cmd.arg("run")
-        .arg("--bin")
-        .arg("fusionpanel-agent")
-        .env("FUSIONPANEL_AGENT_MODE", "legacy-ws")
+    let mut cmd = tokio::process::Command::new(env!("CARGO_BIN_EXE_fusionpanel-agent"));
+    cmd.env("FUSIONPANEL_AGENT_MODE", "legacy-ws")
         .env("FUSIONPANEL_AGENT_URL", "ws://127.0.0.1:0") // Port 0 to intentionally fail connection quickly, testing reconnect backoff
         .env("FUSIONPANEL_AGENT_HEARTBEAT_URL", "ws://127.0.0.1:0")
         .env("FUSIONPANEL_AGENT_SECRET", "test-secret")
-        .stdout(Stdio::piped())
+        .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
 
     let mut child = cmd.spawn().expect("failed to start agent process");
+    let stderr = child.stderr.take().expect("agent stderr should be piped");
+    let mut stderr = BufReader::new(stderr);
+    let mut stderr_output = String::new();
 
-    sleep(Duration::from_millis(1500)).await;
+    let event = timeout(Duration::from_secs(10), async {
+        let mut line = String::new();
+        loop {
+            line.clear();
+            let bytes = stderr.read_line(&mut line).await?;
+            if bytes == 0 {
+                return Ok::<bool, std::io::Error>(false);
+            }
+            stderr_output.push_str(&line);
+            if line.contains("Legacy WebSocket request failed") {
+                return Ok(true);
+            }
+        }
+    })
+    .await;
 
-    child.kill().await.expect("failed to kill agent");
-    let output = child.wait_with_output().await.expect("failed to wait");
+    let kill_result = child.kill().await;
+    let wait_result = timeout(Duration::from_secs(2), child.wait()).await;
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("Legacy WebSocket request failed"),
-        "Agent should attempt to connect and log an error"
+        matches!(event, Ok(Ok(true))),
+        "Agent should attempt to connect and log an error within 10 seconds; observed stderr: {stderr_output:?}"
+    );
+    assert!(
+        kill_result.is_ok(),
+        "Agent process should be stopped after observing the connection error"
+    );
+    assert!(
+        matches!(wait_result, Ok(Ok(_))),
+        "Agent process should exit after cleanup"
     );
 }
 
