@@ -42,6 +42,14 @@ export const SiteDetail: React.FC<SiteDetailProps> = ({ site, onClose }) => (
         <dt className="text-sm font-medium text-gray-600 dark:text-gray-300">State</dt>
         <dd className="mt-1 text-gray-900 dark:text-white">{stateLabels[site.state]}</dd>
       </div>
+      <div>
+        <dt className="text-sm font-medium text-gray-600 dark:text-gray-300">TLS / SSL</dt>
+        <dd className="mt-1 text-gray-900 dark:text-white">Deferred to Sprint 4</dd>
+      </div>
+      <div>
+        <dt className="text-sm font-medium text-gray-600 dark:text-gray-300">PHP-FPM</dt>
+        <dd className="mt-1 text-gray-900 dark:text-white">Deferred</dd>
+      </div>
       {site.kind === 'static' ? (
         <div>
           <dt className="text-sm font-medium text-gray-600 dark:text-gray-300">Document root</dt>

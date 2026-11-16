@@ -30,6 +30,8 @@ export const SiteList: React.FC<SiteListProps> = ({ sites, pendingSiteIds, onSel
             <th scope="col" className="px-4 py-3 text-left text-sm font-semibold">Domain</th>
             <th scope="col" className="px-4 py-3 text-left text-sm font-semibold">Type</th>
             <th scope="col" className="px-4 py-3 text-left text-sm font-semibold">Configuration</th>
+            <th scope="col" className="px-4 py-3 text-left text-sm font-semibold">TLS / SSL</th>
+            <th scope="col" className="px-4 py-3 text-left text-sm font-semibold">PHP-FPM</th>
             <th scope="col" className="px-4 py-3 text-left text-sm font-semibold">State</th>
             <th scope="col" className="px-4 py-3 text-left text-sm font-semibold">Actions</th>
           </tr>
@@ -49,6 +51,8 @@ export const SiteList: React.FC<SiteListProps> = ({ sites, pendingSiteIds, onSel
                   {site.kind === 'static' ? 'Static' : 'Reverse proxy'}
                 </td>
                 <td className="max-w-sm break-all px-4 py-4 text-sm text-gray-700 dark:text-gray-200">{configuration}</td>
+                <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">Deferred to Sprint 4</td>
+                <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">Deferred</td>
                 <td className="px-4 py-4 text-sm">
                   <span
                     role="status"

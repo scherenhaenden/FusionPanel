@@ -184,6 +184,23 @@ export const CreateSiteModal: React.FC<CreateSiteModalProps> = ({
             </label>
           </fieldset>
 
+          <div className="rounded border border-gray-200 px-3 py-2 dark:border-gray-700">
+            <label htmlFor="website-php-deferred" className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+              <input
+                id="website-php-deferred"
+                type="checkbox"
+                checked={false}
+                disabled
+                aria-describedby="website-php-deferred-help"
+              />
+              PHP-FPM site
+              <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300">Deferred</span>
+            </label>
+            <p id="website-php-deferred-help" className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+              PHP provisioning is unavailable in this sprint. This form will not submit PHP site work.
+            </p>
+          </div>
+
           {kind === 'static' ? (
             <div>
               <label htmlFor="website-document-root" className="mb-1 block text-sm font-medium text-gray-800 dark:text-gray-100">Document root</label>

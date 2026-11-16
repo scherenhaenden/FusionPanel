@@ -86,6 +86,8 @@ describe('Websites API and view', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create website' }));
 
     const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('checkbox', { name: /PHP-FPM site Deferred/ })).toBeDisabled();
+    expect(within(dialog).getByText(/PHP provisioning is unavailable in this sprint/i)).toBeInTheDocument();
     fireEvent.change(within(dialog).getByLabelText('Domain name'), { target: { value: 'App.Local' } });
     expect(within(dialog).getByLabelText('Document root')).toHaveValue('/srv/fusionpanel/sites/app.local');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create website' }));
@@ -94,6 +96,10 @@ describe('Websites API and view', () => {
     expect(await screen.findByText('Provisioning')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument(), { timeout: 6500 });
     expect(screen.getByText('app.local is active.')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'TLS / SSL' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'PHP-FPM' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Deferred to Sprint 4' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Deferred' })).toBeInTheDocument();
     expect(JSON.parse(mock.history.post[0].data)).toEqual({
       domain: 'app.local',
       kind: 'static',
@@ -163,6 +169,8 @@ describe('Websites API and view', () => {
 
     expect(await screen.findByRole('heading', { name: 'app.local' })).toBeInTheDocument();
     expect(screen.getByText('/srv/fusionpanel/sites/app.local')).toBeInTheDocument();
+    expect(screen.getByText('Deferred to Sprint 4')).toBeInTheDocument();
+    expect(screen.getByText('Deferred')).toBeInTheDocument();
     expect(mock.history.get.some((request) => request.url === '/v1/websites/site-1')).toBe(true);
   });
 
