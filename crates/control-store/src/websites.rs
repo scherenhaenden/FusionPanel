@@ -51,6 +51,7 @@ impl FromStr for WebsiteState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WebsiteRecord {
     pub id: Uuid,
+    pub tenant_id: Uuid,
     pub domain: String,
     #[serde(flatten)]
     pub spec: WebsiteSpec,
@@ -95,6 +96,7 @@ struct RawWebsite {
     updated_at: String,
     request_id: String,
     job_id: Option<String>,
+    tenant_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +117,7 @@ fn raw_website(row: &rusqlite::Row<'_>) -> rusqlite::Result<RawWebsite> {
         updated_at: row.get(6)?,
         request_id: row.get(7)?,
         job_id: row.get(8)?,
+        tenant_id: row.get(9)?,
     })
 }
 
@@ -133,6 +136,8 @@ fn decode_stored_website(raw: RawWebsite) -> Result<StoredWebsiteSnapshot, Store
 fn decode_website(raw: RawWebsite) -> Result<WebsiteRecord, StoreError> {
     Ok(WebsiteRecord {
         id: Uuid::parse_str(&raw.id).map_err(|error| StoreError::Parse(error.to_string()))?,
+        tenant_id: Uuid::parse_str(&raw.tenant_id)
+            .map_err(|error| StoreError::Parse(error.to_string()))?,
         domain: raw.domain,
         spec: serde_json::from_str(&raw.spec)?,
         state: raw.state.parse()?,
@@ -145,8 +150,23 @@ fn decode_website(raw: RawWebsite) -> Result<WebsiteRecord, StoreError> {
 fn get_by_id(conn: &Connection, site_id: Uuid) -> Result<Option<WebsiteRecord>, StoreError> {
     let raw = conn
         .query_row(
-            "SELECT site_id, domain, spec, state, last_error, created_at, updated_at, operation_request_id, job_id FROM websites WHERE site_id = ?1",
+            "SELECT site_id, domain, spec, state, last_error, created_at, updated_at, operation_request_id, job_id, tenant_id FROM websites WHERE site_id = ?1",
             [site_id.to_string()],
+            raw_website,
+        )
+        .optional()?;
+    raw.map(decode_website).transpose()
+}
+
+fn get_by_id_for_tenant(
+    conn: &Connection,
+    site_id: Uuid,
+    tenant_id: Uuid,
+) -> Result<Option<WebsiteRecord>, StoreError> {
+    let raw = conn
+        .query_row(
+            "SELECT site_id, domain, spec, state, last_error, created_at, updated_at, operation_request_id, job_id, tenant_id FROM websites WHERE site_id = ?1 AND tenant_id = ?2",
+            params![site_id.to_string(), tenant_id.to_string()],
             raw_website,
         )
         .optional()?;
@@ -159,7 +179,7 @@ fn get_stored_by_domain(
 ) -> Result<Option<StoredWebsiteSnapshot>, StoreError> {
     let raw = conn
         .query_row(
-            "SELECT site_id, domain, spec, state, last_error, created_at, updated_at, operation_request_id, job_id FROM websites WHERE domain = ?1 COLLATE NOCASE",
+            "SELECT site_id, domain, spec, state, last_error, created_at, updated_at, operation_request_id, job_id, tenant_id FROM websites WHERE domain = ?1 COLLATE NOCASE",
             [domain],
             raw_website,
         )
@@ -173,7 +193,7 @@ fn get_stored_by_id(
 ) -> Result<Option<StoredWebsiteSnapshot>, StoreError> {
     let raw = conn
         .query_row(
-            "SELECT site_id, domain, spec, state, last_error, created_at, updated_at, operation_request_id, job_id FROM websites WHERE site_id = ?1",
+            "SELECT site_id, domain, spec, state, last_error, created_at, updated_at, operation_request_id, job_id, tenant_id FROM websites WHERE site_id = ?1",
             [site_id.to_string()],
             raw_website,
         )
@@ -255,6 +275,7 @@ impl ControlStore {
         &mut self,
         idempotency_key: &str,
         fingerprint: &Value,
+        tenant_id: Uuid,
         proposed_site_id: Uuid,
         proposed_request_id: Uuid,
         domain: &str,
@@ -265,7 +286,10 @@ impl ControlStore {
         if key.is_empty() || key.len() > 255 {
             return Err(StoreError::IdempotencyConflict);
         }
-        let fingerprint = serde_json::to_string(fingerprint)?;
+        let fingerprint = serde_json::to_string(&serde_json::json!({
+            "tenant_id": tenant_id,
+            "request": fingerprint,
+        }))?;
         let tx = self
             .conn
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
@@ -278,7 +302,10 @@ impl ControlStore {
 
         let (site, previous_site) = if let Some(previous) = get_stored_by_domain(&tx, domain)? {
             let mut existing = previous.record.clone();
-            if existing.state != WebsiteState::Failed || existing.spec != spec {
+            if existing.tenant_id != tenant_id
+                || existing.state != WebsiteState::Failed
+                || existing.spec != spec
+            {
                 return Err(StoreError::WebsiteConflict);
             }
             existing.state = WebsiteState::Provisioning;
@@ -297,6 +324,7 @@ impl ControlStore {
         } else {
             let site = WebsiteRecord {
                 id: proposed_site_id,
+                tenant_id,
                 domain: domain.to_string(),
                 spec,
                 state: WebsiteState::Provisioning,
@@ -306,7 +334,7 @@ impl ControlStore {
             };
             let spec_json = serde_json::to_string(&site.spec)?;
             tx.execute(
-                "INSERT INTO websites (site_id, domain, spec, state, last_error, created_at, updated_at, operation_request_id, job_id) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?5, ?6, NULL)",
+                "INSERT INTO websites (site_id, domain, spec, state, last_error, created_at, updated_at, operation_request_id, job_id, tenant_id) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?5, ?6, NULL, ?7)",
                 params![
                     site.id.to_string(),
                     site.domain,
@@ -314,6 +342,7 @@ impl ControlStore {
                     site.state.as_str(),
                     now,
                     proposed_request_id.to_string(),
+                    tenant_id.to_string(),
                 ],
             )?;
             (site, None)
@@ -337,6 +366,7 @@ impl ControlStore {
         &mut self,
         idempotency_key: &str,
         fingerprint: &Value,
+        tenant_id: Uuid,
         site_id: Uuid,
         request_id: Uuid,
         now: &str,
@@ -345,7 +375,10 @@ impl ControlStore {
         if key.is_empty() || key.len() > 255 {
             return Err(StoreError::IdempotencyConflict);
         }
-        let fingerprint = serde_json::to_string(fingerprint)?;
+        let fingerprint = serde_json::to_string(&serde_json::json!({
+            "tenant_id": tenant_id,
+            "request": fingerprint,
+        }))?;
         let tx = self
             .conn
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
@@ -358,6 +391,9 @@ impl ControlStore {
 
         let previous_site =
             get_stored_by_id(&tx, site_id)?.ok_or(StoreError::WebsiteNotFound(site_id))?;
+        if previous_site.record.tenant_id != tenant_id {
+            return Err(StoreError::WebsiteNotFound(site_id));
+        }
         let mut site = previous_site.record.clone();
         if site.state == WebsiteState::Provisioning {
             return Err(StoreError::WebsiteOperationInProgress);
@@ -552,11 +588,31 @@ impl ControlStore {
         get_by_id(&self.conn, site_id)?.ok_or(StoreError::WebsiteNotFound(site_id))
     }
 
+    pub fn get_website_for_tenant(
+        &self,
+        site_id: Uuid,
+        tenant_id: Uuid,
+    ) -> Result<WebsiteRecord, StoreError> {
+        get_by_id_for_tenant(&self.conn, site_id, tenant_id)?
+            .ok_or(StoreError::WebsiteNotFound(site_id))
+    }
+
     pub fn list_websites(&self) -> Result<Vec<WebsiteRecord>, StoreError> {
         let mut statement = self.conn.prepare(
-            "SELECT site_id, domain, spec, state, last_error, created_at, updated_at, operation_request_id, job_id FROM websites ORDER BY domain COLLATE NOCASE, site_id",
+            "SELECT site_id, domain, spec, state, last_error, created_at, updated_at, operation_request_id, job_id, tenant_id FROM websites ORDER BY domain COLLATE NOCASE, site_id",
         )?;
         let rows = statement.query_map([], raw_website)?;
+        rows.map(|row| decode_website(row?)).collect()
+    }
+
+    pub fn list_websites_for_tenant(
+        &self,
+        tenant_id: Uuid,
+    ) -> Result<Vec<WebsiteRecord>, StoreError> {
+        let mut statement = self.conn.prepare(
+            "SELECT site_id, domain, spec, state, last_error, created_at, updated_at, operation_request_id, job_id, tenant_id FROM websites WHERE tenant_id = ?1 ORDER BY domain COLLATE NOCASE, site_id",
+        )?;
+        let rows = statement.query_map([tenant_id.to_string()], raw_website)?;
         rows.map(|row| decode_website(row?)).collect()
     }
 }
@@ -570,6 +626,10 @@ mod tests {
         WebsiteSpec::Static {
             document_root: "/srv/fusionpanel/sites/app.local".to_string(),
         }
+    }
+
+    fn test_tenant_id() -> Uuid {
+        Uuid::from_u128(1)
     }
 
     fn create_reservation(
@@ -588,6 +648,7 @@ mod tests {
             .reserve_website_create(
                 key,
                 &fingerprint,
+                test_tenant_id(),
                 Uuid::new_v4(),
                 request_id,
                 "app.local",
@@ -620,6 +681,7 @@ mod tests {
             store.reserve_website_create(
                 "create-app",
                 &conflict,
+                test_tenant_id(),
                 Uuid::new_v4(),
                 Uuid::new_v4(),
                 "other.local",
@@ -699,6 +761,7 @@ mod tests {
             .reserve_website_delete(
                 key,
                 &fingerprint,
+                test_tenant_id(),
                 created.site.id,
                 request_id,
                 "2026-11-16T00:02:00Z",
@@ -728,6 +791,7 @@ mod tests {
             .reserve_website_delete(
                 key,
                 &fingerprint,
+                test_tenant_id(),
                 created.site.id,
                 Uuid::new_v4(),
                 "2026-11-16T00:04:00Z",
@@ -750,6 +814,7 @@ mod tests {
             store.reserve_website_delete(
                 "delete-app",
                 &delete_fingerprint,
+                test_tenant_id(),
                 applying.site.id,
                 Uuid::new_v4(),
                 "2026-11-16T00:01:00Z",
@@ -776,6 +841,7 @@ mod tests {
             .reserve_website_delete(
                 "delete-app",
                 &delete_fingerprint,
+                test_tenant_id(),
                 applying.site.id,
                 Uuid::new_v4(),
                 "2026-11-16T00:03:00Z",
@@ -798,5 +864,71 @@ mod tests {
             store.get_website(applying.site.id).unwrap().state,
             WebsiteState::Deleting
         );
+    }
+
+    #[test]
+    fn website_records_and_idempotency_are_tenant_scoped() {
+        let mut store = ControlStore::new_in_memory().unwrap();
+        let tenant_a = Uuid::new_v4();
+        let tenant_b = Uuid::new_v4();
+        let fingerprint = json!({
+            "operation": "site.apply",
+            "payload": {
+                "domain": "tenant.example.test",
+                "spec": static_spec(),
+            },
+        });
+        let site = store
+            .reserve_website_create(
+                "tenant-create",
+                &fingerprint,
+                tenant_a,
+                Uuid::new_v4(),
+                Uuid::new_v4(),
+                "tenant.example.test",
+                static_spec(),
+                "2026-11-16T00:00:00Z",
+            )
+            .unwrap();
+
+        assert_eq!(
+            store.list_websites_for_tenant(tenant_a).unwrap(),
+            vec![site.site.clone()]
+        );
+        assert!(store.list_websites_for_tenant(tenant_b).unwrap().is_empty());
+        assert_eq!(
+            store
+                .get_website_for_tenant(site.site.id, tenant_a)
+                .unwrap(),
+            site.site
+        );
+        assert!(matches!(
+            store.get_website_for_tenant(site.site.id, tenant_b),
+            Err(StoreError::WebsiteNotFound(_))
+        ));
+        assert!(matches!(
+            store.reserve_website_delete(
+                "foreign-delete",
+                &json!({"operation": "site.delete", "site_id": site.site.id}),
+                tenant_b,
+                site.site.id,
+                Uuid::new_v4(),
+                "2026-11-16T00:01:00Z",
+            ),
+            Err(StoreError::WebsiteNotFound(_))
+        ));
+        assert!(matches!(
+            store.reserve_website_create(
+                "tenant-create",
+                &fingerprint,
+                tenant_b,
+                Uuid::new_v4(),
+                Uuid::new_v4(),
+                "tenant.example.test",
+                static_spec(),
+                "2026-11-16T00:01:00Z",
+            ),
+            Err(StoreError::IdempotencyConflict)
+        ));
     }
 }

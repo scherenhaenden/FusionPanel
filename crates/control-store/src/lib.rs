@@ -133,9 +133,11 @@ impl ControlStore {
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     operation_request_id TEXT NOT NULL,
-                    job_id TEXT
+                    job_id TEXT,
+                    tenant_id TEXT NOT NULL
                 );
                 CREATE INDEX idx_websites_state ON websites (state);
+                CREATE INDEX idx_websites_tenant_id ON websites (tenant_id);
                 CREATE TABLE website_operations (
                     idempotency_key TEXT PRIMARY KEY,
                     fingerprint TEXT NOT NULL,
@@ -150,6 +152,37 @@ impl ControlStore {
                 "#,
             )?;
             tx.pragma_update(None, "user_version", 3)?;
+        }
+
+        if user_version < 4 {
+            let has_tenant_id = {
+                let mut statement = tx.prepare("PRAGMA table_info(websites)")?;
+                let rows = statement.query_map([], |row| row.get::<_, String>(1))?;
+                rows.collect::<Result<Vec<_>, _>>()?
+                    .iter()
+                    .any(|name| name == "tenant_id")
+            };
+            if !has_tenant_id {
+                let website_count: i64 =
+                    tx.query_row("SELECT COUNT(*) FROM websites", [], |row| row.get(0))?;
+                let operation_count: i64 =
+                    tx.query_row("SELECT COUNT(*) FROM website_operations", [], |row| {
+                        row.get(0)
+                    })?;
+                if website_count > 0 || operation_count > 0 {
+                    return Err(StoreError::Parse(
+                        "website data exists without tenant ownership; migration stopped without changing it"
+                            .to_string(),
+                    ));
+                }
+                tx.execute_batch(
+                    "ALTER TABLE websites ADD COLUMN tenant_id TEXT NOT NULL DEFAULT '';",
+                )?;
+            }
+            tx.execute_batch(
+                "CREATE INDEX IF NOT EXISTS idx_websites_tenant_id ON websites (tenant_id);",
+            )?;
+            tx.pragma_update(None, "user_version", 4)?;
         }
 
         tx.commit()?;
@@ -302,6 +335,16 @@ impl ControlStore {
             desired_state,
             observed_state,
         })
+    }
+
+    pub fn tenant_exists(&self, tenant_id: Uuid) -> Result<bool, StoreError> {
+        self.conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM resources WHERE tenant_id = ?1)",
+                [tenant_id.to_string()],
+                |row| row.get(0),
+            )
+            .map_err(StoreError::from)
     }
 
     pub fn list_tenant_resources(
@@ -771,7 +814,7 @@ mod tests {
             let user_version: u32 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(user_version, 3);
+            assert_eq!(user_version, 4);
             let website_tables: u32 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('websites', 'website_operations')",
@@ -780,7 +823,132 @@ mod tests {
                 )
                 .unwrap();
             assert_eq!(website_tables, 2);
+            let has_tenant_id: bool = conn
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM pragma_table_info('websites') WHERE name = 'tenant_id')",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(has_tenant_id);
         }
+    }
+
+    fn create_legacy_v3_website_schema(conn: &Connection) {
+        conn.execute_batch(
+            r#"
+            CREATE TABLE websites (
+                site_id TEXT PRIMARY KEY,
+                domain TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                spec TEXT NOT NULL,
+                state TEXT NOT NULL,
+                last_error TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                operation_request_id TEXT NOT NULL,
+                job_id TEXT
+            );
+            CREATE TABLE website_operations (
+                idempotency_key TEXT PRIMARY KEY,
+                fingerprint TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                site_id TEXT NOT NULL,
+                request_id TEXT NOT NULL,
+                site_snapshot TEXT NOT NULL,
+                job_id TEXT,
+                previous_site_snapshot TEXT
+            );
+            PRAGMA user_version = 3;
+            "#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn tenant_migration_adds_column_to_empty_pre_release_schema() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        create_legacy_v3_website_schema(&conn);
+
+        ControlStore::run_migrations(&mut conn).unwrap();
+
+        let user_version: u32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(user_version, 4);
+        let has_tenant_id: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM pragma_table_info('websites') WHERE name = 'tenant_id')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(has_tenant_id);
+    }
+
+    #[test]
+    fn tenant_migration_refuses_to_guess_ownership_of_legacy_sites() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        create_legacy_v3_website_schema(&conn);
+        conn.execute(
+            "INSERT INTO websites (site_id, domain, spec, state, created_at, updated_at, operation_request_id) VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6)",
+            params![
+                Uuid::new_v4().to_string(),
+                "legacy.example.test",
+                r#"{"kind":"static","document_root":"/srv/fusionpanel/sites/legacy.example.test"}"#,
+                "active",
+                "2026-11-16T00:00:00Z",
+                Uuid::new_v4().to_string(),
+            ],
+        )
+        .unwrap();
+
+        let result = ControlStore::run_migrations(&mut conn);
+        assert!(
+            matches!(result, Err(StoreError::Parse(message)) if message.contains("without tenant ownership"))
+        );
+
+        let website_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM websites", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(website_count, 1);
+        let user_version: u32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(user_version, 3);
+    }
+
+    #[test]
+    fn tenant_migration_refuses_to_guess_ownership_of_legacy_operation_snapshots() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        create_legacy_v3_website_schema(&conn);
+        conn.execute(
+            "INSERT INTO website_operations (idempotency_key, fingerprint, operation, site_id, request_id, site_snapshot) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                "legacy-create",
+                "{}",
+                "site.apply",
+                Uuid::new_v4().to_string(),
+                Uuid::new_v4().to_string(),
+                r#"{"record":{"id":"legacy","domain":"legacy.example.test","kind":"static","document_root":"/srv/fusionpanel/sites/legacy.example.test","state":"active","last_error":null,"created_at":"2026-11-16T00:00:00Z","updated_at":"2026-11-16T00:00:00Z"},"request_id":"legacy","job_id":null}"#,
+            ],
+        )
+        .unwrap();
+
+        let result = ControlStore::run_migrations(&mut conn);
+        assert!(
+            matches!(result, Err(StoreError::Parse(message)) if message.contains("without tenant ownership"))
+        );
+
+        let operation_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM website_operations", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(operation_count, 1);
+        let user_version: u32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(user_version, 3);
     }
 
     #[test]

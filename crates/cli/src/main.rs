@@ -100,25 +100,6 @@ struct BootstrapOutput {
     password: Option<String>,
 }
 
-fn initial_operator_role_bindings(
-    user_id: identity::UserId,
-    tenant_id: TenantId,
-) -> [RoleBinding; 2] {
-    let role = Role::super_admin();
-    [
-        RoleBinding {
-            user_id,
-            role: role.clone(),
-            scope: Scope::Tenant { tenant_id },
-        },
-        RoleBinding {
-            user_id,
-            role,
-            scope: Scope::Global,
-        },
-    ]
-}
-
 async fn run_cli(
     args: impl Iterator<Item = String>,
     env_token: Option<String>,
@@ -227,9 +208,12 @@ async fn run_cli(
                     }),
                 )?;
 
-                for binding in initial_operator_role_bindings(user.id(), tenant_id) {
-                    id_store.save_role_binding(&binding)?;
-                }
+                let binding = RoleBinding {
+                    user_id: user.id(),
+                    role: Role::super_admin(),
+                    scope: Scope::Tenant { tenant_id },
+                };
+                id_store.save_role_binding(&binding)?;
 
                 let boot_output = BootstrapOutput {
                     user_id: user.id().to_string(),
@@ -273,40 +257,12 @@ async fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use identity::{AccessControl, Permission};
     use serde_json::json;
     use wiremock::matchers::{bearer_token, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn string_iter<'a>(args: &'a [&'a str]) -> impl Iterator<Item = String> + 'a {
         args.iter().map(|s| s.to_string())
-    }
-
-    #[test]
-    fn bootstrap_super_admin_keeps_default_tenant_and_global_permissions() {
-        let user_id = identity::UserId::new_v4();
-        let tenant_id = TenantId::new_v4();
-        let bindings = initial_operator_role_bindings(user_id, tenant_id);
-
-        assert_eq!(bindings[0].scope, Scope::Tenant { tenant_id });
-        assert_eq!(bindings[1].scope, Scope::Global);
-        assert_eq!(bindings[0].role.role_type, identity::RoleType::SuperAdmin);
-        assert_eq!(bindings[1].role.role_type, identity::RoleType::SuperAdmin);
-
-        assert!(AccessControl::evaluate_principal(
-            user_id,
-            &bindings,
-            Permission::SiteCreate,
-            &Scope::Global,
-        )
-        .is_ok());
-        assert!(AccessControl::evaluate_principal(
-            user_id,
-            &bindings,
-            Permission::DatabaseManage,
-            &Scope::Tenant { tenant_id },
-        )
-        .is_ok());
     }
 
     #[tokio::test]

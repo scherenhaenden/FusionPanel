@@ -21,6 +21,7 @@ use uuid::Uuid;
 use super::{node_jobs, AppState, ErrorDetail, ErrorResponse};
 
 const MAX_UPSTREAM_URL_BYTES: usize = 2048;
+const TENANT_CONTEXT_HEADER: &str = "X-FusionPanel-Tenant-ID";
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -45,12 +46,13 @@ async fn list_websites(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, ErrorResponse> {
-    authorize_website_permission(&state, &headers, Permission::SiteRead).await?;
+    let context = website_authorization_context(&state, &headers).await?;
+    require_website_permission(&context, Permission::SiteRead, None)?;
     let websites = state
         .control_store
         .lock()
         .await
-        .list_websites()
+        .list_websites_for_tenant(context.tenant_id.to_uuid())
         .map_err(map_store_error)?;
     Ok(Json(json!({ "websites": websites })))
 }
@@ -60,14 +62,15 @@ async fn get_website(
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, ErrorResponse> {
-    authorize_website_permission(&state, &headers, Permission::SiteRead).await?;
+    let context = website_authorization_context(&state, &headers).await?;
     let site_id = Uuid::parse_str(&id).map_err(|_| node_jobs::bad_request())?;
     let site = state
         .control_store
         .lock()
         .await
-        .get_website(site_id)
+        .get_website_for_tenant(site_id, context.tenant_id.to_uuid())
         .map_err(map_store_error)?;
+    require_website_permission(&context, Permission::SiteRead, Some(site_id))?;
     Ok(Json(json!({ "website": site })))
 }
 
@@ -76,7 +79,8 @@ async fn create_website(
     headers: HeaderMap,
     Json(request): Json<CreateWebsiteRequest>,
 ) -> Result<(StatusCode, Json<Value>), ErrorResponse> {
-    authorize_website_permission(&state, &headers, Permission::SiteCreate).await?;
+    let context = website_authorization_context(&state, &headers).await?;
+    require_website_permission(&context, Permission::SiteCreate, None)?;
     let idempotency_key = idempotency_key(&headers)?;
 
     let (domain, spec) = match request {
@@ -100,6 +104,7 @@ async fn create_website(
 
     let fingerprint = json!({
         "operation": "site.apply",
+        "tenant_id": context.tenant_id,
         "payload": { "domain": domain, "spec": spec },
     });
     let reservation = state
@@ -109,6 +114,7 @@ async fn create_website(
         .reserve_website_create(
             &idempotency_key,
             &fingerprint,
+            context.tenant_id.to_uuid(),
             Uuid::new_v4(),
             Uuid::new_v4(),
             &domain,
@@ -125,11 +131,13 @@ async fn delete_website(
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Result<(StatusCode, Json<Value>), ErrorResponse> {
-    authorize_website_permission(&state, &headers, Permission::SiteDelete).await?;
+    let context = website_authorization_context(&state, &headers).await?;
     let idempotency_key = idempotency_key(&headers)?;
     let site_id = Uuid::parse_str(&id).map_err(|_| node_jobs::bad_request())?;
+    require_website_permission(&context, Permission::SiteDelete, Some(site_id))?;
     let fingerprint = json!({
         "operation": "site.delete",
+        "tenant_id": context.tenant_id,
         "payload": { "site_id": site_id },
     });
     let reservation = state
@@ -139,6 +147,7 @@ async fn delete_website(
         .reserve_website_delete(
             &idempotency_key,
             &fingerprint,
+            context.tenant_id.to_uuid(),
             site_id,
             Uuid::new_v4(),
             &Utc::now().to_rfc3339(),
@@ -444,13 +453,71 @@ fn map_store_error(error: fusionpanel_control_store::StoreError) -> ErrorRespons
     }
 }
 
-async fn authorize_website_permission(
+struct WebsiteAuthorizationContext {
+    tenant_id: identity::TenantId,
+    is_admin_token: bool,
+    user_id: Option<identity::UserId>,
+    role_bindings: Vec<identity::RoleBinding>,
+}
+
+fn require_website_permission(
+    context: &WebsiteAuthorizationContext,
+    permission: Permission,
+    site_id: Option<Uuid>,
+) -> Result<(), ErrorResponse> {
+    if context.is_admin_token {
+        return Ok(());
+    }
+    let user_id = context.user_id.ok_or_else(node_jobs::unauthorized)?;
+    let scope = match site_id {
+        Some(site_id) => Scope::Site {
+            tenant_id: context.tenant_id,
+            site_id: identity::SiteId::from(site_id),
+        },
+        None => Scope::Tenant {
+            tenant_id: context.tenant_id,
+        },
+    };
+    AccessControl::evaluate_principal(user_id, &context.role_bindings, permission, &scope).map_err(
+        |_| ErrorResponse {
+            error: ErrorDetail {
+                code: "forbidden",
+                message: "Permission denied",
+            },
+        },
+    )
+}
+
+async fn website_authorization_context(
     state: &AppState,
     headers: &HeaderMap,
-    permission: Permission,
-) -> Result<(), ErrorResponse> {
+) -> Result<WebsiteAuthorizationContext, ErrorResponse> {
     if node_jobs::authorized_admin(state, headers) {
-        return Ok(());
+        let tenant_id = headers
+            .get(TENANT_CONTEXT_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse::<Uuid>().ok())
+            .ok_or_else(node_jobs::bad_request)?;
+        let exists = state
+            .control_store
+            .lock()
+            .await
+            .tenant_exists(tenant_id)
+            .map_err(|_| node_jobs::internal_error())?;
+        if !exists {
+            return Err(ErrorResponse {
+                error: ErrorDetail {
+                    code: "not_found",
+                    message: "Tenant not found",
+                },
+            });
+        }
+        return Ok(WebsiteAuthorizationContext {
+            tenant_id: identity::TenantId::from(tenant_id),
+            is_admin_token: true,
+            user_id: None,
+            role_bindings: Vec::new(),
+        });
     }
 
     let session_id = headers
@@ -483,16 +550,12 @@ async fn authorize_website_permission(
         .get_user_role_bindings(session.user_id())
         .map_err(|_| node_jobs::internal_error())?;
 
-    // WebsiteRecord is currently global and has no tenant_id. A session's tenant
-    // cannot safely scope these rows, so only a Global RoleBinding may authorize
-    // website routes until records gain tenant ownership and filtering.
-    AccessControl::evaluate_principal(session.user_id(), &bindings, permission, &Scope::Global)
-        .map_err(|_| ErrorResponse {
-            error: ErrorDetail {
-                code: "forbidden",
-                message: "Permission denied",
-            },
-        })
+    Ok(WebsiteAuthorizationContext {
+        tenant_id: session.tenant_id(),
+        is_admin_token: false,
+        user_id: Some(session.user_id()),
+        role_bindings: bindings,
+    })
 }
 
 #[cfg(test)]
@@ -508,6 +571,7 @@ mod tests {
     use tower::ServiceExt;
 
     const ADMIN_TOKEN: &str = "websites-test-admin-token";
+    const ADMIN_TENANT_ID: &str = "00000000-0000-0000-0000-000000000001";
 
     fn test_app() -> (
         Router,
@@ -519,12 +583,20 @@ mod tests {
         let identity_store = std::sync::Arc::new(tokio::sync::Mutex::new(
             identity::SqliteIdentityStore::open(&db_path).unwrap(),
         ));
+        let admin_tenant_id = Uuid::from_u128(1);
+        let mut control_store = fusionpanel_control_store::ControlStore::new(&db_path).unwrap();
+        control_store
+            .create_resource(
+                admin_tenant_id,
+                admin_tenant_id,
+                fusionpanel_control_store::OwnershipMode::PlatformManaged,
+                json!({ "name": "Admin Test Tenant" }),
+            )
+            .unwrap();
         let state = AppState {
             admin_token: std::sync::Arc::new(ADMIN_TOKEN.to_string()),
             identity_store: identity_store.clone(),
-            control_store: std::sync::Arc::new(tokio::sync::Mutex::new(
-                fusionpanel_control_store::ControlStore::new(&db_path).unwrap(),
-            )),
+            control_store: std::sync::Arc::new(tokio::sync::Mutex::new(control_store)),
             jobs_store: std::sync::Arc::new(tokio::sync::Mutex::new(
                 fusionpanel_jobs::JobStore::new(&db_path).unwrap(),
             )),
@@ -583,9 +655,38 @@ mod tests {
         idempotency_key: Option<&str>,
         body: Option<Value>,
     ) -> Response<Body> {
+        let tenant_context = if token == Some(ADMIN_TOKEN) {
+            Some(ADMIN_TENANT_ID)
+        } else {
+            None
+        };
+        send_with_tenant_context(
+            app,
+            method,
+            uri,
+            token,
+            idempotency_key,
+            body,
+            tenant_context,
+        )
+        .await
+    }
+
+    async fn send_with_tenant_context(
+        app: &Router,
+        method: &str,
+        uri: &str,
+        token: Option<&str>,
+        idempotency_key: Option<&str>,
+        body: Option<Value>,
+        tenant_context: Option<&str>,
+    ) -> Response<Body> {
         let mut builder = Request::builder().method(method).uri(uri);
         if let Some(token) = token {
             builder = builder.header(AUTHORIZATION, format!("Bearer {token}"));
+        }
+        if let Some(tenant_id) = tenant_context {
+            builder = builder.header(TENANT_CONTEXT_HEADER, tenant_id);
         }
         if let Some(key) = idempotency_key {
             builder = builder.header("Idempotency-Key", key);
@@ -774,108 +875,168 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn website_routes_require_global_scoped_permissions() {
+    async fn website_routes_enforce_tenant_ownership_and_rbac_scopes() {
         let (app, _dir, identity_store) = test_app();
-        let global_operator = session_token(
+        let tenant_a = identity::TenantId::new_v4();
+        let tenant_b = identity::TenantId::new_v4();
+        let tenant_a_admin = session_token(
             &identity_store,
-            identity::Role::site_operator(),
-            identity::Scope::Global,
-        )
-        .await;
-
-        let listed = send(
-            &app,
-            "GET",
-            "/v1/websites",
-            Some(&global_operator),
-            None,
-            None,
-        )
-        .await;
-        assert_eq!(listed.status(), StatusCode::OK);
-
-        let create = send(
-            &app,
-            "POST",
-            "/v1/websites",
-            Some(&global_operator),
-            Some("operator-create-denied"),
-            Some(json!({
-                "kind": "reverse_proxy",
-                "domain": "operator.example.com",
-                "upstream_url": "http://127.0.0.1:3000",
-            })),
-        )
-        .await;
-        assert_eq!(create.status(), StatusCode::FORBIDDEN);
-        assert_eq!(response_json(create).await["error"]["code"], "forbidden");
-
-        let delete = send(
-            &app,
-            "DELETE",
-            &format!("/v1/websites/{}", Uuid::new_v4()),
-            Some(&global_operator),
-            Some("operator-delete-denied"),
-            None,
-        )
-        .await;
-        assert_eq!(delete.status(), StatusCode::FORBIDDEN);
-
-        // TenantAdmin carries SiteRead, but WebsiteRecord has no tenant owner;
-        // tenant scope therefore cannot authorize the global website listing.
-        let tenant_admin = session_token(
-            &identity_store,
-            identity::Role::tenant_admin(),
+            identity::Role::super_admin(),
             identity::Scope::Tenant {
-                tenant_id: identity::TenantId::new_v4(),
+                tenant_id: tenant_a,
             },
         )
         .await;
-        let tenant_list = send(&app, "GET", "/v1/websites", Some(&tenant_admin), None, None).await;
-        assert_eq!(tenant_list.status(), StatusCode::FORBIDDEN);
 
-        // This is the binding shape produced by `fusionpanel-cli bootstrap operator`:
-        // tenant scope preserves the default session tenant, and global scope grants
-        // the explicit system-wide SuperAdmin access required by global WebsiteRecords.
-        let tenant_id = identity::TenantId::new_v4();
-        let super_admin = identity::Role::super_admin();
-        let global_admin = session_token_with_roles(
-            &identity_store,
-            tenant_id,
-            vec![
-                (super_admin.clone(), identity::Scope::Tenant { tenant_id }),
-                (super_admin, identity::Scope::Global),
-            ],
-        )
-        .await;
         let create = send(
             &app,
             "POST",
             "/v1/websites",
-            Some(&global_admin),
-            Some("global-admin-create"),
+            Some(&tenant_a_admin),
+            Some("tenant-a-create"),
             Some(json!({
                 "kind": "reverse_proxy",
-                "domain": "global-admin.example.com",
+                "domain": "tenant-a.example.com",
                 "upstream_url": "http://127.0.0.1:3000",
             })),
         )
         .await;
         assert_eq!(create.status(), StatusCode::ACCEPTED);
-        let created = response_json(create).await;
-        let site_id = created["site"]["id"].as_str().unwrap();
-        let delete = send(
+        let site = response_json(create).await["site"].clone();
+        let site_id = site["id"].as_str().unwrap();
+        assert_eq!(site["tenant_id"], tenant_a.to_string());
+
+        let tenant_a_list = send(
             &app,
-            "DELETE",
-            &format!("/v1/websites/{site_id}"),
-            Some(&global_admin),
-            Some("global-admin-delete"),
+            "GET",
+            "/v1/websites",
+            Some(&tenant_a_admin),
+            None,
             None,
         )
         .await;
-        // The 409 comes from provisioning state, proving SiteDelete authorized
-        // the request before the lifecycle guard ran.
-        assert_eq!(delete.status(), StatusCode::CONFLICT);
+        assert_eq!(tenant_a_list.status(), StatusCode::OK);
+        assert_eq!(
+            response_json(tenant_a_list).await["websites"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+
+        let tenant_b_admin = session_token(
+            &identity_store,
+            identity::Role::tenant_admin(),
+            identity::Scope::Tenant {
+                tenant_id: tenant_b,
+            },
+        )
+        .await;
+        let tenant_b_list = send(
+            &app,
+            "GET",
+            "/v1/websites",
+            Some(&tenant_b_admin),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(tenant_b_list.status(), StatusCode::OK);
+        assert!(response_json(tenant_b_list).await["websites"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+
+        let foreign_detail = send(
+            &app,
+            "GET",
+            &format!("/v1/websites/{site_id}"),
+            Some(&tenant_b_admin),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(foreign_detail.status(), StatusCode::NOT_FOUND);
+        let foreign_delete = send(
+            &app,
+            "DELETE",
+            &format!("/v1/websites/{site_id}"),
+            Some(&tenant_b_admin),
+            Some("tenant-b-delete-foreign"),
+            None,
+        )
+        .await;
+        assert_eq!(foreign_delete.status(), StatusCode::NOT_FOUND);
+
+        let site_operator = session_token(
+            &identity_store,
+            identity::Role::site_operator(),
+            identity::Scope::Site {
+                tenant_id: tenant_a,
+                site_id: identity::SiteId::from(Uuid::parse_str(site_id).unwrap()),
+            },
+        )
+        .await;
+        let site_detail = send(
+            &app,
+            "GET",
+            &format!("/v1/websites/{site_id}"),
+            Some(&site_operator),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(site_detail.status(), StatusCode::OK);
+        let forbidden_delete = send(
+            &app,
+            "DELETE",
+            &format!("/v1/websites/{site_id}"),
+            Some(&site_operator),
+            Some("site-operator-delete"),
+            None,
+        )
+        .await;
+        assert_eq!(forbidden_delete.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn admin_token_requires_an_explicit_existing_tenant_context() {
+        let (app, _dir, _identity_store) = test_app();
+        let missing = send_with_tenant_context(
+            &app,
+            "GET",
+            "/v1/websites",
+            Some(ADMIN_TOKEN),
+            None,
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(missing.status(), StatusCode::BAD_REQUEST);
+
+        let malformed = send_with_tenant_context(
+            &app,
+            "GET",
+            "/v1/websites",
+            Some(ADMIN_TOKEN),
+            None,
+            None,
+            Some("not-a-uuid"),
+        )
+        .await;
+        assert_eq!(malformed.status(), StatusCode::BAD_REQUEST);
+
+        let unknown = send_with_tenant_context(
+            &app,
+            "GET",
+            "/v1/websites",
+            Some(ADMIN_TOKEN),
+            None,
+            None,
+            Some("00000000-0000-0000-0000-000000000002"),
+        )
+        .await;
+        assert_eq!(unknown.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
@@ -1045,6 +1206,20 @@ mod tests {
         )
         .await;
         assert_eq!(removed.status(), StatusCode::NOT_FOUND);
+
+        let deletion_replay = send(
+            &app,
+            "DELETE",
+            &format!("/v1/websites/{site_id}"),
+            Some(ADMIN_TOKEN),
+            Some("delete-app-retry"),
+            None,
+        )
+        .await;
+        assert_eq!(deletion_replay.status(), StatusCode::ACCEPTED);
+        let deletion_replay = response_json(deletion_replay).await;
+        assert_eq!(deletion_replay["site"]["id"], site_id);
+        assert_eq!(deletion_replay["job"]["id"], retry_job_id);
     }
 
     #[test]
