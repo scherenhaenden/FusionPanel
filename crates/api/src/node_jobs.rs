@@ -174,6 +174,14 @@ async fn enqueue_job(
     if !authorized_operator(&state, &headers).await {
         return Err(unauthorized());
     }
+    if matches!(body.operation.as_str(), "site.apply" | "site.delete") {
+        return Err(ErrorResponse {
+            error: ErrorDetail {
+                code: "bad_request",
+                message: "Use the Websites API for website operations",
+            },
+        });
+    }
     let key = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
@@ -317,12 +325,28 @@ async fn complete_job(
     let error_text = request
         .error_text
         .map(|text| redact_known_secrets(&text, &[token, state.admin_token.as_str()]));
-    state
+    let node_id = node_id.to_string();
+    {
+        let mut jobs = state.jobs_store.lock().await;
+        let current = jobs.get(&id).map_err(map_job_error)?;
+        let is_same_terminal_retry = current.state == request.state
+            && current.worker_id.as_deref() == Some(node_id.as_str())
+            && matches!(
+                current.state,
+                JobState::Succeeded | JobState::Failed | JobState::Cancelled
+            );
+        if !is_same_terminal_retry {
+            jobs.transition_for_worker(&id, &node_id, request.state, error_text)
+                .map_err(map_job_error)?;
+        }
+    }
+    let completed = state
         .jobs_store
         .lock()
         .await
-        .transition_for_worker(&id, &node_id.to_string(), request.state, error_text)
+        .get(&id)
         .map_err(map_job_error)?;
+    super::websites::record_completion(&state, &completed).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -352,7 +376,7 @@ async fn authenticate_node(
     }
 }
 
-async fn authorized_operator(state: &AppState, headers: &HeaderMap) -> bool {
+pub(super) async fn authorized_operator(state: &AppState, headers: &HeaderMap) -> bool {
     if authorized_admin(state, headers) {
         return true;
     }
@@ -366,7 +390,7 @@ async fn authorized_operator(state: &AppState, headers: &HeaderMap) -> bool {
     }
 }
 
-fn authorized_admin(state: &AppState, headers: &HeaderMap) -> bool {
+pub(super) fn authorized_admin(state: &AppState, headers: &HeaderMap) -> bool {
     let Some(token) = bearer_token(headers) else {
         return false;
     };
@@ -399,7 +423,7 @@ fn redact_known_secrets(value: &str, secrets: &[&str]) -> String {
         })
 }
 
-fn map_job_error(error: fusionpanel_jobs::JobStoreError) -> ErrorResponse {
+pub(super) fn map_job_error(error: fusionpanel_jobs::JobStoreError) -> ErrorResponse {
     match error {
         fusionpanel_jobs::JobStoreError::NotFound(_) => ErrorResponse {
             error: ErrorDetail {
@@ -423,7 +447,7 @@ fn map_job_error(error: fusionpanel_jobs::JobStoreError) -> ErrorResponse {
     }
 }
 
-fn unauthorized() -> ErrorResponse {
+pub(super) fn unauthorized() -> ErrorResponse {
     ErrorResponse {
         error: ErrorDetail {
             code: "unauthorized",
@@ -432,7 +456,7 @@ fn unauthorized() -> ErrorResponse {
     }
 }
 
-fn bad_request() -> ErrorResponse {
+pub(super) fn bad_request() -> ErrorResponse {
     ErrorResponse {
         error: ErrorDetail {
             code: "bad_request",
@@ -441,7 +465,7 @@ fn bad_request() -> ErrorResponse {
     }
 }
 
-fn internal_error() -> ErrorResponse {
+pub(super) fn internal_error() -> ErrorResponse {
     ErrorResponse {
         error: ErrorDetail {
             code: "internal_error",
@@ -586,6 +610,59 @@ mod tests {
             .unwrap();
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn generic_job_enqueue_rejects_website_lifecycle_operations() {
+        let router = super::super::app(test_state());
+        for (key, body) in [
+            (
+                "generic-site-apply",
+                r#"{"operation":"site.apply","payload":{"site_id":"d4c61b93-8a7a-492a-b252-3fc286eb5634","domain":"example.com","spec":{"kind":"static","document_root":"/srv/fusionpanel/sites/example.com"}}}"#,
+            ),
+            (
+                "generic-site-delete",
+                r#"{"operation":"site.delete","payload":{"site_id":"d4c61b93-8a7a-492a-b252-3fc286eb5634","domain":"example.com"}}"#,
+            ),
+        ] {
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/v1/jobs")
+                        .header(AUTHORIZATION, "Bearer test-admin-token")
+                        .header("idempotency-key", key)
+                        .header("content-type", "application/json")
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{key}");
+            let error: Value =
+                serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes())
+                    .unwrap();
+            assert_eq!(
+                error["error"]["message"], "Use the Websites API for website operations",
+                "{key}"
+            );
+        }
+
+        let system_info = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/jobs")
+                    .header(AUTHORIZATION, "Bearer test-admin-token")
+                    .header("idempotency-key", "generic-system-info")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"operation":"system.info","payload":{}}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(system_info.status(), StatusCode::CREATED);
     }
 
     #[tokio::test]
