@@ -104,7 +104,7 @@ The implementation, version bump, and evidence PRs are integrated on `sprint-2`.
 
 **Historical remaining release work as of 15 November:** complete release review and checks on open PR [#590](https://github.com/scherenhaenden/FusionPanel/pull/590), repeat the process-restart E2E on its final head, then obtain product-owner acceptance. The 16 November update below records which of these gates have since passed.
 
-### Final Sprint 2 results — 16 November 2026
+### Sprint 2 pre-redesign full-catalog snapshot — 16 November 2026
 
 The final integrated head is `2e2e8c719dc4cfba488c6dea4c3b635e16aa6656`. The following evidence supersedes the 15 November statements about final-head restart and clean-install qualification:
 
@@ -116,4 +116,14 @@ The final integrated head is `2e2e8c719dc4cfba488c6dea4c3b635e16aa6656`. The fol
 - Full GitHub qualification run [43826668270](https://github.com/scherenhaenden/FusionPanel/actions/runs/43826668270) ended cancelled after 31 jobs passed and 43 failed; the unrelated `tests/e2e/hosting` job was cancelled to save runner time. The 43 failed job names are all within the 46-job master baseline failure set [43707984101](https://github.com/scherenhaenden/FusionPanel/actions/runs/43707984101); no new failed job names were found. The release PR remains open and unstable pending gate review.
 - The package workflow itself could not reach product steps under local `act` because its `debian:bookworm` container lacks Node for `actions/setup-node@v4`. The GitHub package run and actual Docker artifact smoke passed.
 
-**Remaining release work:** review the inherited full-matrix failures and the VM-backed migration blocker, complete the final release gate, then merge PR #590 and obtain product-owner acceptance. No date/hash release tag or published release artifact is recorded. Issue [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) remains open. Remote-node transport and multi-node operation remain outside this evidence.
+### Focused release gate — 16 November 2026
+
+The Sprint 2 release gate passed on product-code head `dbd4167913c520adaa57fd45ca57adebcc648e71`.
+
+- CI run [43853526400](https://github.com/scherenhaenden/FusionPanel/actions/runs/43853526400) passed discovery, validation, dependency checks, root Cargo workspace tests, agent tests, jobs integration tests, nodes integration tests, frontend tests/build, browser package checks, and the Sprint 2 Docker/Playwright E2E with API/agent restart persistence. It selected 4 Cargo and 2 npm manifests from the Sprint 2 diff.
+- Package run [43853526519](https://github.com/scherenhaenden/FusionPanel/actions/runs/43853526519) passed on the same head. The earlier clean-install smoke of the actual package artifact remains recorded above.
+- `integration/nodes` reported 5 passed and 1 ignored. `test_blocked_migration` now records the missing disposable full-machine VM fixture as an explicit ignored blocker; no migration coverage is claimed.
+- CI redesign PR #613 merged normally at `dbd4167913c520adaa57fd45ca57adebcc648e71`. The all-catalog matrix is manual (`workflow_dispatch`); its earlier cancelled run [43844071048](https://github.com/scherenhaenden/FusionPanel/actions/runs/43844071048) had failures already present in the master baseline and was not a green Sprint 2 gate.
+- At this snapshot, release PR [#590](https://github.com/scherenhaenden/FusionPanel/pull/590) is approved and `CLEAN`, but still open. A documentation-only Sprint 2 update will advance its head and cause the focused gate to run again before merge.
+
+The remaining delivery step is to merge #590 after that final focused run passes. Issue [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) stays open until product-owner acceptance is recorded. No date/hash release tag or published release artifact is recorded. Remote-node transport, multi-node operation, and systemd activation remain outside this evidence.
