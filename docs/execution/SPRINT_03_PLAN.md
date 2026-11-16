@@ -56,7 +56,7 @@ The API returns `202 Accepted` with `{ "site": ..., "job": ... }`. A repeated id
 - `GET /v1/websites/:id` returns `{ "website": ... }`.
 - `DELETE /v1/websites/:id` requires an idempotency key and returns `202 Accepted` with the deleting site and job.
 
-Each site record includes `id`, `domain`, `kind`, its kind-specific config, `state` (`provisioning`, `active`, `failed`, or `deleting`), `last_error`, `created_at`, and `updated_at`. The UI must display the server state; an enqueued job is not a successful site creation.
+Each site record includes `id`, `tenant_id`, `domain`, `kind`, its kind-specific config, `state` (`provisioning`, `active`, `failed`, or `deleting`), `last_error`, `created_at`, and `updated_at`. The UI must display the server state; an enqueued job is not a successful site creation.
 
 ### Agent operation envelope
 

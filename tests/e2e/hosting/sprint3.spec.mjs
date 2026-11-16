@@ -22,9 +22,10 @@ function exactKeys(value, expected) {
 function assertWebsiteRecord(site, kind) {
   const kindField = kind === 'static' ? 'document_root' : 'upstream_url';
   exactKeys(site, [
-    'id', 'domain', 'kind', kindField, 'state', 'last_error', 'created_at', 'updated_at',
+    'id', 'tenant_id', 'domain', 'kind', kindField, 'state', 'last_error', 'created_at', 'updated_at',
   ]);
   expect(site.id).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(site.tenant_id).toMatch(/^[0-9a-f-]{36}$/i);
   expect(site.kind).toBe(kind);
   expect(site.last_error === null || typeof site.last_error === 'string').toBe(true);
   expect(Date.parse(site.created_at)).not.toBeNaN();
