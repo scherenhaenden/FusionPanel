@@ -1,40 +1,39 @@
-# Sprint 2 Handoff — 2026-11-15
+# Sprint 2 Handoff — 2026-11-16 refresh
 
-## Estado al cierre
+## Current state
 
-- PR [#602](https://github.com/scherenhaenden/FusionPanel/pull/602) está fusionado en `sprint-2`, merge commit `67eae339833c0da8adf116d57989a4f0fe75ae6e`. Su package pasó en run [43757289385](https://github.com/scherenhaenden/FusionPanel/actions/runs/43757289385). El agente tuvo 16/16 unit tests; el binario locked con Rustls, los tests de entorno/systemd del instalador, formato y sintaxis pasaron. Revisión independiente sin bloqueos.
-- PR [#590](https://github.com/scherenhaenden/FusionPanel/pull/590) sigue abierto hacia `master`, en el head `67eae339833c0da8adf116d57989a4f0fe75ae6e`.
+- PR [#602](https://github.com/scherenhaenden/FusionPanel/pull/602) is merged into `sprint-2`, merge commit `67eae339833c0da8adf116d57989a4f0fe75ae6e`. Its package passed in run [43757289385](https://github.com/scherenhaenden/FusionPanel/actions/runs/43757289385). Agent library unit tests passed 16/16; the locked agent binary check, installer environment test, systemd verification, formatting, shell syntax, and diff checks passed. Independent source review found no blocker.
+- PR [#590](https://github.com/scherenhaenden/FusionPanel/pull/590) remains open from `sprint-2` to `master`, head `67eae339833c0da8adf116d57989a4f0fe75ae6e`, status `UNSTABLE`.
   - Package run [43758110106](https://github.com/scherenhaenden/FusionPanel/actions/runs/43758110106): PASS.
-  - Browser E2E con Docker, job [132946572841](https://github.com/scherenhaenden/FusionPanel/actions/runs/43758110127/job/132946572841): PASS.
-  - CI Qualification run [43758110127](https://github.com/scherenhaenden/FusionPanel/actions/runs/43758110127) seguía en curso: `crates/agent/Cargo.toml` falló (job `132946716176`) después de pasar en el head anterior; `tests/e2e/hosting` seguía ejecutándose (job `132946716331`). Inspeccionar el log del agente cuando termine; puede ser regresión del cambio TLS. **No fusionar #590 antes de resolver/entender esto.**
-- En el run anterior, 44 jobs Cargo fallidos coincidieron por nombre con `master`; `tests/e2e/hosting` fue cancelado en ambas ramas. Volver a comparar el run final del head actual antes de atribuir fallos al sprint.
-- El Browser E2E actual prueba registro local, job `system.info` exitoso y logs visibles, pero no reinicia API/agente. La persistencia tras ambos reinicios sigue en el DoD de Sprint 2 y falta probarse en el head final.
-- PR [#585](https://github.com/scherenhaenden/FusionPanel/pull/585) sigue abierto hacia `sprint-3`. Su package falló con el error antiguo de `safe.directory`; actualizar su base tras integrar Sprint 2 y repetirlo.
+  - Docker Browser E2E job [132946572841](https://github.com/scherenhaenden/FusionPanel/actions/runs/43758110127/job/132946572841): PASS.
+  - CI Qualification run [43758110127](https://github.com/scherenhaenden/FusionPanel/actions/runs/43758110127): FAILURE. `crates/agent` compile, formatting, Clippy, and its 16 library unit tests passed; its separate integration test `test_agent_child_process_integration` failed at `crates/agent/tests/integration.rs:86` because the expected connection error was not logged before the test killed the child.
+  - The failing integration test starts a nested `cargo run`, sleeps a fixed 1.5 seconds, then kills the child. The same manifest passed on the previous Sprint 2 run and the master baseline, so this appears timing-sensitive and was exposed by the changed build/dependency timing. It must be fixed and rerun; do not treat this as a proven runtime TLS defect.
+  - The broad Cargo matrix still has the known baseline failures. The `tests/e2e/hosting` job was CANCELLED, not passed.
+- The Docker Browser E2E proves local node registration, UI job creation, successful `system.info`, and visible logs. It does **not** restart API and agent. Sprint 2 DoD still requires verifying that the succeeded job and logs remain visible after both processes restart.
+- PR [#585](https://github.com/scherenhaenden/FusionPanel/pull/585) is still open to `sprint-3`; its package check failed on the old safe-directory setup. Revalidate it after Sprint 2 lands in master.
 
-## Trabajo siguiente
+## Remaining Sprint 2 work
 
-1. Esperar el resultado de CI Qualification [43758110127](https://github.com/scherenhaenden/FusionPanel/actions/runs/43758110127), inspeccionar el fallo de `crates/agent`, y corregirlo por PR atómico a `sprint-2` si es una regresión real. En ramas atómicas, correr solo unit tests del componente afectado.
-2. Añadir al fixture Docker/Playwright la secuencia exigida: ejecutar un job, reiniciar API y agente, volver a abrir Jobs y comprobar que sigan `succeeded` el estado y los logs. Correr el E2E solo después de integrar esa rama en `sprint-2`.
-3. Repetir el gate final de Sprint 2 en el head actualizado, documentar resultados reales y no fusionar #590 hasta resolver los fallos relevantes.
-4. Después de #590, sincronizar `sprint-3` desde el nuevo `master`, revalidar y fusionar #585.
-5. Mantener issue #24 abierto hasta merge a `master` y aceptación/evidencia correspondiente.
+1. Replace the flaky nested `cargo run`/fixed-delay integration-test harness with the prebuilt agent binary and a bounded wait for the expected log. On the atomic branch, run only agent library unit tests plus formatting/syntax checks; run integration tests only after merging into `sprint-2`.
+2. Extend the disposable Docker/Playwright fixture: execute a real job, restart API and agent, reopen Nodes/Jobs, and verify the same node is online and the succeeded job/logs persisted. Run Browser E2E only on the integration branch after the atomic PR is merged.
+3. Merge those atomic PRs into `sprint-2`, rerun the final Sprint 2 gate, compare broad failures against master, and update sprint evidence. Do not merge #590 until the Sprint 2 relevant gate is complete and failures are explained.
+4. Keep issue #24 open until the release PR is merged to master and the required acceptance/evidence is recorded.
 
-## Límite del artefacto de instalación
+## Development package limitation
 
-El tarball de desarrollo contiene API y agente, pero no `fusionpanel-cli` ni `frontend/dist`; una instalación limpia no puede hacer el bootstrap previsto ni servir la UI. El Browser E2E construye CLI/frontend desde el checkout y no cualifica ese tarball. También se detectó que `packaging/update.sh` y `packaging/install.sh` usan layouts de versión distintos. Mantener el artefacto marcado como desarrollo; no llamarlo instalación completa. Si se requiere un bundle instalable completo, abrir un PR atómico para empaquetar CLI/UI, configurar la ruta de assets, alinear updater/rollback y añadir un smoke test Docker de instalación limpia.
+The current development tarball contains the API and agent, but omits `fusionpanel-cli` and `frontend/dist`; a clean install cannot run the planned CLI bootstrap or serve the UI. The Browser E2E builds CLI/frontend from the checkout and does not qualify this tarball. `packaging/update.sh` also uses a different version-directory layout from `install.sh`. Do not call this an install-ready full product. If that is required for Sprint 2, add an atomic packaging PR to bundle CLI/UI, configure the installed API's frontend path, align updater/rollback, and verify the real artifact in a disposable clean-install Docker smoke test.
 
-## Continuar desde otra PC
+## Sprint 3 handoff
 
-Tras clonar el repositorio, obtener esta documentación desde la rama publicada:
+After #590 is accepted and merged to `master`, sync `sprint-3` from the new master, rerun and review #585, then merge it and remove its task branch/worktree.
+
+## Get this handoff on another PC
+
+This document is on the published branch `docs/sprint-2-handoff` until its docs PR is merged. In an existing clone:
 
 ```sh
 git fetch origin
 git switch --track origin/docs/sprint-2-handoff
 ```
 
-Si el PR del handoff ya fue integrado, usar la rama de Sprint 2:
-
-```sh
-git fetch origin
-git switch --track origin/sprint-2
-```
+After the docs PR is merged into `sprint-2`, switch to `origin/sprint-2` instead.
