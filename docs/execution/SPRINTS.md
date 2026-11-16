@@ -102,9 +102,9 @@ The Sprint 2 agent defaults to HTTP mode. Existing deployments that use the lega
 
 ---
 
-## 6. Next Sprint Backlog Ready to Start (Sprint 3: Websites & Reverse Proxy)
+## 6. Active Sprint 3 (Websites & Reverse Proxy)
 
-Sprint 2 implementation and integration gates are documented above. The Sprint 3 handoff plan is in [PR #585](https://github.com/scherenhaenden/FusionPanel/pull/585), which targets `sprint-3`; it is planning documentation only, not website/proxy implementation or live Nginx acceptance. Sprint 3 implementation remains a separate set of atomic PRs to `sprint-3`.
+Sprint 3 is based on the completed Sprint 2 release through merged base-refresh PR [#620](https://github.com/scherenhaenden/FusionPanel/pull/620). Website UI, Nginx apply, tenant-scoped API, and E2E fixture work are integrated through PRs #621–#630 on `sprint-3`. The release gate is still blocked: the latest disposable Docker/Playwright run marks its first static site `failed` rather than `active`, so reverse-proxy, delete, and rollback acceptance remain unverified. Issue [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) remains open. See [the 16 November Sprint 3 handoff](./SPRINT_03_HANDOFF_2026-11-16.md) and [the implementation plan](./SPRINT_03_PLAN.md) before resuming.
 
 ### Sprint 2 focused release gate — 16 November 2026
 

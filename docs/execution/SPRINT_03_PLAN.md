@@ -1,12 +1,12 @@
 # Sprint 3 Plan & Handoff Guide — Websites & Reverse Proxy
 
-- **Sprint branch**: `sprint-3` is currently at `6b5adf5`; base-refresh PR #620 proposes bringing in verified `master` at `c28b7cc`
+- **Sprint branch**: `sprint-3` is integrated through `a92f889` (PR #630); base-refresh PR #620 is merged
 - **Dependency**: Sprint 2 release is complete on `master`; use its node/job API + agent worker contracts
 - **Target release**: `sprint-3` -> `master` only after the Sprint 3 close gate
 - **Docker**: Optional for local feature work; required for the disposable Nginx E2E gate
 - **Estimate**: L (8 story points)
 
-> Sprint 2 is complete on `master` at `c28b7cc`. The existing `sprint-3` branch remains at `6b5adf5`, and PR #620 is the proposed base refresh. Implementation work is being staged against the exact verified `c28b7cc` release; do not publish Sprint 3 feature PRs until #620 is reviewed and merged, so their target branch contains the dependency. Do not implement against guessed or unmerged agent/API interfaces.
+> Sprint 2 is complete on `master` at `c28b7cc`. PR #620 refreshed `sprint-3` from that base, and implementation/support PRs #621–#630 are integrated. The Sprint 3 release gate is not complete: the current Docker/Playwright run reaches a real static-site apply, but the site ends in `failed` instead of `active`. See [the 16 November handoff](./SPRINT_03_HANDOFF_2026-11-16.md) for evidence and the exact restart point. Do not publish Sprint 3 to `master` until the E2E and remaining release gates pass.
 
 ## 1. Sprint goal
 

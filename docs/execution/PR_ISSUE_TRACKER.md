@@ -141,8 +141,26 @@ This broad qualification snapshot was superseded by the focused final release ga
 
 | PR | Scope | Primary issue | Evidence | Delivery / remaining |
 |---|---|---|---|---|
-| [#585](https://github.com/scherenhaenden/FusionPanel/pull/585) | Sprint 3 website and reverse-proxy handoff plan | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | Reviewed current hosting domain/config code and the Websites view; `git diff --check` passed. | Open documentation PR to `sprint-3`. Its package check failed at the safe-directory step in its current base. The #584 workflow fix is merged to `sprint-2` and must be carried into `sprint-3` before a fresh package check. This remains a planning contract, not implementation or live Nginx acceptance. |
+| [#585](https://github.com/scherenhaenden/FusionPanel/pull/585) | Sprint 3 website and reverse-proxy handoff plan | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | Reviewed current hosting domain/config code and the Websites view; `git diff --check` passed. | Merged as planning documentation only; it did not qualify implementation or live Nginx acceptance. |
 | [#586](https://github.com/scherenhaenden/FusionPanel/pull/586) | Sprint 2 PR evidence and issue-link tracker update | None directly applies; cross-cutting traceability for PRs linked to #24 and integration maintenance. | This PR records the completed Sprint 2 gate and exact PR traceability. | Documentation-only change; no product issue closure or capability acceptance claimed. |
+
+## Sprint 3 implementation and release-gate checkpoint — 16 November 2026
+
+| PR | Scope | Primary issue | Evidence | Delivery / remaining |
+|---|---|---|---|---|
+| [#620](https://github.com/scherenhaenden/FusionPanel/pull/620) | Refresh Sprint 3 base from completed Sprint 2 | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | Regular merge commit `142aabefbfef7d9b4a794db6e5b8ee371bcd94ca`. | Merged to `sprint-3`; dependent implementation PRs followed. |
+| [#621](https://github.com/scherenhaenden/FusionPanel/pull/621) | Websites UI; mark TLS and PHP as deferred | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | Integrated website-management UI. | Merged to `sprint-3`; final browser acceptance is still blocked by site apply. |
+| [#622](https://github.com/scherenhaenden/FusionPanel/pull/622) | Apply/remove managed Nginx site config through an isolated helper | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | Typed agent operation and Nginx helper implementation. | Merged to `sprint-3`; the live static-site path has not passed E2E yet. |
+| [#623](https://github.com/scherenhaenden/FusionPanel/pull/623) | Tenant-scoped Websites API | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | `cargo fmt --all -- --check`; API tests 16/16 and control-store library tests 16/16. | Merged to `sprint-3`. |
+| [#624](https://github.com/scherenhaenden/FusionPanel/pull/624) | Disposable Docker/Playwright hosting fixture | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | Fixture preflight and shell syntax checks passed. | Merged to `sprint-3`; fixture teardown removes only its own resources. |
+| [#625](https://github.com/scherenhaenden/FusionPanel/pull/625) | Refresh nested agent lockfile | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | Nested agent crate tests 27/27. | Merged to `sprint-3`. |
+| [#626](https://github.com/scherenhaenden/FusionPanel/pull/626) | Use a private lock directory for E2E runs | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | Workspace and nested agent suites passed on integration head `e107a0b`; this predates later fixture/test-only updates. | Merged to `sprint-3`. |
+| [#627](https://github.com/scherenhaenden/FusionPanel/pull/627) | Support compressed Docker local logs | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | Fixture preflight checks 25/25; shell syntax and whitespace checks passed. | Merged to `sprint-3`. |
+| [#628](https://github.com/scherenhaenden/FusionPanel/pull/628) | Prepare writable Nginx temporary paths | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | Fixture preflight checks 26/26. | Merged to `sprint-3`; ownership correction followed in #629. |
+| [#629](https://github.com/scherenhaenden/FusionPanel/pull/629) | Create Nginx temporary paths as `www-data` | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | Independent security review approved; fixture preflight checks 26/26 and shell/diff checks passed. | Merged to `sprint-3`; Docker services subsequently started successfully. |
+| [#630](https://github.com/scherenhaenden/FusionPanel/pull/630) | Align website response contract with `tenant_id` | [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) | `node --check tests/e2e/hosting/sprint3.spec.mjs` and `git diff --check` passed. | Merged to `sprint-3`; exact response assertion now passes, but site-apply E2E still fails. |
+
+The implementation PRs are integrated, but this is not a Sprint 3 release qualification. The latest full E2E run is documented in [the handoff](./SPRINT_03_HANDOFF_2026-11-16.md). Issue #45 remains open, and no Sprint 3 release PR or package has been produced.
 
 ## Sprint 2 browser E2E gate — historical PR #594
 
