@@ -65,7 +65,7 @@ services:
       - /run:rw,noexec,nosuid,nodev,size=8m,uid=0,gid=2000,mode=0750
       - /etc/nginx/fusionpanel:rw,noexec,nosuid,nodev,size=16m,uid=0,gid=0,mode=0750
       - /var/cache/nginx:rw,noexec,nosuid,nodev,size=16m,uid=33,gid=33,mode=0700
-      - /var/lib/nginx:rw,noexec,nosuid,nodev,size=16m,uid=33,gid=33,mode=0700
+      - /var/lib/nginx:rw,noexec,nosuid,nodev,size=16m,uid=0,gid=33,mode=2770
     cap_drop:
       - ALL
     cap_add:
@@ -119,6 +119,8 @@ services:
           && test -s /run/nginx.pid
           && kill -0 "$$(cat /run/nginx.pid)"
           && nginx -t -q -c /etc/nginx/nginx.conf
+          && test "$$(stat -c '%u:%g:%a' /var/lib/nginx/body)" = '0:33:2770'
+          && setpriv --reuid="$${FUSIONPANEL_S3_AGENT_UID}" --regid="$${FUSIONPANEL_S3_AGENT_GID}" --groups=2000 --no-new-privs -- test ! -w /var/lib/nginx/body
       interval: 2s
       timeout: 3s
       retries: 30
