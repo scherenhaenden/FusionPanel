@@ -1,13 +1,14 @@
 [Unit]
 Description=FusionPanel Agent Service
-After=network.target fusionpanel.service
-Wants=fusionpanel.service
+After=network.target fusionpanel.service fusionpanel-nginx-helper.service
+Wants=fusionpanel.service fusionpanel-nginx-helper.service
 Documentation=https://github.com/scherenhaenden/FusionPanel
 
 [Service]
 Type=simple
 User=fusionpanel
 Group=fusionpanel
+SupplementaryGroups=fusionpanel-nginx
 ExecStart=/usr/local/bin/fusionpanel-agent
 EnvironmentFile=-/etc/fusionpanel/fusionpanel-agent.env
 

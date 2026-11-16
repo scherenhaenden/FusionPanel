@@ -112,6 +112,12 @@ pub mod fastcgi_cache;
 pub mod geoip_filter;
 pub use geoip_filter::*;
 
+pub mod managed_site;
+pub use managed_site::{
+    ManagedEntryKind, ManagedSiteError, ManagedSiteFs, ManagedSiteOperations, ManagedSiteSpec,
+    NginxControl, NginxSiteAdapter, StdManagedSiteFs, SystemNginxControl,
+};
+
 pub mod opcache_advisor;
 pub use opcache_advisor::*;
 pub mod tls_ticket_rotation;

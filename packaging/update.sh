@@ -7,23 +7,32 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$SCRIPT_DIR/layout.sh"
 
 VERSION="${1:-latest}"
-BACKUP_DIR="/var/lib/fusionpanel/backup-pre-update"
+BACKUP_PARENT="/var/lib/fusionpanel-update"
+BACKUP_DIR="$BACKUP_PARENT/backup-pre-update"
 CONFIG_DIR="/etc/fusionpanel"
 BIN_DIR="/usr/local/bin"
 VERSION_LIB_DIR="/usr/local/lib/fusionpanel/versions"
 STATE_DIR="/var/lib/fusionpanel"
+SYSTEMD_DIR="/etc/systemd/system"
 HEALTH_URL="${FUSIONPANEL_HEALTH_URL:-}"
 HEALTH_TIMEOUT=30
+TEST_MODE=0
+if fusionpanel_is_source_checkout "$SCRIPT_DIR"; then
+    TEST_MODE=1
+fi
 
 # Allow isolated layout tests without touching host paths or services.
-[ -z "${FUSIONPANEL_TEST_BACKUP_DIR:-}" ] || BACKUP_DIR="$FUSIONPANEL_TEST_BACKUP_DIR"
-[ -z "${FUSIONPANEL_TEST_CONFIG_DIR:-}" ] || CONFIG_DIR="$FUSIONPANEL_TEST_CONFIG_DIR"
-[ -z "${FUSIONPANEL_TEST_BIN_DIR:-}" ] || BIN_DIR="$FUSIONPANEL_TEST_BIN_DIR"
-[ -z "${FUSIONPANEL_TEST_VERSION_LIB_DIR:-}" ] || VERSION_LIB_DIR="$FUSIONPANEL_TEST_VERSION_LIB_DIR"
-[ -z "${FUSIONPANEL_TEST_STATE_DIR:-}" ] || STATE_DIR="$FUSIONPANEL_TEST_STATE_DIR"
+if [ "$TEST_MODE" -eq 1 ]; then
+    [ -z "${FUSIONPANEL_TEST_BACKUP_DIR:-}" ] || BACKUP_DIR="$FUSIONPANEL_TEST_BACKUP_DIR"
+    [ -z "${FUSIONPANEL_TEST_CONFIG_DIR:-}" ] || CONFIG_DIR="$FUSIONPANEL_TEST_CONFIG_DIR"
+    [ -z "${FUSIONPANEL_TEST_BIN_DIR:-}" ] || BIN_DIR="$FUSIONPANEL_TEST_BIN_DIR"
+    [ -z "${FUSIONPANEL_TEST_VERSION_LIB_DIR:-}" ] || VERSION_LIB_DIR="$FUSIONPANEL_TEST_VERSION_LIB_DIR"
+    [ -z "${FUSIONPANEL_TEST_STATE_DIR:-}" ] || STATE_DIR="$FUSIONPANEL_TEST_STATE_DIR"
+    [ -z "${FUSIONPANEL_TEST_SYSTEMD_DIR:-}" ] || SYSTEMD_DIR="$FUSIONPANEL_TEST_SYSTEMD_DIR"
+fi
 
 detect_os() {
-    if [ -n "${FUSIONPANEL_TEST_OS:-}" ]; then
+    if [ "$TEST_MODE" -eq 1 ] && [ -n "${FUSIONPANEL_TEST_OS:-}" ]; then
         OS="$FUSIONPANEL_TEST_OS"
         return
     fi
@@ -41,7 +50,7 @@ detect_os() {
 }
 
 detect_arch() {
-    if [ -n "${FUSIONPANEL_TEST_ARCH:-}" ]; then
+    if [ "$TEST_MODE" -eq 1 ] && [ -n "${FUSIONPANEL_TEST_ARCH:-}" ]; then
         ARCH="$FUSIONPANEL_TEST_ARCH"
         return
     fi
@@ -123,6 +132,17 @@ case "$VERSION" in *[!a-zA-Z0-9.+_-]*|'') echo "Invalid version" >&2; exit 1;; e
 detect_os
 detect_arch
 
+if [ "$BACKUP_DIR" = "$BACKUP_PARENT/backup-pre-update" ]; then
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "Error: the FusionPanel updater must run as root." >&2
+        exit 1
+    fi
+    if ! fusionpanel_ensure_private_directory "$BACKUP_PARENT" root root; then
+        echo "Error: the root-owned update backup directory is unsafe; no update was attempted." >&2
+        exit 1
+    fi
+fi
+
 if [ -L "$CONFIG_DIR" ] || { [ -e "$CONFIG_DIR" ] && [ ! -d "$CONFIG_DIR" ]; }; then
     echo "Error: FusionPanel config path is not a real directory: $CONFIG_DIR" >&2
     exit 1
@@ -133,14 +153,36 @@ for env_file in "$CONFIG_DIR/fusionpanel.env" "$CONFIG_DIR/fusionpanel-agent.env
         exit 1
     fi
 done
+for unit in fusionpanel.service fusionpanel-agent.service fusionpanel-nginx-helper.service; do
+    unit_path="$SYSTEMD_DIR/$unit"
+    if [ -L "$unit_path" ] || { [ -e "$unit_path" ] && [ ! -f "$unit_path" ]; }; then
+        echo "Error: Refusing to update with a non-regular systemd unit: $unit_path" >&2
+        exit 1
+    fi
+done
 resolve_health_url
 
 # Preserve the active state before any service or symlink is changed.
 rm -rf "$BACKUP_DIR"
-mkdir -p "$BACKUP_DIR/bin" "$BACKUP_DIR/config"
-if [ -e "$BIN_DIR/fusionpanel-api" ]; then cp -L "$BIN_DIR/fusionpanel-api" "$BACKUP_DIR/bin/fusionpanel-api"; fi
-if [ -e "$BIN_DIR/fusionpanel-agent" ]; then cp -L "$BIN_DIR/fusionpanel-agent" "$BACKUP_DIR/bin/fusionpanel-agent"; fi
-if [ -e "$BIN_DIR/fusionpanel-cli" ]; then cp -L "$BIN_DIR/fusionpanel-cli" "$BACKUP_DIR/bin/fusionpanel-cli"; fi
+(umask 077; mkdir "$BACKUP_DIR") || {
+    echo "Error: Could not create the private update backup directory." >&2
+    exit 1
+}
+mkdir -m 0700 "$BACKUP_DIR/bin" "$BACKUP_DIR/config" "$BACKUP_DIR/systemd"
+: > "$BACKUP_DIR/bin/present"
+: > "$BACKUP_DIR/systemd/present"
+for binary in fusionpanel-api fusionpanel-agent fusionpanel-cli fusionpanel-nginx-helper; do
+    if [ -e "$BIN_DIR/$binary" ]; then
+        cp -L "$BIN_DIR/$binary" "$BACKUP_DIR/bin/$binary"
+        printf '%s\n' "$binary" >> "$BACKUP_DIR/bin/present"
+    fi
+done
+for unit in fusionpanel.service fusionpanel-agent.service fusionpanel-nginx-helper.service; do
+    if [ -f "$SYSTEMD_DIR/$unit" ]; then
+        cp -a "$SYSTEMD_DIR/$unit" "$BACKUP_DIR/systemd/$unit"
+        printf '%s\n' "$unit" >> "$BACKUP_DIR/systemd/present"
+    fi
+done
 if [ -d "$CONFIG_DIR" ] && [ ! -L "$CONFIG_DIR" ]; then cp -a "$CONFIG_DIR/." "$BACKUP_DIR/config/"; fi
 if [ -f "$STATE_DIR/.version" ] && [ ! -L "$STATE_DIR/.version" ]; then
     cp -a "$STATE_DIR/.version" "$BACKUP_DIR/previous-version"
@@ -180,7 +222,7 @@ else
     LEGACY_DOWNLOAD_URL="https://github.com/scherenhaenden/FusionPanel/releases/download/${URL_VERSION}/fusionpanel-${URL_VERSION}-${OS}-${ARCH}.tar.gz"
 fi
 
-if [ -n "${FUSIONPANEL_MOCK_DOWNLOAD_URL:-}" ]; then
+if [ "$TEST_MODE" -eq 1 ] && [ -n "${FUSIONPANEL_MOCK_DOWNLOAD_URL:-}" ]; then
     DOWNLOAD_URL="$FUSIONPANEL_MOCK_DOWNLOAD_URL"
     LEGACY_DOWNLOAD_URL=""
 fi
@@ -199,6 +241,9 @@ if ! tar -xzf "$TMP_DIR/fusionpanel.tar.gz" -C "$TMP_DIR/payload"; then
     exit 1
 fi
 if ! fusionpanel_validate_payload "$TMP_DIR/payload"; then
+    exit 1
+fi
+if ! fusionpanel_ensure_nginx_helper_group; then
     exit 1
 fi
 
@@ -228,8 +273,15 @@ done
 
 echo "Stopping services..."
 UPDATE_SERVICES_STOPPED=1
-systemctl stop fusionpanel.service fusionpanel-agent.service || true
-if [ "${FUSIONPANEL_TEST_FAIL_AFTER_STOP:-0}" = 1 ]; then
+for unit in fusionpanel-agent.service fusionpanel.service fusionpanel-nginx-helper.service; do
+    unit_path="$SYSTEMD_DIR/$unit"
+    if [ -f "$unit_path" ] && [ ! -L "$unit_path" ] \
+        && ! fusionpanel_stop_unit_if_active "$unit"; then
+        echo "Error: Could not stop $unit safely; the previous release will be restored." >&2
+        exit 1
+    fi
+done
+if [ "$TEST_MODE" -eq 1 ] && [ "${FUSIONPANEL_TEST_FAIL_AFTER_STOP:-0}" = 1 ]; then
     echo "Synthetic failure requested after stopping services." >&2
     exit 73
 fi
@@ -238,6 +290,13 @@ install_dir="$VERSION_LIB_DIR/$VERSION"
 fusionpanel_publish_version_dir "$TMP_DIR/release" "$install_dir"
 fusionpanel_switch_current "$VERSION_LIB_DIR" "$VERSION"
 fusionpanel_link_runtime_binaries "$BIN_DIR" "$VERSION_LIB_DIR"
+: > "$BACKUP_DIR/bin/installed-checksums"
+for binary in fusionpanel-api fusionpanel-agent fusionpanel-cli fusionpanel-nginx-helper; do
+    if [ -e "$BIN_DIR/$binary" ]; then
+        checksum=$(cksum "$BIN_DIR/$binary" | awk '{ print $1 ":" $2 }')
+        printf '%s %s\n' "$binary" "$checksum" >> "$BACKUP_DIR/bin/installed-checksums"
+    fi
+done
 
 mkdir -p "$CONFIG_DIR" "$STATE_DIR"
 cp -a "$install_dir/config/." "$CONFIG_DIR/"
@@ -251,8 +310,34 @@ for env_file in "$CONFIG_DIR/fusionpanel.env" "$CONFIG_DIR/fusionpanel-agent.env
     fi
 done
 
+if ! "$install_dir/bin/packaging/nginx-include.sh"; then
+    echo "Warning: Nginx include was not installed; website operations will fail closed until a compatible include is configured." >&2
+fi
+if ! fusionpanel_install_systemd_units "$install_dir/bin" "$SYSTEMD_DIR" "$CONFIG_DIR"; then
+    echo "Error: Could not install the FusionPanel systemd units." >&2
+    exit 1
+fi
+: > "$BACKUP_DIR/systemd/installed-checksums"
+for unit in fusionpanel.service fusionpanel-agent.service fusionpanel-nginx-helper.service; do
+    checksum=$(cksum "$SYSTEMD_DIR/$unit" | awk '{ print $1 ":" $2 }')
+    printf '%s %s\n' "$unit" "$checksum" >> "$BACKUP_DIR/systemd/installed-checksums"
+done
+if ! systemctl daemon-reload; then
+    echo "Error: systemd daemon-reload failed after installing updated units." >&2
+    exit 1
+fi
+
 echo "Restarting services..."
-systemctl start fusionpanel.service fusionpanel-agent.service || true
+for unit in fusionpanel-nginx-helper.service fusionpanel.service fusionpanel-agent.service; do
+    if ! systemctl start "$unit"; then
+        echo "Error: systemd could not start $unit; the previous release will be restored." >&2
+        exit 1
+    fi
+    if ! systemctl is-active --quiet "$unit"; then
+        echo "Error: $unit did not become active; the previous release will be restored." >&2
+        exit 1
+    fi
+done
 
 echo "Performing health check..."
 START_TIME=$(date +%s)
