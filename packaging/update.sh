@@ -1,27 +1,30 @@
 #!/bin/sh
-set -e
+set -eu
 
-# Non-interactive atomic updater script for FusionPanel
+# Non-interactive atomic updater script for FusionPanel.
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$SCRIPT_DIR/layout.sh"
 
 VERSION="${1:-latest}"
 BACKUP_DIR="/var/lib/fusionpanel/backup-pre-update"
 CONFIG_DIR="/etc/fusionpanel"
 BIN_DIR="/usr/local/bin"
 VERSION_LIB_DIR="/usr/local/lib/fusionpanel/versions"
+STATE_DIR="/var/lib/fusionpanel"
 HEALTH_URL="http://127.0.0.1:8080/v1/health"
 HEALTH_TIMEOUT=30
 
-# Allow overriding for tests
-if [ -n "$FUSIONPANEL_TEST_BACKUP_DIR" ]; then BACKUP_DIR="$FUSIONPANEL_TEST_BACKUP_DIR"; fi
-if [ -n "$FUSIONPANEL_TEST_CONFIG_DIR" ]; then CONFIG_DIR="$FUSIONPANEL_TEST_CONFIG_DIR"; fi
-if [ -n "$FUSIONPANEL_TEST_BIN_DIR" ]; then BIN_DIR="$FUSIONPANEL_TEST_BIN_DIR"; fi
-if [ -n "$FUSIONPANEL_TEST_VERSION_LIB_DIR" ]; then VERSION_LIB_DIR="$FUSIONPANEL_TEST_VERSION_LIB_DIR"; fi
-if [ -n "$FUSIONPANEL_HEALTH_URL" ]; then HEALTH_URL="$FUSIONPANEL_HEALTH_URL"; fi
+# Allow isolated layout tests without touching host paths or services.
+[ -z "${FUSIONPANEL_TEST_BACKUP_DIR:-}" ] || BACKUP_DIR="$FUSIONPANEL_TEST_BACKUP_DIR"
+[ -z "${FUSIONPANEL_TEST_CONFIG_DIR:-}" ] || CONFIG_DIR="$FUSIONPANEL_TEST_CONFIG_DIR"
+[ -z "${FUSIONPANEL_TEST_BIN_DIR:-}" ] || BIN_DIR="$FUSIONPANEL_TEST_BIN_DIR"
+[ -z "${FUSIONPANEL_TEST_VERSION_LIB_DIR:-}" ] || VERSION_LIB_DIR="$FUSIONPANEL_TEST_VERSION_LIB_DIR"
+[ -z "${FUSIONPANEL_TEST_STATE_DIR:-}" ] || STATE_DIR="$FUSIONPANEL_TEST_STATE_DIR"
+[ -z "${FUSIONPANEL_HEALTH_URL:-}" ] || HEALTH_URL="$FUSIONPANEL_HEALTH_URL"
 
-OS=""
-ARCH=""
 detect_os() {
-    if [ -n "$FUSIONPANEL_TEST_OS" ]; then
+    if [ -n "${FUSIONPANEL_TEST_OS:-}" ]; then
         OS="$FUSIONPANEL_TEST_OS"
         return
     fi
@@ -37,8 +40,9 @@ detect_os() {
         exit 1
     fi
 }
+
 detect_arch() {
-    if [ -n "$FUSIONPANEL_TEST_ARCH" ]; then
+    if [ -n "${FUSIONPANEL_TEST_ARCH:-}" ]; then
         ARCH="$FUSIONPANEL_TEST_ARCH"
         return
     fi
@@ -49,40 +53,74 @@ detect_arch() {
     esac
 }
 
+record_previous_release() {
+    previous_target=""
+    if [ -L "$VERSION_LIB_DIR/current" ]; then
+        previous_target=$(readlink "$VERSION_LIB_DIR/current")
+    elif [ -L "$BIN_DIR/fusionpanel-api" ]; then
+        previous_api=$(readlink "$BIN_DIR/fusionpanel-api")
+        case "$previous_api" in
+            "$VERSION_LIB_DIR"/*/bin/fusionpanel-api)
+                previous_target=${previous_api#"$VERSION_LIB_DIR"/}
+                previous_target=${previous_target%/bin/fusionpanel-api}
+                ;;
+        esac
+    fi
+
+    case "$previous_target" in
+        "" ) ;;
+        */*|.|..) echo "Error: Unrecognized current version target: $previous_target" >&2; return 1 ;;
+        * )
+            printf '%s\n' "$previous_target" > "$BACKUP_DIR/previous-current"
+            if [ -d "$VERSION_LIB_DIR/$previous_target" ]; then
+                cp -a "$VERSION_LIB_DIR/$previous_target" "$BACKUP_DIR/previous-release"
+            fi
+            ;;
+    esac
+}
+
 echo "Updating FusionPanel to version $VERSION..."
+case "$VERSION" in *[!a-zA-Z0-9.+_-]*|'') echo "Invalid version" >&2; exit 1;; esac
 detect_os
 detect_arch
 
-# Create backup of current state
-echo "Creating backup in $BACKUP_DIR..."
+if [ -L "$CONFIG_DIR" ] || { [ -e "$CONFIG_DIR" ] && [ ! -d "$CONFIG_DIR" ]; }; then
+    echo "Error: FusionPanel config path is not a real directory: $CONFIG_DIR" >&2
+    exit 1
+fi
+for env_file in "$CONFIG_DIR/fusionpanel.env" "$CONFIG_DIR/fusionpanel-agent.env"; do
+    if [ -L "$env_file" ] || { [ -e "$env_file" ] && [ ! -f "$env_file" ]; }; then
+        echo "Error: Refusing to update with a non-regular environment file: $env_file" >&2
+        exit 1
+    fi
+done
+
+# Preserve the active state before any service or symlink is changed.
 rm -rf "$BACKUP_DIR"
 mkdir -p "$BACKUP_DIR/bin" "$BACKUP_DIR/config"
+if [ -e "$BIN_DIR/fusionpanel-api" ]; then cp -L "$BIN_DIR/fusionpanel-api" "$BACKUP_DIR/bin/fusionpanel-api"; fi
+if [ -e "$BIN_DIR/fusionpanel-agent" ]; then cp -L "$BIN_DIR/fusionpanel-agent" "$BACKUP_DIR/bin/fusionpanel-agent"; fi
+if [ -e "$BIN_DIR/fusionpanel-cli" ]; then cp -L "$BIN_DIR/fusionpanel-cli" "$BACKUP_DIR/bin/fusionpanel-cli"; fi
+if [ -d "$CONFIG_DIR" ] && [ ! -L "$CONFIG_DIR" ]; then cp -a "$CONFIG_DIR/." "$BACKUP_DIR/config/"; fi
+if [ -f "$STATE_DIR/.version" ] && [ ! -L "$STATE_DIR/.version" ]; then
+    cp -a "$STATE_DIR/.version" "$BACKUP_DIR/previous-version"
+fi
+mkdir -p "$VERSION_LIB_DIR"
+record_previous_release
 
-if [ -e "$BIN_DIR/fusionpanel-api" ]; then
-    cp -L "$BIN_DIR/fusionpanel-api" "$BACKUP_DIR/bin/fusionpanel-api"
-fi
-if [ -e "$BIN_DIR/fusionpanel-agent" ]; then
-    cp -L "$BIN_DIR/fusionpanel-agent" "$BACKUP_DIR/bin/fusionpanel-agent"
-fi
-if [ -d "$CONFIG_DIR" ]; then
-    cp -a "$CONFIG_DIR/." "$BACKUP_DIR/config/" 2>/dev/null || true
-fi
-
-# Download new version
 TMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TMP_DIR"' EXIT
+trap 'rm -rf "$TMP_DIR"' EXIT HUP INT TERM
 
 LEGACY_DOWNLOAD_URL=""
 if [ "$VERSION" = "latest" ]; then
     DOWNLOAD_URL="https://github.com/scherenhaenden/FusionPanel/releases/latest/download/fusionpanel-${OS}-${ARCH}.tar.gz"
 else
-    case "$VERSION" in *[!a-zA-Z0-9.+_-]*|'') echo "Invalid version" >&2; exit 1;; esac
     URL_VERSION=$(printf '%s' "$VERSION" | sed 's/+/%2B/g')
     DOWNLOAD_URL="https://github.com/scherenhaenden/FusionPanel/releases/download/${URL_VERSION}/fusionpanel-${OS}-${ARCH}.tar.gz"
     LEGACY_DOWNLOAD_URL="https://github.com/scherenhaenden/FusionPanel/releases/download/${URL_VERSION}/fusionpanel-${URL_VERSION}-${OS}-${ARCH}.tar.gz"
 fi
 
-if [ -n "$FUSIONPANEL_MOCK_DOWNLOAD_URL" ]; then
+if [ -n "${FUSIONPANEL_MOCK_DOWNLOAD_URL:-}" ]; then
     DOWNLOAD_URL="$FUSIONPANEL_MOCK_DOWNLOAD_URL"
     LEGACY_DOWNLOAD_URL=""
 fi
@@ -95,47 +133,60 @@ if ! curl -sSLf "$DOWNLOAD_URL" -o "$TMP_DIR/fusionpanel.tar.gz"; then
     fi
 fi
 
-mkdir -p "$TMP_DIR/bin"
-if ! tar -xzf "$TMP_DIR/fusionpanel.tar.gz" -C "$TMP_DIR/bin/"; then
+mkdir -p "$TMP_DIR/payload"
+if ! tar -xzf "$TMP_DIR/fusionpanel.tar.gz" -C "$TMP_DIR/payload"; then
     echo "Error extracting archive." >&2
     exit 1
 fi
-
-if [ ! -f "$TMP_DIR/bin/fusionpanel-api" ] || [ ! -f "$TMP_DIR/bin/fusionpanel-agent" ]; then
-    echo "Error: Required binaries not found in archive." >&2
+if ! fusionpanel_validate_payload "$TMP_DIR/payload"; then
     exit 1
 fi
 
-# We use atomic installation logic
-install_dir="${VERSION_LIB_DIR}/${VERSION}"
-mkdir -p "${VERSION_LIB_DIR}"
-if [ -d "$install_dir" ]; then
-    rm -rf "$install_dir"
+# Prepare the exact same version-directory shape as install.sh before stopping services.
+mkdir -p "$TMP_DIR/release/bin" "$TMP_DIR/release/config" "$TMP_DIR/release/data"
+cp -a "$TMP_DIR/payload/." "$TMP_DIR/release/bin/"
+if [ -d "$CONFIG_DIR" ] && [ ! -L "$CONFIG_DIR" ]; then
+    cp -a "$CONFIG_DIR/." "$TMP_DIR/release/config/"
 fi
+fusionpanel_set_frontend_env \
+    "$TMP_DIR/release/config/fusionpanel.env" \
+    "$VERSION_LIB_DIR/current/bin/frontend/dist"
+printf '%s\n' "$VERSION" > "$TMP_DIR/release/.version"
+chmod 0700 "$TMP_DIR/release/config"
+chown root:root "$TMP_DIR/release/config"
+for env_file in "$TMP_DIR/release/config/fusionpanel.env" "$TMP_DIR/release/config/fusionpanel-agent.env"; do
+    if [ -f "$env_file" ]; then
+        chown root:root "$env_file"
+        chmod 0600 "$env_file"
+    fi
+done
 
-cp -a "$TMP_DIR/bin" "${install_dir}.tmp"
-mv "${install_dir}.tmp" "$install_dir"
-chmod 755 "$install_dir/fusionpanel-api" "$install_dir/fusionpanel-agent"
-
-# Stop services
 echo "Stopping services..."
 systemctl stop fusionpanel.service fusionpanel-agent.service || true
 
-# Replace binaries
-echo "Replacing binaries..."
-mkdir -p "$BIN_DIR"
-ln -sfn "$install_dir/fusionpanel-api" "$BIN_DIR/fusionpanel-api"
-ln -sfn "$install_dir/fusionpanel-agent" "$BIN_DIR/fusionpanel-agent"
+install_dir="$VERSION_LIB_DIR/$VERSION"
+fusionpanel_publish_version_dir "$TMP_DIR/release" "$install_dir"
+fusionpanel_switch_current "$VERSION_LIB_DIR" "$VERSION"
+fusionpanel_link_runtime_binaries "$BIN_DIR" "$VERSION_LIB_DIR"
 
-# Restart services
+mkdir -p "$CONFIG_DIR" "$STATE_DIR"
+cp -a "$install_dir/config/." "$CONFIG_DIR/"
+cp "$install_dir/.version" "$STATE_DIR/.version"
+chmod 0700 "$CONFIG_DIR"
+chown root:root "$CONFIG_DIR"
+for env_file in "$CONFIG_DIR/fusionpanel.env" "$CONFIG_DIR/fusionpanel-agent.env"; do
+    if [ -f "$env_file" ]; then
+        chown root:root "$env_file"
+        chmod 0600 "$env_file"
+    fi
+done
+
 echo "Restarting services..."
 systemctl start fusionpanel.service fusionpanel-agent.service || true
 
-# Health check
 echo "Performing health check..."
 START_TIME=$(date +%s)
 HEALTH_PASS=0
-
 while true; do
     if curl -sSLf "$HEALTH_URL" > /dev/null 2>&1; then
         HEALTH_PASS=1
@@ -143,9 +194,7 @@ while true; do
     fi
     CURRENT_TIME=$(date +%s)
     ELAPSED=$((CURRENT_TIME - START_TIME))
-    if [ "$ELAPSED" -ge "$HEALTH_TIMEOUT" ]; then
-        break
-    fi
+    if [ "$ELAPSED" -ge "$HEALTH_TIMEOUT" ]; then break; fi
     sleep 1
 done
 
@@ -153,6 +202,6 @@ if [ "$HEALTH_PASS" -eq 1 ]; then
     echo "Update successful."
 else
     echo "Health check failed after $HEALTH_TIMEOUT seconds. Rolling back." >&2
-    "$(dirname "$0")/rollback.sh"
+    "$SCRIPT_DIR/rollback.sh"
     exit 1
 fi

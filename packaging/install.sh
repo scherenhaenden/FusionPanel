@@ -117,6 +117,7 @@ write_runtime_env_files() {
     local port="$2"
     local admin_token="$3"
     local node_name
+    local frontend_dir="${5:-/usr/local/lib/fusionpanel/versions/current/bin/frontend/dist}"
     node_name=$(normalize_node_name "$4")
 
     mkdir -p "$config_dir"
@@ -127,6 +128,7 @@ write_runtime_env_files() {
     printf 'FUSIONPANEL_LISTEN=127.0.0.1:%s\n' "$port" > "$config_dir/fusionpanel.env"
     printf 'FUSIONPANEL_DATABASE_URL=/var/lib/fusionpanel/fusionpanel.db\n' >> "$config_dir/fusionpanel.env"
     printf 'FUSIONPANEL_ADMIN_TOKEN=%s\n' "$admin_token" >> "$config_dir/fusionpanel.env"
+    printf 'FUSIONPANEL_FRONTEND_DIR=%s\n' "$frontend_dir" >> "$config_dir/fusionpanel.env"
 
     printf 'FUSIONPANEL_AGENT_MODE=http\n' > "$config_dir/fusionpanel-agent.env"
     printf 'FUSIONPANEL_API_URL=http://127.0.0.1:%s\n' "$port" >> "$config_dir/fusionpanel-agent.env"
@@ -231,6 +233,14 @@ secure_active_env_files() {
 install() {
     echo "Installing FusionPanel $VERSION (Port: $PORT) on $OS ($ARCH)"
 
+    local source_dir
+    source_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+    if [ ! -f "$source_dir/layout.sh" ] && [ -f "$source_dir/../layout.sh" ]; then
+        source_dir=$(CDPATH= cd -- "$source_dir/.." && pwd)
+    fi
+    # shellcheck source=packaging/layout.sh
+    . "$source_dir/layout.sh"
+
     if [ "$DRY_RUN" -eq 1 ]; then
         echo "[Dry-run] Would download and install FusionPanel $VERSION"
         echo "[Dry-run] Would create symlinks and systemd units"
@@ -239,16 +249,19 @@ install() {
     fi
 
     local version_file="/var/lib/fusionpanel/.version"
-    local versions_dir="/usr/local/lib/fusionpanel/versions"
+    local versions_dir="${FUSIONPANEL_VERSION_LIB_DIR:-/usr/local/lib/fusionpanel/versions}"
     local install_dir="${versions_dir}/${VERSION}"
+    local bin_dir="${FUSIONPANEL_BIN_DIR:-/usr/local/bin}"
 
     # Harden existing copies even when the requested version is already installed.
     secure_versioned_env_files "$versions_dir"
 
-    if [ -f "/usr/local/bin/fusionpanel-api" ]; then
+    if [ -f "$bin_dir/fusionpanel-api" ]; then
         if [ -f "$version_file" ]; then
             INSTALLED_VERSION=$(cat "$version_file")
-            if [ "$INSTALLED_VERSION" = "$VERSION" ]; then
+            if [ "$INSTALLED_VERSION" = "$VERSION" ] \
+                && [ -x "$versions_dir/current/bin/fusionpanel-cli" ] \
+                && [ -f "$versions_dir/current/bin/frontend/dist/index.html" ]; then
                 echo "FusionPanel is already installed with version $VERSION."
                 echo "Idempotency guard triggered: skipping installation."
                 return 0
@@ -296,12 +309,11 @@ install() {
 
     rm -f "$TMP_DIR/fusionpanel.tar.gz"
 
-    if [ ! -f "$TMP_DIR/bin/fusionpanel-api" ] || [ ! -f "$TMP_DIR/bin/fusionpanel-agent" ]; then
-        echo "Error: Required binaries (fusionpanel-api, fusionpanel-agent) not found in archive" >&2
+    if ! fusionpanel_validate_payload "$TMP_DIR/bin"; then
         exit 1
     fi
 
-    chmod 755 "$TMP_DIR/bin/fusionpanel-api" "$TMP_DIR/bin/fusionpanel-agent"
+    chmod 755 "$TMP_DIR/bin/fusionpanel-api" "$TMP_DIR/bin/fusionpanel-agent" "$TMP_DIR/bin/fusionpanel-cli"
     echo "$VERSION" > "$TMP_DIR/.version"
 
     # Create configuration environment file with securely generated admin token if not exists
@@ -328,7 +340,8 @@ install() {
 
     local node_name
     node_name=$(normalize_node_name "$(uname -n 2>/dev/null || true)")
-    write_runtime_env_files "$TMP_DIR/config" "$PORT" "$admin_token" "$node_name"
+    write_runtime_env_files "$TMP_DIR/config" "$PORT" "$admin_token" "$node_name" \
+        "$versions_dir/current/bin/frontend/dist"
     preserve_agent_env_file "$sysconfdir/fusionpanel-agent.env" "$TMP_DIR/config/fusionpanel-agent.env"
 
     # Atomic move logic: copy to temporary path in final destination, then rename to ensure no incomplete installs.
@@ -337,21 +350,15 @@ install() {
     # Older releases also contain environment-file copies. Secure them before staging opens up its parent directory.
     secure_versioned_env_files "$versions_dir"
 
-    if [ -d "$install_dir" ]; then
-        rm -rf "$install_dir"
-    fi
-
     chmod 755 "$TMP_DIR"
-    cp -a "$TMP_DIR" "${install_dir}.tmp"
-    mv "${install_dir}.tmp" "$install_dir"
+    fusionpanel_publish_version_dir "$TMP_DIR" "$install_dir"
 
     # Keep the new versioned copies root-only as well; the active copies are installed under /etc below.
     secure_versioned_env_files "$versions_dir"
 
     # Now set up symlinks for binaries
-    mkdir -p /usr/local/bin
-    ln -sfn "$install_dir/bin/fusionpanel-api" "/usr/local/bin/fusionpanel-api"
-    ln -sfn "$install_dir/bin/fusionpanel-agent" "/usr/local/bin/fusionpanel-agent"
+    fusionpanel_switch_current "$versions_dir" "$VERSION"
+    fusionpanel_link_runtime_binaries "$bin_dir" "$versions_dir"
 
     cp "$install_dir/config/fusionpanel.env" "$sysconfdir/"
     cp "$install_dir/config/fusionpanel-agent.env" "$sysconfdir/"
@@ -374,7 +381,6 @@ install() {
         systemd_dir="$FUSIONPANEL_SYSTEMD_DIR"
     fi
 
-    local source_dir="$(cd "$(dirname "$0")" && pwd)"
     mkdir -p "$systemd_dir"
 
     if [ -f "$source_dir/systemd/fusionpanel.service" ]; then
