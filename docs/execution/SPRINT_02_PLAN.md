@@ -2,19 +2,19 @@
 
 **Sprint Branch**: `sprint-2` (branched from `master` @ `6b5adf5`, `v0.2.0-dev.1`)  
 **Target Release**: PR [#590](https://github.com/scherenhaenden/FusionPanel/pull/590) from `sprint-2` to `master` is open for release review; Cargo workspace package version `0.3.0-dev.1` is internal metadata, and no date/hash release tag or published artifact is recorded.<br>
-**Docker Required**: **No** (runs natively with `fusionpanel-api`, `fusionpanel-agent`, `fusionpanel-cli`, and SQLite)  
+**Docker Required**: Product development can run natively; Docker is used for the final disposable browser E2E and clean-install package qualification.
 **Estimated Effort**: L (8 story points)  
 
 ---
 
 ## 1. Sprint Goal (100% E2E Deliverable)
 
-Enable the FusionPanel control plane to **register a local node, enqueue jobs via API/UI, claim and execute them on `fusionpanel-agent`, and persist execution status and logs in SQLite**. Process-restart persistence is a separate qualification requirement.
+Enable the FusionPanel control plane to **register a local node, enqueue jobs via API/UI, claim and execute them on `fusionpanel-agent`, and persist execution status and logs in SQLite**. Process-restart persistence is part of the final browser E2E qualification.
 
 ### What Works at Sprint 2 Close
 1. Local `fusionpanel-agent` registers with `fusionpanel-api` and sends periodic heartbeats.
 2. Authenticated operators (cookie session or Bearer token) can list nodes, enqueue a job, poll/view job status (`queued` -> `running` -> `succeeded` / `failed`), and inspect job logs from both the REST API and React UI.
-3. SQLite store tests verify that node records, queued/completed jobs, and logs survive reopening `FUSIONPANEL_DATABASE_URL`; process-restart behavior remains a separate E2E qualification.
+3. SQLite store tests verify that node records, queued/completed jobs, and logs survive reopening `FUSIONPANEL_DATABASE_URL`; the final Docker/Playwright E2E also verifies node, job/log, and session persistence after API and agent restart.
 
 ### Upgrade Compatibility
 
@@ -84,8 +84,8 @@ Each branch **must** be developed independently from `sprint-2`, run **only loca
    * `RUST_MIN_STACK=33554432 cargo test --locked --workspace`
    * `RUST_MIN_STACK=33554432 cargo test --locked --manifest-path crates/agent/Cargo.toml`
    * `cd frontend && npm test -- --runInBand && npm run build`
-2. Run **Live E2E** (no Docker required):
-   * `fusionpanel-cli bootstrap operator` -> start `fusionpanel-api` + `fusionpanel-agent` -> browser/cookie login -> verify node appears online via `/v1/nodes` -> enqueue job via `/v1/jobs` -> verify agent executes & persists `succeeded` + logs -> restart both API & agent -> verify persisted node/job history. This final process-restart step has not been repeated on the versioned Sprint 2 head and remains unqualified there.
+2. Run **Live E2E** on the integrated Sprint branch:
+   * `fusionpanel-cli bootstrap operator` -> start `fusionpanel-api` + `fusionpanel-agent` -> browser/cookie login -> verify node appears online via `/v1/nodes` -> enqueue job via `/v1/jobs` -> verify agent executes & persists `succeeded` + logs -> restart both API & agent -> verify persisted node/job history. This flow passed on final head `2e2e8c7` in the Docker/Playwright gate on 2026-11-16.
 3. Complete release preparation after the Sprint gate is green:
    * The workspace version bump to `0.3.0-dev.1` is complete in PR #588.
    * Build the package from the versioned `sprint-2` head with `bash packaging/build-package.sh`.
@@ -102,4 +102,18 @@ The implementation, version bump, and evidence PRs are integrated on `sprint-2`.
 - Historical live E2E, no Docker: recorded at implementation gate head `55e1a1434a2c6be1fbb64477a7fb39eab242d1d3`. A disposable SQLite operator logged in through the cookie session, registered a local HTTP agent, ran `system.info` to `succeeded`, and manually checked persistence after restarting API and agent. That process-restart check was not repeated on the final versioned head. The final-head Docker/Playwright E2E covers login, a live node heartbeat, and a successful `system.info` job; it does not restart either process.
 - Package: `bash packaging/build-package.sh 0.3.0-dev.1 /tmp/fusionpanel-sprint2-final-package` — **passed** on `72b88a0a55e3c646579dda8f716eeb2daa43321a`. Archive: `fusionpanel-0.3.0-dev.1-debian-x86_64.tar.gz`, 5,321,299 bytes; SHA-256 `a1c8dd8982163633fcf8b6c1f729f984e568d4f69c835b7422a0e6291194e3a7`. `BUILD_INFO.txt` records the same source commit.
 
-**Remaining release work:** complete release review and checks on open PR [#590](https://github.com/scherenhaenden/FusionPanel/pull/590), repeat the process-restart E2E on its final head, then obtain product-owner acceptance. No date/hash release tag or published artifact is recorded. Issue [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) remains open. Current E2E does not qualify remote-node transport, clean-host installation, process restarts on the final head, or multi-node operation.
+**Historical remaining release work as of 15 November:** complete release review and checks on open PR [#590](https://github.com/scherenhaenden/FusionPanel/pull/590), repeat the process-restart E2E on its final head, then obtain product-owner acceptance. The 16 November update below records which of these gates have since passed.
+
+### Final Sprint 2 results — 16 November 2026
+
+The final integrated head is `2e2e8c719dc4cfba488c6dea4c3b635e16aa6656`. The following evidence supersedes the 15 November statements about final-head restart and clean-install qualification:
+
+- GitHub package run [43826668194](https://github.com/scherenhaenden/FusionPanel/actions/runs/43826668194) passed on this head. It verified package layout, updater rollback, installer checks, and package build.
+- The actual package artifact from that run passed a disposable Ubuntu 24.04 Docker install smoke with networking disabled. The installed CLI, API, agent, and UI worked; API/CLI health passed; UI root and bundled JavaScript returned HTTP 200; the agent remained active. Artifact SHA-256: `5b73733014b29d63a8618bcf1345e0c444765ac58c4d84a8d666612d0628929f`. systemd reload/activation was not tested.
+- GitHub browser E2E job [133162021961](https://github.com/scherenhaenden/FusionPanel/actions/runs/43826668270/job/133162021961) and local `act` both passed the Docker/Playwright flow (1/1). It runs `system.info`, restarts API and agent, then verifies the same node ID, operator session, succeeded job, and logs.
+- Local `act` jobs passed for validation, root Cargo workspace, agent (16 library + 5 integration tests), jobs (9 tests), frontend (6 suites / 26 tests + build), and browser npm package.
+- Local and GitHub `integration/nodes` remain blocked by `test_blocked_migration`, which requires full-machine disposable VMs. Five other node integration tests pass.
+- Full GitHub qualification run [43826668270](https://github.com/scherenhaenden/FusionPanel/actions/runs/43826668270) ended cancelled after 31 jobs passed and 43 failed; the unrelated `tests/e2e/hosting` job was cancelled to save runner time. The 43 failed job names are all within the 46-job master baseline failure set [43707984101](https://github.com/scherenhaenden/FusionPanel/actions/runs/43707984101); no new failed job names were found. The release PR remains open and unstable pending gate review.
+- The package workflow itself could not reach product steps under local `act` because its `debian:bookworm` container lacks Node for `actions/setup-node@v4`. The GitHub package run and actual Docker artifact smoke passed.
+
+**Remaining release work:** review the inherited full-matrix failures and the VM-backed migration blocker, complete the final release gate, then merge PR #590 and obtain product-owner acceptance. No date/hash release tag or published release artifact is recorded. Issue [#24](https://github.com/scherenhaenden/FusionPanel/issues/24) remains open. Remote-node transport and multi-node operation remain outside this evidence.
