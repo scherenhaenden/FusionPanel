@@ -36,17 +36,22 @@ fi
 "$cargo_bin" build --locked --release --manifest-path "$root/Cargo.toml" \
     --target-dir "$target_dir" -p fusionpanel-api -p fusionpanel-cli
 "$cargo_bin" build --locked --release --manifest-path "$root/crates/agent/Cargo.toml" \
-    --target-dir "$target_dir" --bin fusionpanel-agent
+    --target-dir "$target_dir" --bin fusionpanel-agent --bin fusionpanel-nginx-helper
 "$npm_bin" ci --prefix "$root/frontend"
 "$npm_bin" --prefix "$root/frontend" run build -- --outDir "$frontend_dist" --emptyOutDir
 
-for binary in fusionpanel-api fusionpanel-agent fusionpanel-cli; do
+for binary in fusionpanel-api fusionpanel-agent fusionpanel-cli fusionpanel-nginx-helper; do
     [[ -x "$target_dir/release/$binary" ]] || {
         echo "BLOCKED: release binary missing or not executable: $target_dir/release/$binary" >&2
         exit 1
     }
     install -m 755 "$target_dir/release/$binary" "$staging/$binary"
 done
+mkdir -p "$staging/systemd" "$staging/packaging"
+for unit in fusionpanel.service fusionpanel-agent.service fusionpanel-nginx-helper.service; do
+    install -m 644 "$root/packaging/systemd/$unit" "$staging/systemd/$unit"
+done
+install -m 755 "$root/packaging/nginx-include.sh" "$staging/packaging/nginx-include.sh"
 [[ -f "$frontend_dist/index.html" ]] || {
     echo "BLOCKED: frontend build did not produce $frontend_dist/index.html" >&2
     exit 1

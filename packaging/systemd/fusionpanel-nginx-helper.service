@@ -1,0 +1,34 @@
+[Unit]
+Description=FusionPanel Nginx Configuration Helper
+After=local-fs.target
+Before=fusionpanel-agent.service
+Documentation=https://github.com/scherenhaenden/FusionPanel
+
+[Service]
+Type=simple
+User=root
+Group=fusionpanel-nginx
+ExecStart=/usr/local/bin/fusionpanel-nginx-helper
+Restart=on-failure
+RestartSec=2s
+RuntimeDirectory=fusionpanel-nginx
+RuntimeDirectoryMode=0750
+UMask=0007
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_KILL
+ReadWritePaths=-/etc/nginx/fusionpanel
+ReadOnlyPaths=-/srv/fusionpanel/sites
+
+[Install]
+WantedBy=multi-user.target

@@ -26,6 +26,8 @@ pub enum ManagedSiteError {
     ActiveConfigRejected,
     ReloadFailed,
     RollbackFailed,
+    HelperUnavailable,
+    OutcomeUncertain,
 }
 
 impl std::fmt::Display for ManagedSiteError {
@@ -39,6 +41,8 @@ impl std::fmt::Display for ManagedSiteError {
             Self::ActiveConfigRejected => "Nginx rejected the active config",
             Self::ReloadFailed => "Nginx reload failed",
             Self::RollbackFailed => "site config rollback could not be completed",
+            Self::HelperUnavailable => "privileged site helper is unavailable",
+            Self::OutcomeUncertain => "site operation outcome is uncertain",
         })
     }
 }

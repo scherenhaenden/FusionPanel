@@ -4,16 +4,225 @@
 
 fusionpanel_validate_payload() {
     payload_dir=$1
-    for binary in fusionpanel-api fusionpanel-agent fusionpanel-cli; do
+    for binary in fusionpanel-api fusionpanel-agent fusionpanel-cli fusionpanel-nginx-helper; do
         if [ ! -x "$payload_dir/$binary" ]; then
             echo "Error: Required executable not found in package: $binary" >&2
             return 1
         fi
     done
+    for unit in fusionpanel.service fusionpanel-agent.service fusionpanel-nginx-helper.service; do
+        if [ ! -f "$payload_dir/systemd/$unit" ] || [ -L "$payload_dir/systemd/$unit" ]; then
+            echo "Error: Required systemd unit not found in package: $unit" >&2
+            return 1
+        fi
+    done
+    if [ ! -x "$payload_dir/packaging/nginx-include.sh" ]; then
+        echo "Error: Required Nginx integration setup script not found in package." >&2
+        return 1
+    fi
     if [ ! -f "$payload_dir/frontend/dist/index.html" ]; then
         echo "Error: Required frontend file not found in package: frontend/dist/index.html" >&2
         return 1
     fi
+}
+
+fusionpanel_is_source_checkout() {
+    fusionpanel_script_dir=$1
+    fusionpanel_repo_root=$(CDPATH= cd -- "$fusionpanel_script_dir/.." && pwd) || return 1
+    [ -d "$fusionpanel_repo_root/.git" ] || [ -f "$fusionpanel_repo_root/.git" ]
+}
+
+fusionpanel_validate_nginx_helper_group() {
+    if ! fusionpanel_group_entry=$(getent group fusionpanel-nginx 2>/dev/null); then
+        echo "Error: Could not verify the private Nginx helper group." >&2
+        return 1
+    fi
+    fusionpanel_group_members=$(printf '%s\n' "$fusionpanel_group_entry" | awk -F: 'NF >= 4 { print $4 }')
+    fusionpanel_group_gid=$(printf '%s\n' "$fusionpanel_group_entry" | awk -F: 'NF >= 3 { print $3 }')
+    case "$fusionpanel_group_gid" in
+        ""|*[!0-9]*)
+            echo "Error: Could not resolve the private Nginx helper group GID." >&2
+            return 1
+            ;;
+    esac
+    if [ -n "$fusionpanel_group_members" ]; then
+        echo "Error: fusionpanel-nginx already has supplementary members; refusing to grant helper access." >&2
+        return 1
+    fi
+
+    if ! fusionpanel_passwd_entries=$(getent passwd 2>/dev/null); then
+        echo "Error: Could not verify primary-group users for fusionpanel-nginx." >&2
+        return 1
+    fi
+    fusionpanel_primary_group_users=$(printf '%s\n' "$fusionpanel_passwd_entries" \
+        | awk -F: -v gid="$fusionpanel_group_gid" '$4 == gid { print $1 }')
+    if [ -n "$fusionpanel_primary_group_users" ]; then
+        echo "Error: fusionpanel-nginx is a primary group for existing accounts; refusing to grant helper access." >&2
+        return 1
+    fi
+}
+
+fusionpanel_ensure_nginx_helper_group() {
+    if ! command -v getent >/dev/null 2>&1 || ! command -v groupadd >/dev/null 2>&1; then
+        echo "Error: getent and groupadd are required to provision the private Nginx helper group." >&2
+        return 1
+    fi
+
+    if getent group fusionpanel-nginx >/dev/null 2>&1; then
+        fusionpanel_validate_nginx_helper_group
+        return $?
+    fi
+
+    if ! groupadd --system fusionpanel-nginx; then
+        echo "Error: Could not create the private Nginx helper group." >&2
+        return 1
+    fi
+    fusionpanel_validate_nginx_helper_group
+}
+
+fusionpanel_stop_unit_if_active() {
+    fusionpanel_unit=$1
+    if systemctl is-active --quiet "$fusionpanel_unit"; then
+        systemctl stop "$fusionpanel_unit"
+        return $?
+    else
+        fusionpanel_active_status=$?
+        case "$fusionpanel_active_status" in
+            3|4) return 0 ;;
+            *) return 1 ;;
+        esac
+    fi
+}
+
+# Ensure a service-owned private directory without changing any existing
+# directory or traversing its contents. The optional installer UID exists so
+# package tests can exercise this helper with temporary, non-system paths.
+fusionpanel_ensure_private_directory() {
+    fusionpanel_private_dir=$1
+    fusionpanel_private_user=$2
+    fusionpanel_private_group=$3
+    fusionpanel_required_installer_uid=${4:-0}
+
+    case "$fusionpanel_private_dir" in
+        /*/*) ;;
+        *) echo "Error: Refusing an invalid private directory path." >&2; return 1 ;;
+    esac
+    if [ -L "$fusionpanel_private_dir" ] \
+        || { [ -e "$fusionpanel_private_dir" ] && [ ! -d "$fusionpanel_private_dir" ]; }; then
+        echo "Error: Refusing a symlink or non-directory at $fusionpanel_private_dir." >&2
+        return 1
+    fi
+
+    fusionpanel_private_uid=$(id -u "$fusionpanel_private_user" 2>/dev/null) || {
+        echo "Error: Could not resolve service user $fusionpanel_private_user." >&2
+        return 1
+    }
+    fusionpanel_private_group_entry=$(getent group "$fusionpanel_private_group" 2>/dev/null) || {
+        echo "Error: Could not resolve service group $fusionpanel_private_group." >&2
+        return 1
+    }
+    fusionpanel_private_gid=$(printf '%s\n' "$fusionpanel_private_group_entry" | awk -F: 'NF >= 3 { print $3 }')
+    case "$fusionpanel_private_uid:$fusionpanel_private_gid" in
+        *[!0-9:]*|:|*:|:*)
+            echo "Error: Could not resolve numeric service ownership." >&2
+            return 1
+            ;;
+    esac
+
+    if [ ! -e "$fusionpanel_private_dir" ]; then
+        fusionpanel_private_parent=${fusionpanel_private_dir%/*}
+        if [ -L "$fusionpanel_private_parent" ] || [ ! -d "$fusionpanel_private_parent" ]; then
+            echo "Error: The parent of $fusionpanel_private_dir must already be a real directory." >&2
+            return 1
+        fi
+        fusionpanel_current_uid=$(id -u 2>/dev/null) || {
+            echo "Error: Could not verify installer identity." >&2
+            return 1
+        }
+        if [ "$fusionpanel_current_uid" != "$fusionpanel_required_installer_uid" ]; then
+            echo "Error: Only the expected privileged installer may create $fusionpanel_private_dir." >&2
+            return 1
+        fi
+        if ! mkdir -m 0700 -- "$fusionpanel_private_dir"; then
+            echo "Error: Could not create $fusionpanel_private_dir." >&2
+            return 1
+        fi
+        fusionpanel_created_metadata=$(stat -c '%u %g' -- "$fusionpanel_private_dir" 2>/dev/null) || {
+            rmdir -- "$fusionpanel_private_dir" 2>/dev/null || true
+            echo "Error: Could not verify newly created directory $fusionpanel_private_dir." >&2
+            return 1
+        }
+        set -- $fusionpanel_created_metadata
+        if { [ "$1" != "$fusionpanel_private_uid" ] || [ "$2" != "$fusionpanel_private_gid" ]; } \
+            && ! chown -- "$fusionpanel_private_user:$fusionpanel_private_group" "$fusionpanel_private_dir"; then
+            rmdir -- "$fusionpanel_private_dir" 2>/dev/null || true
+            echo "Error: Could not assign service ownership to newly created directory $fusionpanel_private_dir." >&2
+            return 1
+        fi
+        if ! chmod 0700 -- "$fusionpanel_private_dir"; then
+            rmdir -- "$fusionpanel_private_dir" 2>/dev/null || true
+            echo "Error: Could not secure newly created directory $fusionpanel_private_dir." >&2
+            return 1
+        fi
+    fi
+
+    fusionpanel_private_metadata=$(stat -c '%u %g %a' -- "$fusionpanel_private_dir" 2>/dev/null) || {
+        echo "Error: Could not verify $fusionpanel_private_dir." >&2
+        return 1
+    }
+    set -- $fusionpanel_private_metadata
+    if [ "$1" != "$fusionpanel_private_uid" ] \
+        || [ "$2" != "$fusionpanel_private_gid" ] \
+        || [ "$3" != 700 ]; then
+        echo "Error: Existing directory $fusionpanel_private_dir must be owned by $fusionpanel_private_user:$fusionpanel_private_group with mode 0700; it was left unchanged." >&2
+        return 1
+    fi
+}
+
+fusionpanel_install_systemd_units() {
+    payload_dir=$1
+    systemd_dir=$2
+    sysconfdir=$3
+    mkdir -p "$systemd_dir"
+    unit_temp_dir="$systemd_dir/.fusionpanel-unit-stage.$$"
+    if [ -e "$unit_temp_dir" ] || [ -L "$unit_temp_dir" ]; then
+        echo "Error: Systemd staging path already exists." >&2
+        return 1
+    fi
+    mkdir -m 0700 "$unit_temp_dir" || return 1
+
+    for unit in fusionpanel.service fusionpanel-agent.service fusionpanel-nginx-helper.service; do
+        source_unit="$payload_dir/systemd/$unit"
+        target_unit="$unit_temp_dir/$unit"
+        if [ ! -f "$source_unit" ] || [ -L "$source_unit" ]; then
+            rm -rf "$unit_temp_dir"
+            echo "Error: Required systemd unit is missing or unsafe: $unit" >&2
+            return 1
+        fi
+        case "$unit" in
+            fusionpanel.service)
+                sed "s|/etc/fusionpanel/fusionpanel.env|$sysconfdir/fusionpanel.env|g" "$source_unit" > "$target_unit"
+                ;;
+            fusionpanel-agent.service)
+                sed "s|/etc/fusionpanel/fusionpanel-agent.env|$sysconfdir/fusionpanel-agent.env|g" "$source_unit" > "$target_unit"
+                ;;
+            *) cp "$source_unit" "$target_unit" ;;
+        esac
+        chmod 0644 "$target_unit" || { rm -rf "$unit_temp_dir"; return 1; }
+    done
+
+    for unit in fusionpanel.service fusionpanel-agent.service fusionpanel-nginx-helper.service; do
+        target="$systemd_dir/$unit"
+        if [ -L "$target" ] || { [ -e "$target" ] && [ ! -f "$target" ]; }; then
+            rm -rf "$unit_temp_dir"
+            echo "Error: Refusing to replace a non-regular systemd unit: $target" >&2
+            return 1
+        fi
+    done
+    for unit in fusionpanel.service fusionpanel-agent.service fusionpanel-nginx-helper.service; do
+        mv -f "$unit_temp_dir/$unit" "$systemd_dir/$unit" || { rm -rf "$unit_temp_dir"; return 1; }
+    done
+    rmdir "$unit_temp_dir"
 }
 
 fusionpanel_normalize_node_name() {
@@ -249,8 +458,13 @@ fusionpanel_link_runtime_binaries() {
     bin_dir=$1
     versions_dir=$2
     mkdir -p "$bin_dir"
-    for binary in fusionpanel-api fusionpanel-agent fusionpanel-cli; do
-        ln -sfn "$versions_dir/current/bin/$binary" "$bin_dir/$binary"
+    for binary in fusionpanel-api fusionpanel-agent fusionpanel-cli fusionpanel-nginx-helper; do
+        target="$versions_dir/current/bin/$binary"
+        if [ -x "$target" ]; then
+            ln -sfn "$target" "$bin_dir/$binary"
+        elif [ -L "$bin_dir/$binary" ] && [ "$(readlink "$bin_dir/$binary" 2>/dev/null || true)" = "$target" ]; then
+            rm -f "$bin_dir/$binary"
+        fi
     done
 }
 

@@ -4,6 +4,8 @@ set -e
 # Test installer functionality
 
 TEST_DIR=$(mktemp -d)
+TEST_UID=$(id -u)
+TEST_GID=$(id -g)
 INSTALL_SCRIPT="$(dirname "$(dirname "$0")")/install.sh"
 
 cleanup() {
@@ -19,15 +21,61 @@ chmod +x "$INSTALL_SCRIPT"
 # Mocking commands for the test environment
 export PATH="$TEST_DIR/bin:$PATH"
 mkdir -p "$TEST_DIR/bin"
-for cmd in curl systemctl tar useradd groupadd id chown openssl; do
+for cmd in apt-get curl systemctl tar useradd groupadd getent id chown openssl; do
     echo "#!/bin/sh" > "$TEST_DIR/bin/$cmd"
 
     if [ "$cmd" = "openssl" ]; then
         echo "echo 'mocked-secure-token-1234567890abcdef'" >> "$TEST_DIR/bin/$cmd"
+    elif [ "$cmd" = "apt-get" ]; then
+        echo "exit 0" >> "$TEST_DIR/bin/$cmd"
     elif [ "$cmd" = "id" ]; then
-        echo "if [ \"\$1\" = 'fusionpanel' ] && [ -f \"$TEST_DIR/fusionpanel_user_created\" ]; then exit 0; elif [ \"\$1\" = 'fusionpanel' ]; then exit 1; else exit 0; fi" >> "$TEST_DIR/bin/$cmd"
+        cat <<EOF > "$TEST_DIR/bin/$cmd"
+#!/bin/sh
+if [ "\$1" = '-u' ]; then
+    if [ "\${2:-}" = 'fusionpanel' ] || [ \$# -eq 1 ]; then
+        printf '%s\\n' '$TEST_UID'
+        exit 0
+    fi
+fi
+if [ "\$1" = 'fusionpanel' ]; then
+    [ -f "$TEST_DIR/fusionpanel_user_created" ] && exit 0
+    exit 1
+fi
+exit 0
+EOF
     elif [ "$cmd" = "groupadd" ]; then
-        echo "touch \"$TEST_DIR/fusionpanel_group_created\"" >> "$TEST_DIR/bin/$cmd"
+        echo "if [ \"\$2\" = 'fusionpanel-nginx' ]; then touch \"$TEST_DIR/fusionpanel_nginx_group_created\"; else touch \"$TEST_DIR/fusionpanel_group_created\"; fi" >> "$TEST_DIR/bin/$cmd"
+    elif [ "$cmd" = "getent" ]; then
+        cat <<EOF > "$TEST_DIR/bin/$cmd"
+#!/bin/sh
+case "\$1" in
+    group)
+        case "\${2:-}" in
+            fusionpanel-nginx)
+                if [ -f "$TEST_DIR/fusionpanel_nginx_group_created" ]; then
+                    printf 'fusionpanel-nginx:x:$(($TEST_GID + 1)):\\n'
+                    exit 0
+                fi
+                exit 2
+                ;;
+            fusionpanel)
+                if [ -f "$TEST_DIR/fusionpanel_group_created" ]; then
+                    printf 'fusionpanel:x:$TEST_GID:\\n'
+                    exit 0
+                fi
+                exit 2
+                ;;
+            *) exit 2 ;;
+        esac
+        ;;
+    passwd)
+        exit 0
+        ;;
+    *)
+        exit 2
+        ;;
+esac
+EOF
     elif [ "$cmd" = "useradd" ]; then
         echo "touch \"$TEST_DIR/fusionpanel_user_created\"" >> "$TEST_DIR/bin/$cmd"
     elif [ "$cmd" = "systemctl" ]; then
@@ -35,9 +83,33 @@ for cmd in curl systemctl tar useradd groupadd id chown openssl; do
     elif [ "$cmd" = "curl" ]; then
         echo "touch \"\$4\"" >> "$TEST_DIR/bin/$cmd"
     elif [ "$cmd" = "tar" ]; then
-        echo "mkdir -p \"\$4\"" >> "$TEST_DIR/bin/$cmd"
-        echo "touch \"\$4/fusionpanel-api\"" >> "$TEST_DIR/bin/$cmd"
-        echo "touch \"\$4/fusionpanel-agent\"" >> "$TEST_DIR/bin/$cmd"
+        cat <<EOF > "$TEST_DIR/bin/$cmd"
+#!/bin/sh
+destination=
+while [ \$# -gt 0 ]; do
+    if [ "\$1" = "-C" ]; then
+        shift
+        destination=\$1
+        break
+    fi
+    shift
+done
+if [ -z "\$destination" ]; then
+    echo 'mock tar did not receive an extraction directory' >&2
+    exit 2
+fi
+mkdir -p "\$destination/frontend/dist" "\$destination/systemd" "\$destination/packaging"
+for binary in fusionpanel-api fusionpanel-agent fusionpanel-cli fusionpanel-nginx-helper; do
+    : > "\$destination/\$binary"
+    chmod +x "\$destination/\$binary"
+done
+for unit in fusionpanel.service fusionpanel-agent.service fusionpanel-nginx-helper.service; do
+    : > "\$destination/systemd/\$unit"
+done
+printf '#!/bin/sh\\nexit 0\\n' > "\$destination/packaging/nginx-include.sh"
+chmod +x "\$destination/packaging/nginx-include.sh"
+: > "\$destination/frontend/dist/index.html"
+EOF
     else
         echo "echo 'Mocked $cmd called' >&2" >> "$TEST_DIR/bin/$cmd"
     fi
@@ -74,8 +146,8 @@ test_clean_install() {
         echo "FAIL: Expected $test_prefix/bin/fusionpanel-api to be executable"
         exit 1
     fi
-    if [ ! -f "$test_prefix/.version" ]; then
-        echo "FAIL: Expected $test_prefix/.version to exist"
+    if [ ! -f "$test_prefix/var/lib/fusionpanel/.version" ]; then
+        echo "FAIL: Expected version marker in the isolated FusionPanel state directory"
         exit 1
     fi
 

@@ -1,8 +1,9 @@
 #![forbid(unsafe_code)]
 
 use crate::metrics::{MetricsCollector, SystemMetrics};
+use crate::nginx_helper_rpc::NginxHelperClient;
 use fusionpanel_agent_protocol::{Operation as ProtocolOperation, Request as ProtocolRequest};
-use hosting::{ManagedSiteOperations, ManagedSiteSpec, NginxSiteAdapter};
+use hosting::{ManagedSiteError, ManagedSiteOperations, ManagedSiteSpec};
 use reqwest::{Client, Method, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -404,12 +405,12 @@ impl AgentWorker {
     }
 
     pub fn from_config(config: AgentWorkerConfig) -> Result<Self, WorkerError> {
-        Self::from_config_with_site_operations(config, Box::new(NginxSiteAdapter::system_default()))
+        Self::from_config_with_site_operations(config, Box::new(NginxHelperClient::default()))
     }
 
-    /// Build a worker with an explicit site runtime. Production defaults use
-    /// the node's configured Nginx adapter; fixtures can inject a real isolated
-    /// Nginx runtime or a unit fake through the same boundary.
+    /// Build a worker with an explicit site runtime. Production defaults use a
+    /// bounded local RPC to the privileged Nginx helper; fixtures can inject an
+    /// isolated Nginx adapter or a unit fake through the same boundary.
     pub fn from_config_with_site_operations(
         config: AgentWorkerConfig,
         site_operations: Box<dyn ManagedSiteOperations>,
@@ -647,18 +648,36 @@ fn execute_operation(
             spec,
         } => match site_operations.apply_site(site_id, &domain, &spec) {
             Ok(()) => OperationOutcome::success(format!("site.apply completed for {domain}")),
-            Err(_) => OperationOutcome::failure(
-                "site.apply failed; managed config was preserved or rolled back",
-            ),
+            Err(error) => OperationOutcome::failure(site_apply_failure_message(&error)),
         },
         TypedOperation::SiteDelete { site_id, domain } => {
             match site_operations.delete_site(site_id, &domain) {
                 Ok(()) => OperationOutcome::success(format!("site.delete completed for {domain}")),
-                Err(_) => OperationOutcome::failure(
-                    "site.delete failed; managed config was preserved or rolled back",
-                ),
+                Err(error) => OperationOutcome::failure(site_delete_failure_message(&error)),
             }
         }
+    }
+}
+
+fn site_apply_failure_message(error: &ManagedSiteError) -> &'static str {
+    if matches!(
+        error,
+        ManagedSiteError::RollbackFailed | ManagedSiteError::OutcomeUncertain
+    ) {
+        "site.apply failed; managed config state is uncertain and manual Nginx recovery may be required"
+    } else {
+        "site.apply failed; managed config was preserved or rolled back"
+    }
+}
+
+fn site_delete_failure_message(error: &ManagedSiteError) -> &'static str {
+    if matches!(
+        error,
+        ManagedSiteError::RollbackFailed | ManagedSiteError::OutcomeUncertain
+    ) {
+        "site.delete failed; managed config state is uncertain and manual Nginx recovery may be required"
+    } else {
+        "site.delete failed; managed config was preserved or rolled back"
     }
 }
 
@@ -872,6 +891,20 @@ mod tests {
             Some("site.apply failed; managed config was preserved or rolled back")
         );
         assert!(!outcome.log_text.contains("ReloadFailed"));
+    }
+
+    #[test]
+    fn rollback_and_rpc_uncertainty_are_not_reported_as_successful_restoration() {
+        assert!(
+            site_apply_failure_message(&ManagedSiteError::RollbackFailed)
+                .contains("state is uncertain")
+        );
+        assert!(
+            site_delete_failure_message(&ManagedSiteError::OutcomeUncertain)
+                .contains("manual Nginx recovery")
+        );
+        assert!(site_apply_failure_message(&ManagedSiteError::ReloadFailed)
+            .contains("preserved or rolled back"));
     }
 
     #[test]
