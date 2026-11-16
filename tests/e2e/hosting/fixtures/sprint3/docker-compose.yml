@@ -2,7 +2,7 @@ x-sprint3-logging: &sprint3-logging
   driver: local
   options:
     max-size: "2m"
-    max-file: "1"
+    max-file: "2"
 
 services:
   api:

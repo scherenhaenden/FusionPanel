@@ -156,6 +156,31 @@ if [ "$digest_one" = "$digest_two" ]; then
 fi
 printf 'PASS: fixture digest is stable and changes with the input.\n'
 
+if sprint3_validate_fixture_log_rotation "$fixture_dir/docker-compose.yml"; then
+  printf 'PASS: fixture runtime preflight accepts the compressed-log rotation minimum.\n'
+else
+  printf 'FAIL: fixture runtime preflight rejected the configured log rotation limit.\n' >&2
+  exit 1
+fi
+sed 's/max-file: "2"/max-file: "1"/' \
+  "$fixture_dir/docker-compose.yml" >"$temporary_dir/docker-compose-one-log-file.yml"
+if sprint3_validate_fixture_log_rotation "$temporary_dir/docker-compose-one-log-file.yml" \
+  >"$temporary_dir/one-log-file.log" 2>&1; then
+  printf 'FAIL: fixture runtime preflight accepted one compressed log file.\n' >&2
+  exit 1
+elif ! grep -q 'must retain at least two files' "$temporary_dir/one-log-file.log"; then
+  printf 'FAIL: compressed-log rotation rejection was not explained.\n' >&2
+  cat "$temporary_dir/one-log-file.log" >&2
+  exit 1
+else
+  printf 'PASS: fixture runtime preflight rejects a single compressed log file.\n'
+fi
+if ! grep -Fq 'sprint3_validate_fixture_log_rotation "$compose_file" || exit 2' \
+  "$fixture_dir/run.sh"; then
+  printf 'FAIL: fixture runner does not enforce the log rotation preflight before building.\n' >&2
+  exit 1
+fi
+
 mkdir -p "$temporary_dir/stage-source" "$temporary_dir/stage-context"
 printf 'FROM scratch\n' >"$temporary_dir/stage-source/Dockerfile"
 printf '#!/bin/sh\n' >"$temporary_dir/stage-source/start-node.sh"
@@ -205,6 +230,11 @@ fi
 if ! grep -Fq 'FUSIONPANEL_S3_API_BUILD_CONTEXT' "$fixture_dir/docker-compose.yml" \
   || ! grep -Fq 'FUSIONPANEL_S3_NODE_BUILD_CONTEXT' "$fixture_dir/docker-compose.yml"; then
   printf 'FAIL: Compose does not use staged narrow image build contexts.\n' >&2
+  exit 1
+fi
+if ! grep -Eq '^[[:space:]]+max-file: "([2-9]|[1-9][0-9]+)"$' \
+  "$fixture_dir/docker-compose.yml"; then
+  printf 'FAIL: Compose log rotation must retain at least two files for compressed Docker logs.\n' >&2
   exit 1
 fi
 printf 'PASS: isolated BuildKit cache has a 512 MiB GC cap and no global prune.\n'

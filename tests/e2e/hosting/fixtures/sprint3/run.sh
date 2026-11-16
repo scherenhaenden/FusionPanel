@@ -9,6 +9,7 @@ compose_file="$fixture_dir/docker-compose.yml"
 tmp_root=$(cd -- "${TMPDIR:-/tmp}" && pwd -P)
 
 source "$fixture_dir/preflight.sh"
+sprint3_validate_fixture_log_rotation "$compose_file" || exit 2
 sprint3_require_non_root_uid "$(id -u)"
 if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
   lock_parent="$XDG_RUNTIME_DIR"

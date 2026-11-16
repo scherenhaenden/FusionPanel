@@ -189,6 +189,30 @@ sprint3_validate_docker_target() {
   return 0
 }
 
+sprint3_validate_fixture_log_rotation() {
+  local compose_file="$1"
+  local max_files
+
+  if [ ! -f "$compose_file" ] || ! max_files=$(awk '
+    $1 == "x-sprint3-logging:" { in_logging = 1; next }
+    in_logging && /^[^[:space:]]/ { in_logging = 0 }
+    in_logging && $1 == "max-file:" {
+      gsub(/\"/, "", $2)
+      print $2
+      found++
+    }
+    END { if (found != 1) exit 1 }
+  ' "$compose_file"); then
+    printf 'BLOCKED: could not read one Sprint 3 Docker log rotation limit from %s.\n' \
+      "$compose_file" >&2
+    return 1
+  fi
+  if ! [[ "$max_files" =~ ^[0-9]+$ ]] || [ "$max_files" -lt 2 ]; then
+    printf 'BLOCKED: Sprint 3 Docker local log rotation must retain at least two files because compression is enabled by default.\n' >&2
+    return 1
+  fi
+}
+
 sprint3_fixture_digest() {
   local fixture_dir="$1"
 
