@@ -62,12 +62,15 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Check Sprint 2 E2E fixture shell and preflight
+      - name: Check Sprint 2 E2E fixture shell, seed and preflight
         run: |
           bash -n tests/e2e/browser/fixtures/sprint2/run.sh
           bash -n tests/e2e/browser/fixtures/sprint2/preflight.sh
           bash -n tests/e2e/browser/fixtures/sprint2/preflight.test.sh
+          bash -n tests/e2e/browser/fixtures/sprint2/seed-admin.sh
+          bash -n tests/e2e/browser/fixtures/sprint2/seed-admin.test.sh
           bash tests/e2e/browser/fixtures/sprint2/preflight.test.sh
+          bash tests/e2e/browser/fixtures/sprint2/seed-admin.test.sh
           npm --prefix tests/e2e/browser run test:unit:sprint2-fixture
 
   dependency-lane:
