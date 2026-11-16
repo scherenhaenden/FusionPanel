@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { api, CreateWebsiteRequest, WebsiteRecord } from '../../api';
+import React, { useEffect, useRef, useState } from 'react';
+import { api, createIdempotencyKey, CreateWebsiteRequest, WebsiteRecord } from '../../api';
 import { JobRecord } from '../../types';
 import { CreateSiteModal } from './CreateSiteModal';
 import { SiteDetail } from './SiteDetail';
@@ -14,6 +14,11 @@ type PendingOperation = {
   job: JobRecord;
 };
 
+type PendingCreateRequest = {
+  payloadSignature: string;
+  idempotencyKey: string;
+};
+
 const messageFromError = (error: unknown, fallback: string): string => {
   const value = error as { response?: { data?: { error?: { message?: string } } }; message?: string };
   return value.response?.data?.error?.message || value.message || fallback;
@@ -22,6 +27,11 @@ const messageFromError = (error: unknown, fallback: string): string => {
 const statusFromError = (error: unknown): number | undefined => {
   const value = error as { response?: { status?: number } };
   return value.response?.status;
+};
+
+const isUncertainMutationError = (error: unknown): boolean => {
+  const status = statusFromError(error);
+  return status === undefined || status === 408 || status === 425 || status === 429 || status >= 500;
 };
 
 const upsertSite = (sites: WebsiteRecord[], site: WebsiteRecord): WebsiteRecord[] => {
@@ -45,6 +55,8 @@ export const WebsitesView: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [pendingOperations, setPendingOperations] = useState<PendingOperation[]>([]);
   const [deletingSiteIds, setDeletingSiteIds] = useState<string[]>([]);
+  const pendingCreateRequestRef = useRef<PendingCreateRequest | null>(null);
+  const pendingDeleteKeysRef = useRef<Map<string, string>>(new Map());
 
   const selectedSite = selectedSiteId ? sites.find((site) => site.id === selectedSiteId) || null : null;
 
@@ -162,12 +174,22 @@ export const WebsitesView: React.FC = () => {
   }, [pollingSignature]);
 
   const handleCreateSite = async (request: CreateWebsiteRequest) => {
+    const payloadSignature = JSON.stringify(request);
+    const previousRequest = pendingCreateRequestRef.current;
+    const idempotencyKey = previousRequest?.payloadSignature === payloadSignature
+      ? previousRequest.idempotencyKey
+      : createIdempotencyKey();
+    pendingCreateRequestRef.current = { payloadSignature, idempotencyKey };
+
     setCreateError(null);
     setOperationError(null);
     setNotice(null);
     setIsCreating(true);
     try {
-      const response = await api.createSite(request);
+      const response = await api.createSite(request, idempotencyKey);
+      if (pendingCreateRequestRef.current?.idempotencyKey === idempotencyKey) {
+        pendingCreateRequestRef.current = null;
+      }
       setSites((currentSites) => upsertSite(currentSites, response.site));
       setIsCreateModalOpen(false);
 
@@ -183,6 +205,9 @@ export const WebsitesView: React.FC = () => {
         setOperationError(response.site.last_error || `${response.site.domain} provisioning failed.`);
       }
     } catch (error) {
+      if (!isUncertainMutationError(error) && pendingCreateRequestRef.current?.idempotencyKey === idempotencyKey) {
+        pendingCreateRequestRef.current = null;
+      }
       setCreateError(messageFromError(error, 'Could not create website.'));
     } finally {
       setIsCreating(false);
@@ -204,11 +229,17 @@ export const WebsitesView: React.FC = () => {
   };
 
   const handleDeleteSite = async (site: WebsiteRecord) => {
+    const idempotencyKey = pendingDeleteKeysRef.current.get(site.id) || createIdempotencyKey();
+    pendingDeleteKeysRef.current.set(site.id, idempotencyKey);
+
     setOperationError(null);
     setNotice(null);
     setDeletingSiteIds((currentIds) => currentIds.includes(site.id) ? currentIds : [...currentIds, site.id]);
     try {
-      const response = await api.deleteSite(site.id);
+      const response = await api.deleteSite(site.id, idempotencyKey);
+      if (pendingDeleteKeysRef.current.get(site.id) === idempotencyKey) {
+        pendingDeleteKeysRef.current.delete(site.id);
+      }
       setSites((currentSites) => upsertSite(currentSites, response.site));
       setPendingOperations((currentOperations) => [
         ...currentOperations.filter((operation) => operation.siteId !== site.id),
@@ -217,6 +248,9 @@ export const WebsitesView: React.FC = () => {
       setSelectedSiteId((currentId) => (currentId === site.id ? null : currentId));
       setNotice(`Deletion queued for ${site.domain}; waiting for the API to confirm it is gone.`);
     } catch (error) {
+      if (!isUncertainMutationError(error) && pendingDeleteKeysRef.current.get(site.id) === idempotencyKey) {
+        pendingDeleteKeysRef.current.delete(site.id);
+      }
       setOperationError(messageFromError(error, `Could not delete ${site.domain}.`));
     } finally {
       setDeletingSiteIds((currentIds) => currentIds.filter((id) => id !== site.id));

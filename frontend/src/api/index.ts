@@ -28,7 +28,7 @@ export interface WebsiteOperationResponse {
   job: JobRecord;
 }
 
-const createIdempotencyKey = (): string => {
+export const createIdempotencyKey = (): string => {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
   }
@@ -104,16 +104,16 @@ export const api = {
     return response.data.website;
   },
 
-  createSite: async (data: CreateWebsiteRequest): Promise<WebsiteOperationResponse> => {
+  createSite: async (data: CreateWebsiteRequest, idempotencyKey = createIdempotencyKey()): Promise<WebsiteOperationResponse> => {
     const response = await apiClient.post<WebsiteOperationResponse>('/v1/websites', data, {
-      headers: { 'Idempotency-Key': createIdempotencyKey() },
+      headers: { 'Idempotency-Key': idempotencyKey },
     });
     return response.data;
   },
 
-  deleteSite: async (id: string): Promise<WebsiteOperationResponse> => {
+  deleteSite: async (id: string, idempotencyKey = createIdempotencyKey()): Promise<WebsiteOperationResponse> => {
     const response = await apiClient.delete<WebsiteOperationResponse>(`/v1/websites/${encodeURIComponent(id)}`, {
-      headers: { 'Idempotency-Key': createIdempotencyKey() },
+      headers: { 'Idempotency-Key': idempotencyKey },
     });
     return response.data;
   },

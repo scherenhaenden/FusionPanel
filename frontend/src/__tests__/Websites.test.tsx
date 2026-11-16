@@ -59,8 +59,8 @@ describe('Websites API and view', () => {
       domain: 'app.local',
       kind: 'static',
       document_root: '/srv/fusionpanel/sites/app.local',
-    })).resolves.toEqual({ site, job: makeJob() });
-    await expect(api.deleteSite('site/one')).resolves.toEqual({ site, job: makeJob() });
+    }, 'create-site-key')).resolves.toEqual({ site, job: makeJob() });
+    await expect(api.deleteSite('site/one', 'delete-site-key')).resolves.toEqual({ site, job: makeJob() });
 
     expect(mock.history.get[1].url).toBe('/v1/websites/site%2Fone');
     expect(JSON.parse(mock.history.post[0].data)).toEqual({
@@ -68,9 +68,9 @@ describe('Websites API and view', () => {
       kind: 'static',
       document_root: '/srv/fusionpanel/sites/app.local',
     });
-    expect(headerValue(mock.history.post[0].headers, 'Idempotency-Key')).toBeTruthy();
+    expect(headerValue(mock.history.post[0].headers, 'Idempotency-Key')).toBe('create-site-key');
     expect(mock.history.delete[0].url).toBe('/v1/websites/site%2Fone');
-    expect(headerValue(mock.history.delete[0].headers, 'Idempotency-Key')).toBeTruthy();
+    expect(headerValue(mock.history.delete[0].headers, 'Idempotency-Key')).toBe('delete-site-key');
   });
 
   it('creates a static site and waits for persisted active state', async () => {
@@ -101,6 +101,56 @@ describe('Websites API and view', () => {
     });
     expect(headerValue(mock.history.post[0].headers, 'Idempotency-Key')).toBeTruthy();
     expect(mock.history.get.some((request) => request.url === '/v1/jobs/job-1')).toBe(true);
+  });
+
+  it('reuses a create idempotency key when retrying the same payload after a network error', async () => {
+    const site = makeStaticSite();
+    mock.onGet('/v1/websites').reply(200, { websites: [] });
+    mock.onPost('/v1/websites').networkErrorOnce().onPost('/v1/websites').reply(202, { site, job: makeJob() });
+
+    render(<WebsitesView />);
+    await screen.findByText('No websites found.');
+    fireEvent.click(screen.getByRole('button', { name: 'Create website' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Domain name'), { target: { value: 'app.local' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create website' }));
+
+    await within(dialog).findByRole('alert');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create website' }));
+    expect(await screen.findByText('app.local is active.')).toBeInTheDocument();
+
+    expect(mock.history.post).toHaveLength(2);
+    expect(headerValue(mock.history.post[0].headers, 'Idempotency-Key')).toBeTruthy();
+    expect(headerValue(mock.history.post[1].headers, 'Idempotency-Key')).toBe(
+      headerValue(mock.history.post[0].headers, 'Idempotency-Key'),
+    );
+  });
+
+  it('uses a fresh create idempotency key when a retry changes the payload', async () => {
+    const site = { ...makeStaticSite(), document_root: '/srv/fusionpanel/sites/app.local/public' };
+    mock.onGet('/v1/websites').reply(200, { websites: [] });
+    mock.onPost('/v1/websites').networkErrorOnce().onPost('/v1/websites').reply(202, { site, job: makeJob() });
+
+    render(<WebsitesView />);
+    await screen.findByText('No websites found.');
+    fireEvent.click(screen.getByRole('button', { name: 'Create website' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Domain name'), { target: { value: 'app.local' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create website' }));
+
+    await within(dialog).findByRole('alert');
+    fireEvent.change(within(dialog).getByLabelText('Document root'), {
+      target: { value: '/srv/fusionpanel/sites/app.local/public' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create website' }));
+    expect(await screen.findByText('app.local is active.')).toBeInTheDocument();
+
+    expect(mock.history.post).toHaveLength(2);
+    expect(JSON.parse(mock.history.post[0].data).document_root).toBe('/srv/fusionpanel/sites/app.local');
+    expect(JSON.parse(mock.history.post[1].data).document_root).toBe('/srv/fusionpanel/sites/app.local/public');
+    expect(headerValue(mock.history.post[0].headers, 'Idempotency-Key')).not.toBe(
+      headerValue(mock.history.post[1].headers, 'Idempotency-Key'),
+    );
   });
 
   it('loads details from the detail endpoint and renders the site configuration', async () => {
@@ -202,5 +252,28 @@ describe('Websites API and view', () => {
     expect(mock.history.delete).toHaveLength(1);
     expect(mock.history.delete[0].url).toBe('/v1/websites/site-1');
     expect(headerValue(mock.history.delete[0].headers, 'Idempotency-Key')).toBeTruthy();
+  });
+
+  it('reuses a delete idempotency key after a network error', async () => {
+    const site = makeStaticSite();
+    const deletingSite = { ...site, state: 'deleting' as const };
+    mock.onGet('/v1/websites').reply(200, { websites: [site] });
+    mock.onDelete('/v1/websites/site-1').networkErrorOnce()
+      .onDelete('/v1/websites/site-1').reply(202, { site: deletingSite, job: makeJob() });
+
+    render(<WebsitesView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete app.local' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
+    await screen.findByRole('alert');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete app.local' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
+    expect(await screen.findByText(/Deletion queued for app.local/)).toBeInTheDocument();
+
+    expect(mock.history.delete).toHaveLength(2);
+    expect(headerValue(mock.history.delete[0].headers, 'Idempotency-Key')).toBeTruthy();
+    expect(headerValue(mock.history.delete[1].headers, 'Idempotency-Key')).toBe(
+      headerValue(mock.history.delete[0].headers, 'Idempotency-Key'),
+    );
   });
 });
