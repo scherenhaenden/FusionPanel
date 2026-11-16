@@ -317,12 +317,28 @@ async fn complete_job(
     let error_text = request
         .error_text
         .map(|text| redact_known_secrets(&text, &[token, state.admin_token.as_str()]));
-    state
+    let node_id = node_id.to_string();
+    {
+        let mut jobs = state.jobs_store.lock().await;
+        let current = jobs.get(&id).map_err(map_job_error)?;
+        let is_same_terminal_retry = current.state == request.state
+            && current.worker_id.as_deref() == Some(node_id.as_str())
+            && matches!(
+                current.state,
+                JobState::Succeeded | JobState::Failed | JobState::Cancelled
+            );
+        if !is_same_terminal_retry {
+            jobs.transition_for_worker(&id, &node_id, request.state, error_text)
+                .map_err(map_job_error)?;
+        }
+    }
+    let completed = state
         .jobs_store
         .lock()
         .await
-        .transition_for_worker(&id, &node_id.to_string(), request.state, error_text)
+        .get(&id)
         .map_err(map_job_error)?;
+    super::websites::record_completion(&state, &completed).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -352,7 +368,7 @@ async fn authenticate_node(
     }
 }
 
-async fn authorized_operator(state: &AppState, headers: &HeaderMap) -> bool {
+pub(super) async fn authorized_operator(state: &AppState, headers: &HeaderMap) -> bool {
     if authorized_admin(state, headers) {
         return true;
     }
@@ -399,7 +415,7 @@ fn redact_known_secrets(value: &str, secrets: &[&str]) -> String {
         })
 }
 
-fn map_job_error(error: fusionpanel_jobs::JobStoreError) -> ErrorResponse {
+pub(super) fn map_job_error(error: fusionpanel_jobs::JobStoreError) -> ErrorResponse {
     match error {
         fusionpanel_jobs::JobStoreError::NotFound(_) => ErrorResponse {
             error: ErrorDetail {
@@ -423,7 +439,7 @@ fn map_job_error(error: fusionpanel_jobs::JobStoreError) -> ErrorResponse {
     }
 }
 
-fn unauthorized() -> ErrorResponse {
+pub(super) fn unauthorized() -> ErrorResponse {
     ErrorResponse {
         error: ErrorDetail {
             code: "unauthorized",
@@ -432,7 +448,7 @@ fn unauthorized() -> ErrorResponse {
     }
 }
 
-fn bad_request() -> ErrorResponse {
+pub(super) fn bad_request() -> ErrorResponse {
     ErrorResponse {
         error: ErrorDetail {
             code: "bad_request",
@@ -441,7 +457,7 @@ fn bad_request() -> ErrorResponse {
     }
 }
 
-fn internal_error() -> ErrorResponse {
+pub(super) fn internal_error() -> ErrorResponse {
     ErrorResponse {
         error: ErrorDetail {
             code: "internal_error",

@@ -6,6 +6,12 @@ use std::path::Path;
 use thiserror::Error;
 use uuid::Uuid;
 
+mod websites;
+
+pub use websites::{
+    WebsiteOperation, WebsiteOperationReservation, WebsiteRecord, WebsiteSpec, WebsiteState,
+};
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum OwnershipMode {
     TenantOwned,
@@ -43,6 +49,12 @@ pub enum StoreError {
     Json(#[from] serde_json::Error),
     #[error("Parse error: {0}")]
     Parse(String),
+    #[error("Website not found: {0}")]
+    WebsiteNotFound(Uuid),
+    #[error("Website request conflicts with existing state")]
+    WebsiteConflict,
+    #[error("Idempotency key was reused for a different operation")]
+    IdempotencyConflict,
 }
 
 pub struct ControlStore {
@@ -105,6 +117,37 @@ impl ControlStore {
                 [],
             )?;
             tx.pragma_update(None, "user_version", 2)?;
+        }
+
+        if user_version < 3 {
+            tx.execute_batch(
+                r#"
+                CREATE TABLE websites (
+                    site_id TEXT PRIMARY KEY,
+                    domain TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                    spec TEXT NOT NULL,
+                    state TEXT NOT NULL CHECK (state IN ('provisioning', 'active', 'failed', 'deleting')),
+                    last_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    operation_request_id TEXT NOT NULL,
+                    job_id TEXT
+                );
+                CREATE INDEX idx_websites_state ON websites (state);
+                CREATE TABLE website_operations (
+                    idempotency_key TEXT PRIMARY KEY,
+                    fingerprint TEXT NOT NULL,
+                    operation TEXT NOT NULL CHECK (operation IN ('site.apply', 'site.delete')),
+                    site_id TEXT NOT NULL,
+                    request_id TEXT NOT NULL,
+                    site_snapshot TEXT NOT NULL,
+                    job_id TEXT,
+                    previous_site_snapshot TEXT
+                );
+                CREATE INDEX idx_website_operations_site_id ON website_operations (site_id);
+                "#,
+            )?;
+            tx.pragma_update(None, "user_version", 3)?;
         }
 
         tx.commit()?;
@@ -726,7 +769,15 @@ mod tests {
             let user_version: u32 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(user_version, 2);
+            assert_eq!(user_version, 3);
+            let website_tables: u32 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('websites', 'website_operations')",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(website_tables, 2);
         }
     }
 

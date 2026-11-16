@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod node_jobs;
+mod websites;
 
 use axum::{
     body::Body,
@@ -258,6 +259,7 @@ fn app(state: AppState) -> Router {
         .route("/v1/capabilities", get(capabilities_handler))
         .route("/api/v1/capabilities", get(capabilities_handler))
         .merge(node_jobs::routes())
+        .merge(websites::routes())
         .fallback(fallback_handler)
         .with_state(state)
         .merge(auth_router)
