@@ -69,7 +69,7 @@ async fn get_website(
         .await
         .get_website(site_id)
         .map_err(map_store_error)?;
-    Ok(Json(json!({ "site": site })))
+    Ok(Json(json!({ "website": site })))
 }
 
 async fn create_website(
@@ -668,7 +668,9 @@ mod tests {
             None,
         )
         .await;
-        assert_eq!(response_json(detail).await["site"]["id"], site_id);
+        let detail = response_json(detail).await;
+        assert!(detail.get("site").is_none());
+        assert_eq!(detail["website"]["id"], site_id);
     }
 
     #[tokio::test]
@@ -733,7 +735,7 @@ mod tests {
             None,
         )
         .await;
-        assert_eq!(response_json(detail).await["site"]["state"], "active");
+        assert_eq!(response_json(detail).await["website"]["state"], "active");
 
         let deletion = send(
             &app,
@@ -775,7 +777,7 @@ mod tests {
             None,
         )
         .await;
-        let failed = response_json(detail).await["site"].clone();
+        let failed = response_json(detail).await["website"].clone();
         assert_eq!(failed["state"], "failed");
         assert_eq!(
             failed["last_error"],
