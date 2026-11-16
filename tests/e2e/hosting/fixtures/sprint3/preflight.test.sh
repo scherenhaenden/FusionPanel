@@ -285,6 +285,20 @@ else
   printf 'PASS: a symlinked fixture lock directory is rejected.\n'
 fi
 
+mkdir -m 0770 "$temporary_dir/group-writable-parent"
+if sprint3_prepare_runner_lock_dir \
+  "$temporary_dir/group-writable-parent/private-lock" "$(id -u)" \
+  >"$temporary_dir/group-writable-parent.log" 2>&1; then
+  printf 'FAIL: a group-writable fixture lock parent was accepted.\n' >&2
+  exit 1
+elif ! grep -q 'not group/world writable' "$temporary_dir/group-writable-parent.log"; then
+  printf 'FAIL: unsafe fixture lock parent rejection was not explained.\n' >&2
+  cat "$temporary_dir/group-writable-parent.log" >&2
+  exit 1
+else
+  printf 'PASS: a group-writable fixture lock parent is rejected.\n'
+fi
+
 rm "$temporary_dir/target/debug/fusionpanel-agent"
 if sprint3_fixture_artifacts_missing "$temporary_dir" "$temporary_dir/browser" \
   >"$temporary_dir/missing-agent.log" 2>&1; then

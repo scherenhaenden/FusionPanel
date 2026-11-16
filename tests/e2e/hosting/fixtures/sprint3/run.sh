@@ -10,11 +10,19 @@ tmp_root=$(cd -- "${TMPDIR:-/tmp}" && pwd -P)
 
 source "$fixture_dir/preflight.sh"
 sprint3_require_non_root_uid "$(id -u)"
-git_common_dir=$(git -C "$repo_root" rev-parse --git-common-dir)
-if [[ "$git_common_dir" != /* ]]; then
-  git_common_dir=$(cd -- "$repo_root/$git_common_dir" && pwd -P)
+if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+  lock_parent="$XDG_RUNTIME_DIR"
+elif [ -n "${HOME:-}" ]; then
+  lock_parent="$HOME/.cache"
+  if [ ! -d "$lock_parent" ] && ! mkdir -m 700 -- "$lock_parent"; then
+    printf 'BLOCKED: could not create the user cache directory for the fixture lock.\n' >&2
+    exit 2
+  fi
+else
+  printf 'BLOCKED: neither XDG_RUNTIME_DIR nor HOME is available for a private fixture lock.\n' >&2
+  exit 2
 fi
-lock_dir="$git_common_dir/fusionpanel-sprint3-e2e-lock"
+lock_dir="$lock_parent/fusionpanel-sprint3-e2e-lock"
 sprint3_prepare_runner_lock_dir "$lock_dir" "$(id -u)" || exit 2
 sprint3_acquire_runner_lock "$lock_dir/fusionpanel-sprint3-e2e.lock" || exit 2
 sprint3_check_available_memory 4096 || exit 2
