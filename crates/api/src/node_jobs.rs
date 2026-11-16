@@ -174,6 +174,14 @@ async fn enqueue_job(
     if !authorized_operator(&state, &headers).await {
         return Err(unauthorized());
     }
+    if matches!(body.operation.as_str(), "site.apply" | "site.delete") {
+        return Err(ErrorResponse {
+            error: ErrorDetail {
+                code: "bad_request",
+                message: "Use the Websites API for website operations",
+            },
+        });
+    }
     let key = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
@@ -602,6 +610,59 @@ mod tests {
             .unwrap();
         let response = router.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn generic_job_enqueue_rejects_website_lifecycle_operations() {
+        let router = super::super::app(test_state());
+        for (key, body) in [
+            (
+                "generic-site-apply",
+                r#"{"operation":"site.apply","payload":{"site_id":"d4c61b93-8a7a-492a-b252-3fc286eb5634","domain":"example.com","spec":{"kind":"static","document_root":"/srv/fusionpanel/sites/example.com"}}}"#,
+            ),
+            (
+                "generic-site-delete",
+                r#"{"operation":"site.delete","payload":{"site_id":"d4c61b93-8a7a-492a-b252-3fc286eb5634","domain":"example.com"}}"#,
+            ),
+        ] {
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/v1/jobs")
+                        .header(AUTHORIZATION, "Bearer test-admin-token")
+                        .header("idempotency-key", key)
+                        .header("content-type", "application/json")
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{key}");
+            let error: Value =
+                serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes())
+                    .unwrap();
+            assert_eq!(
+                error["error"]["message"], "Use the Websites API for website operations",
+                "{key}"
+            );
+        }
+
+        let system_info = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/jobs")
+                    .header(AUTHORIZATION, "Bearer test-admin-token")
+                    .header("idempotency-key", "generic-system-info")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"operation":"system.info","payload":{}}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(system_info.status(), StatusCode::CREATED);
     }
 
     #[tokio::test]
