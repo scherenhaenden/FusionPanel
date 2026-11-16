@@ -61,6 +61,9 @@ else
 fi
 
 archive="fusionpanel-${label}-debian-x86_64.tar.gz"
+# mktemp creates staging with mode 0700; this directory is archived as the
+# package root and becomes the installer's bin/payload directory on extraction.
+chmod 0755 "$staging"
 tar -C "$staging" -czf "$output_dir/$archive" .
 cp "$output_dir/$archive" "$output_dir/fusionpanel-debian-x86_64.tar.gz"
 (cd "$output_dir" && sha256sum "$archive" fusionpanel-debian-x86_64.tar.gz > SHA256SUMS)

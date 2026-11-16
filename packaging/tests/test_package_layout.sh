@@ -53,6 +53,22 @@ for member in fusionpanel-api fusionpanel-agent fusionpanel-cli frontend/dist/in
     fi
 done
 
+EXTRACTED_PAYLOAD="$TEST_DIR/extracted/bin"
+mkdir -p "$EXTRACTED_PAYLOAD"
+tar -xzf "$ARCHIVE" -C "$EXTRACTED_PAYLOAD"
+root_mode=$(stat -c '%a' "$EXTRACTED_PAYLOAD")
+if [[ "$root_mode" != 755 ]]; then
+    echo "FAIL: extracted package root has mode $root_mode; expected 755" >&2
+    exit 1
+fi
+for binary in fusionpanel-api fusionpanel-agent fusionpanel-cli; do
+    binary_mode=$(stat -c '%a' "$EXTRACTED_PAYLOAD/$binary")
+    if [[ "$binary_mode" != 755 ]]; then
+        echo "FAIL: extracted executable $binary has mode $binary_mode; expected 755" >&2
+        exit 1
+    fi
+done
+
 # Exercise the same functions used by install.sh and update.sh with isolated paths.
 . "$ROOT_DIR/packaging/layout.sh"
 VERSIONS="$TEST_DIR/versions"
