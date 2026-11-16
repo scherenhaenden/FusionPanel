@@ -35,3 +35,33 @@ export interface AuditLog {
   operator: string;
   details: string;
 }
+
+export type NodeState = 'online' | 'offline';
+
+export interface NodeRecord {
+  node_id: string;
+  name: string;
+  state: NodeState;
+  created_at: string;
+  last_heartbeat: string;
+}
+
+export type JobState = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+
+export interface JobRecord {
+  id: string;
+  kind: string;
+  payload: Record<string, unknown>;
+  state: JobState;
+  worker_id: string | null;
+  error_text: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobLogEntry {
+  sequence: number;
+  stream: 'stdout' | 'stderr' | 'system' | string;
+  text: string;
+  created_at: string;
+}

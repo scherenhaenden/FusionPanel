@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use crate::heartbeat::{Backoff, HeartbeatPayload};
+use crate::worker::validate_websocket_url;
 use futures_util::{SinkExt, StreamExt};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -43,6 +44,7 @@ impl HmacWsTransport {
 #[async_trait::async_trait]
 impl HeartbeatTransport for HmacWsTransport {
     async fn send_heartbeat(&self, payload: &HeartbeatPayload) -> Result<(), DaemonError> {
+        validate_websocket_url(&self.url).map_err(|_| DaemonError::TransportFailed)?;
         let payload_str =
             serde_json::to_string(payload).map_err(|_| DaemonError::TransportFailed)?;
         let signature = self.sign_payload(payload_str.as_bytes())?;

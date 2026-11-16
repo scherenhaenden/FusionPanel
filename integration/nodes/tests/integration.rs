@@ -20,14 +20,26 @@ fn two_identities_signed_transport() {
         let node_id2 = Uuid::new_v4();
 
         let mut node1 = Node::new_invited(24).unwrap();
+        let enrollment_token1 = node1.enrollment_token().unwrap().to_string();
         node1
-            .enroll(node_id1, "key-1".to_string(), NodeOwnership::Managed)
+            .enroll(
+                node_id1,
+                "key-1".to_string(),
+                NodeOwnership::Managed,
+                enrollment_token1,
+            )
             .unwrap();
         store.insert_node(node1.id(), node1.state()).unwrap();
 
         let mut node2 = Node::new_invited(24).unwrap();
+        let enrollment_token2 = node2.enrollment_token().unwrap().to_string();
         node2
-            .enroll(node_id2, "key-2".to_string(), NodeOwnership::Managed)
+            .enroll(
+                node_id2,
+                "key-2".to_string(),
+                NodeOwnership::Managed,
+                enrollment_token2,
+            )
             .unwrap();
         store.insert_node(node2.id(), node2.state()).unwrap();
 
@@ -50,14 +62,26 @@ fn enroll_two_nodes_revoke_one_and_reject_its_requests() {
         let node_id2 = Uuid::new_v4();
 
         let mut node1 = Node::new_invited(24).unwrap();
+        let enrollment_token1 = node1.enrollment_token().unwrap().to_string();
         node1
-            .enroll(node_id1, "key-1".to_string(), NodeOwnership::Managed)
+            .enroll(
+                node_id1,
+                "key-1".to_string(),
+                NodeOwnership::Managed,
+                enrollment_token1,
+            )
             .unwrap();
         store.insert_node(node1.id(), node1.state()).unwrap();
 
         let mut node2 = Node::new_invited(24).unwrap();
+        let enrollment_token2 = node2.enrollment_token().unwrap().to_string();
         node2
-            .enroll(node_id2, "key-2".to_string(), NodeOwnership::Managed)
+            .enroll(
+                node_id2,
+                "key-2".to_string(),
+                NodeOwnership::Managed,
+                enrollment_token2,
+            )
             .unwrap();
         store.insert_node(node2.id(), node2.state()).unwrap();
 
@@ -120,8 +144,14 @@ fn agent_protocol_validation() {
 #[test]
 fn node_heartbeat_and_reconnect() {
     let mut node = Node::new_invited(24).unwrap();
-    node.enroll(Uuid::new_v4(), "key".to_string(), NodeOwnership::Adopted)
-        .unwrap();
+    let enrollment_token = node.enrollment_token().unwrap().to_string();
+    node.enroll(
+        Uuid::new_v4(),
+        "key".to_string(),
+        NodeOwnership::Adopted,
+        enrollment_token,
+    )
+    .unwrap();
 
     // Heartbeat not expired
     assert!(!node.is_heartbeat_expired(60));
@@ -161,6 +191,5 @@ fn load_aware_placement_plan() {
 }
 
 #[test]
-fn test_blocked_migration() {
-    panic!("RESULT=BLOCKED; missing full-machine disposable VMs");
-}
+#[ignore = "BLOCKED: disposable full-machine VMs are required for multi-node migration coverage"]
+fn test_blocked_migration() {}
