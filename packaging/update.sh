@@ -211,6 +211,11 @@ fi
 fusionpanel_set_frontend_env \
     "$TMP_DIR/release/config/fusionpanel.env" \
     "$VERSION_LIB_DIR/current/bin/frontend/dist"
+fusionpanel_migrate_legacy_local_agent_env \
+    "$CONFIG_DIR/fusionpanel-agent.env" \
+    "$CONFIG_DIR/fusionpanel.env" \
+    "$TMP_DIR/release/config/fusionpanel.env" \
+    "$TMP_DIR/release/config/fusionpanel-agent.env"
 printf '%s\n' "$VERSION" > "$TMP_DIR/release/.version"
 chmod 0700 "$TMP_DIR/release/config"
 chown root:root "$TMP_DIR/release/config"
