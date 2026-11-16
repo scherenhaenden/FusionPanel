@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod node_jobs;
+mod websites;
 
 use axum::{
     body::Body,
@@ -70,6 +71,7 @@ impl IntoResponse for ErrorResponse {
             "not_found" => StatusCode::NOT_FOUND,
             "bad_request" => StatusCode::BAD_REQUEST,
             "conflict" => StatusCode::CONFLICT,
+            "forbidden" => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(self)).into_response()
@@ -258,6 +260,7 @@ fn app(state: AppState) -> Router {
         .route("/v1/capabilities", get(capabilities_handler))
         .route("/api/v1/capabilities", get(capabilities_handler))
         .merge(node_jobs::routes())
+        .merge(websites::routes())
         .fallback(fallback_handler)
         .with_state(state)
         .merge(auth_router)

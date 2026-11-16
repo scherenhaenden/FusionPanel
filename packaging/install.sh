@@ -7,6 +7,13 @@ VERSION="latest"
 OS=""
 ARCH=""
 DRY_RUN=0
+INSTALLER_SOURCE_FILE=${BASH_SOURCE:-$0}
+INSTALLER_SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$INSTALLER_SOURCE_FILE")" && pwd)
+INSTALLER_TEST_MODE=0
+INSTALLER_TEST_PREFIX=""
+if [ -d "$INSTALLER_SCRIPT_DIR/../.git" ] || [ -f "$INSTALLER_SCRIPT_DIR/../.git" ]; then
+    INSTALLER_TEST_MODE=1
+fi
 export DEBIAN_FRONTEND=noninteractive
 
 usage() {
@@ -38,7 +45,11 @@ while [ $# -gt 0 ]; do
             exit 0
             ;;
         --prefix)
-            # Ignore prefix argument for compatibility
+            # Keep this legacy test option confined to a checked-out source tree.
+            if [ "$INSTALLER_TEST_MODE" -eq 1 ]; then
+                PREFIX="$2"
+                INSTALLER_TEST_PREFIX="$2"
+            fi
             shift 2
             ;;
         *)
@@ -77,7 +88,7 @@ check_dependencies() {
         apt-get install -yqq curl tar openssl || true
     fi
 
-    for cmd in curl systemctl tar useradd groupadd id mktemp openssl; do
+    for cmd in curl systemctl tar useradd groupadd getent id mktemp openssl; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             echo "Missing required dependency: $cmd" >&2
             exit 1
@@ -100,6 +111,19 @@ setup_users() {
             echo "[Dry-run] Would run: useradd --system -g fusionpanel -s /sbin/nologin -d \"/var/lib/fusionpanel\" -c \"FusionPanel Service User\" fusionpanel"
         fi
     fi
+
+    local source_dir
+    source_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+    if [ ! -f "$source_dir/layout.sh" ] && [ -f "$source_dir/../layout.sh" ]; then
+        source_dir=$(CDPATH= cd -- "$source_dir/.." && pwd)
+    fi
+    # shellcheck source=packaging/layout.sh
+    . "$source_dir/layout.sh"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "[Dry-run] Would ensure the empty fusionpanel-nginx helper group."
+        return 0
+    fi
+    fusionpanel_ensure_nginx_helper_group
 }
 
 normalize_node_name() {
@@ -259,10 +283,22 @@ install() {
         return 0
     fi
 
-    local version_file="/var/lib/fusionpanel/.version"
-    local versions_dir="${FUSIONPANEL_VERSION_LIB_DIR:-/usr/local/lib/fusionpanel/versions}"
+    local state_dir="/var/lib/fusionpanel"
+    local log_dir="/var/log/fusionpanel"
+    local expected_installer_uid=0
+    local versions_dir="/usr/local/lib/fusionpanel/versions"
     local install_dir="${versions_dir}/${VERSION}"
-    local bin_dir="${FUSIONPANEL_BIN_DIR:-/usr/local/bin}"
+    local bin_dir="/usr/local/bin"
+    if [ "$INSTALLER_TEST_MODE" -eq 1 ] && [ -n "$INSTALLER_TEST_PREFIX" ]; then
+        versions_dir="$INSTALLER_TEST_PREFIX/versions"
+        bin_dir="$INSTALLER_TEST_PREFIX/bin"
+        state_dir="$INSTALLER_TEST_PREFIX/var/lib/fusionpanel"
+        log_dir="$INSTALLER_TEST_PREFIX/var/log/fusionpanel"
+        expected_installer_uid=$(id -u)
+        mkdir -p "${state_dir%/*}" "${log_dir%/*}"
+    fi
+    local version_file="$state_dir/.version"
+    install_dir="${versions_dir}/${VERSION}"
 
     # Harden existing copies even when the requested version is already installed.
     secure_versioned_env_files "$versions_dir"
@@ -272,6 +308,7 @@ install() {
             INSTALLED_VERSION=$(cat "$version_file")
             if [ "$INSTALLED_VERSION" = "$VERSION" ] \
                 && [ -x "$versions_dir/current/bin/fusionpanel-cli" ] \
+                && [ -x "$versions_dir/current/bin/fusionpanel-nginx-helper" ] \
                 && [ -f "$versions_dir/current/bin/frontend/dist/index.html" ]; then
                 echo "FusionPanel is already installed with version $VERSION."
                 echo "Idempotency guard triggered: skipping installation."
@@ -301,7 +338,7 @@ install() {
     fi
 
     # Check if download URL is mocked for tests
-    if [ -n "$FUSIONPANEL_MOCK_DOWNLOAD_URL" ]; then
+    if [ "$INSTALLER_TEST_MODE" -eq 1 ] && [ -n "${FUSIONPANEL_MOCK_DOWNLOAD_URL:-}" ]; then
         DOWNLOAD_URL="$FUSIONPANEL_MOCK_DOWNLOAD_URL"
         LEGACY_DOWNLOAD_URL=""
     fi
@@ -324,7 +361,8 @@ install() {
         exit 1
     fi
 
-    chmod 755 "$TMP_DIR/bin/fusionpanel-api" "$TMP_DIR/bin/fusionpanel-agent" "$TMP_DIR/bin/fusionpanel-cli"
+    chmod 755 "$TMP_DIR/bin/fusionpanel-api" "$TMP_DIR/bin/fusionpanel-agent" \
+        "$TMP_DIR/bin/fusionpanel-cli" "$TMP_DIR/bin/fusionpanel-nginx-helper"
     echo "$VERSION" > "$TMP_DIR/.version"
 
     # Create configuration environment file with securely generated admin token if not exists
@@ -375,45 +413,44 @@ install() {
     cp "$install_dir/config/fusionpanel.env" "$sysconfdir/"
     cp "$install_dir/config/fusionpanel-agent.env" "$sysconfdir/"
 
-    # Setup data and log directory
-    mkdir -p /var/lib/fusionpanel
-    mkdir -p /var/log/fusionpanel
+    # Create only missing leaf directories. Existing trees and their contents
+    # are never recursively chowned or chmodded by the installer.
+    if ! fusionpanel_ensure_private_directory "$state_dir" fusionpanel fusionpanel "$expected_installer_uid" \
+        || ! fusionpanel_ensure_private_directory "$log_dir" fusionpanel fusionpanel "$expected_installer_uid"; then
+        echo "Error: FusionPanel data and log directories must be private service-owned directories; existing paths were left unchanged." >&2
+        exit 1
+    fi
 
-    cp "$install_dir/.version" "/var/lib/fusionpanel/.version"
-
-    # Set permissions
-    chown -R fusionpanel:fusionpanel /var/lib/fusionpanel /var/log/fusionpanel || echo "Warning: chown failed, running as non-root?"
-    chmod 700 /var/lib/fusionpanel /var/log/fusionpanel
+    cp "$install_dir/.version" "$version_file"
 
     secure_active_env_files "$sysconfdir"
 
     # Install systemd services
     local systemd_dir="/etc/systemd/system"
-    if [ -n "$FUSIONPANEL_SYSTEMD_DIR" ]; then
+    if [ "$INSTALLER_TEST_MODE" -eq 1 ] && [ -n "${FUSIONPANEL_SYSTEMD_DIR:-}" ]; then
         systemd_dir="$FUSIONPANEL_SYSTEMD_DIR"
     fi
 
     mkdir -p "$systemd_dir"
 
-    if [ -f "$source_dir/systemd/fusionpanel.service" ]; then
-        sed -e "s|/usr/local/bin/fusionpanel-api|/usr/local/bin/fusionpanel-api|g" \
-            -e "s|/etc/fusionpanel/fusionpanel.env|$sysconfdir/fusionpanel.env|g" \
-            "$source_dir/systemd/fusionpanel.service" > "$systemd_dir/fusionpanel.service"
+    if ! fusionpanel_install_systemd_units "$install_dir/bin" "$systemd_dir" "$sysconfdir"; then
+        echo "Error: Could not install the FusionPanel systemd units." >&2
+        exit 1
+    fi
 
-        sed -e "s|/usr/local/bin/fusionpanel-agent|/usr/local/bin/fusionpanel-agent|g" \
-            -e "s|/etc/fusionpanel/fusionpanel-agent.env|$sysconfdir/fusionpanel-agent.env|g" \
-            "$source_dir/systemd/fusionpanel-agent.service" > "$systemd_dir/fusionpanel-agent.service"
+    if ! "$install_dir/bin/packaging/nginx-include.sh"; then
+        echo "Warning: Nginx include was not installed; website operations will fail closed until a compatible include is configured." >&2
+    fi
 
-        if [ -z "$FUSIONPANEL_INSTALLER_NO_SYSTEMD_RELOAD" ]; then
-            if ! systemctl daemon-reload; then
-                echo "Error: systemd daemon-reload failed; service enablement was not attempted. Staged files and existing unit state were not rolled back." >&2
-                exit 1
-            fi
+    if [ "$INSTALLER_TEST_MODE" -ne 1 ] || [ -z "${FUSIONPANEL_INSTALLER_NO_SYSTEMD_RELOAD:-}" ]; then
+        if ! systemctl daemon-reload; then
+            echo "Error: systemd daemon-reload failed; service enablement was not attempted. Staged files and existing unit state were not rolled back." >&2
+            exit 1
+        fi
 
-            if ! systemctl enable fusionpanel.service fusionpanel-agent.service; then
-                echo "Error: systemd could not enable both FusionPanel services; either service may now be enabled. Staged files and existing unit state were not rolled back." >&2
-                exit 1
-            fi
+        if ! systemctl enable fusionpanel.service fusionpanel-agent.service fusionpanel-nginx-helper.service; then
+            echo "Error: systemd could not enable the FusionPanel services; some services may now be enabled. Staged files and existing unit state were not rolled back." >&2
+            exit 1
         fi
     fi
 
@@ -428,6 +465,10 @@ main() {
     install
 }
 
-if [ -z "$FUSIONPANEL_INSTALLER_NO_RUN" ]; then
-    main "$@"
-fi
+case "$0" in
+    *install.sh)
+        if [ "$INSTALLER_TEST_MODE" -ne 1 ] || [ -z "${FUSIONPANEL_INSTALLER_NO_RUN:-}" ]; then
+            main "$@"
+        fi
+        ;;
+esac
