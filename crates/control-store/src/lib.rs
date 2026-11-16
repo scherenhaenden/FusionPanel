@@ -53,6 +53,8 @@ pub enum StoreError {
     WebsiteNotFound(Uuid),
     #[error("Website request conflicts with existing state")]
     WebsiteConflict,
+    #[error("Website operation is still in progress")]
+    WebsiteOperationInProgress,
     #[error("Idempotency key was reused for a different operation")]
     IdempotencyConflict,
 }

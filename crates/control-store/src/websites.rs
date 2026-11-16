@@ -359,6 +359,9 @@ impl ControlStore {
         let previous_site =
             get_stored_by_id(&tx, site_id)?.ok_or(StoreError::WebsiteNotFound(site_id))?;
         let mut site = previous_site.record.clone();
+        if site.state == WebsiteState::Provisioning {
+            return Err(StoreError::WebsiteOperationInProgress);
+        }
         if site.state == WebsiteState::Deleting {
             return Err(StoreError::WebsiteConflict);
         }
@@ -732,5 +735,68 @@ mod tests {
             .unwrap();
         assert_eq!(replay.site, deleting.site);
         assert_eq!(replay.request_id, deleting.request_id);
+    }
+
+    #[test]
+    fn delete_waits_for_apply_completion_before_reserving_delete() {
+        let mut store = ControlStore::new_in_memory().unwrap();
+        let applying = create_reservation(&mut store, "create-app", Uuid::new_v4());
+        let delete_fingerprint = json!({
+            "operation": "site.delete",
+            "payload": { "site_id": applying.site.id },
+        });
+
+        assert!(matches!(
+            store.reserve_website_delete(
+                "delete-app",
+                &delete_fingerprint,
+                applying.site.id,
+                Uuid::new_v4(),
+                "2026-11-16T00:01:00Z",
+            ),
+            Err(StoreError::WebsiteOperationInProgress)
+        ));
+        assert_eq!(
+            store.get_website(applying.site.id).unwrap().state,
+            WebsiteState::Provisioning
+        );
+
+        assert!(store
+            .complete_website_operation(
+                applying.site.id,
+                applying.request_id,
+                WebsiteOperation::Apply,
+                true,
+                None,
+                "2026-11-16T00:02:00Z",
+            )
+            .unwrap());
+
+        let deleting = store
+            .reserve_website_delete(
+                "delete-app",
+                &delete_fingerprint,
+                applying.site.id,
+                Uuid::new_v4(),
+                "2026-11-16T00:03:00Z",
+            )
+            .unwrap();
+        assert_eq!(deleting.site.state, WebsiteState::Deleting);
+
+        // A duplicate or delayed apply completion cannot overwrite the delete reservation.
+        assert!(!store
+            .complete_website_operation(
+                applying.site.id,
+                applying.request_id,
+                WebsiteOperation::Apply,
+                true,
+                None,
+                "2026-11-16T00:04:00Z",
+            )
+            .unwrap());
+        assert_eq!(
+            store.get_website(applying.site.id).unwrap().state,
+            WebsiteState::Deleting
+        );
     }
 }

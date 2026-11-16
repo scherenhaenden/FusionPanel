@@ -71,6 +71,7 @@ impl IntoResponse for ErrorResponse {
             "not_found" => StatusCode::NOT_FOUND,
             "bad_request" => StatusCode::BAD_REQUEST,
             "conflict" => StatusCode::CONFLICT,
+            "forbidden" => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(self)).into_response()

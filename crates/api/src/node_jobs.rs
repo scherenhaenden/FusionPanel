@@ -390,7 +390,7 @@ pub(super) async fn authorized_operator(state: &AppState, headers: &HeaderMap) -
     }
 }
 
-fn authorized_admin(state: &AppState, headers: &HeaderMap) -> bool {
+pub(super) fn authorized_admin(state: &AppState, headers: &HeaderMap) -> bool {
     let Some(token) = bearer_token(headers) else {
         return false;
     };

@@ -2,13 +2,14 @@
 
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
     routing::get,
     Json, Router,
 };
 use chrono::Utc;
 use fusionpanel_control_store::{WebsiteOperation, WebsiteOperationReservation, WebsiteSpec};
 use fusionpanel_domain::DomainName;
+use identity::{AccessControl, Permission, Scope, SessionId};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
@@ -44,9 +45,7 @@ async fn list_websites(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, ErrorResponse> {
-    if !node_jobs::authorized_operator(&state, &headers).await {
-        return Err(node_jobs::unauthorized());
-    }
+    authorize_website_permission(&state, &headers, Permission::SiteRead).await?;
     let websites = state
         .control_store
         .lock()
@@ -61,9 +60,7 @@ async fn get_website(
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, ErrorResponse> {
-    if !node_jobs::authorized_operator(&state, &headers).await {
-        return Err(node_jobs::unauthorized());
-    }
+    authorize_website_permission(&state, &headers, Permission::SiteRead).await?;
     let site_id = Uuid::parse_str(&id).map_err(|_| node_jobs::bad_request())?;
     let site = state
         .control_store
@@ -79,9 +76,7 @@ async fn create_website(
     headers: HeaderMap,
     Json(request): Json<CreateWebsiteRequest>,
 ) -> Result<(StatusCode, Json<Value>), ErrorResponse> {
-    if !node_jobs::authorized_operator(&state, &headers).await {
-        return Err(node_jobs::unauthorized());
-    }
+    authorize_website_permission(&state, &headers, Permission::SiteCreate).await?;
     let idempotency_key = idempotency_key(&headers)?;
 
     let (domain, spec) = match request {
@@ -130,9 +125,7 @@ async fn delete_website(
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Result<(StatusCode, Json<Value>), ErrorResponse> {
-    if !node_jobs::authorized_operator(&state, &headers).await {
-        return Err(node_jobs::unauthorized());
-    }
+    authorize_website_permission(&state, &headers, Permission::SiteDelete).await?;
     let idempotency_key = idempotency_key(&headers)?;
     let site_id = Uuid::parse_str(&id).map_err(|_| node_jobs::bad_request())?;
     let fingerprint = json!({
@@ -336,7 +329,7 @@ fn validate_document_root(document_root: &str, domain: &str) -> Result<String, E
                 normalized.push(part);
             }
             Component::CurDir | Component::ParentDir | Component::Prefix(_) => {
-                return Err(node_jobs::bad_request())
+                return Err(node_jobs::bad_request());
             }
         }
     }
@@ -354,7 +347,7 @@ fn reject_existing_symlink_components(path: &FsPath) -> Result<(), ErrorResponse
         current.push(component.as_os_str());
         match fs::symlink_metadata(&current) {
             Ok(metadata) if metadata.file_type().is_symlink() => {
-                return Err(node_jobs::bad_request())
+                return Err(node_jobs::bad_request());
             }
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -441,8 +434,65 @@ fn map_store_error(error: fusionpanel_control_store::StoreError) -> ErrorRespons
                 message: "Website request conflicts with existing state",
             },
         },
+        fusionpanel_control_store::StoreError::WebsiteOperationInProgress => ErrorResponse {
+            error: ErrorDetail {
+                code: "conflict",
+                message: "Website is still provisioning; retry deletion after it completes",
+            },
+        },
         _ => node_jobs::internal_error(),
     }
+}
+
+async fn authorize_website_permission(
+    state: &AppState,
+    headers: &HeaderMap,
+    permission: Permission,
+) -> Result<(), ErrorResponse> {
+    if node_jobs::authorized_admin(state, headers) {
+        return Ok(());
+    }
+
+    let session_id = headers
+        .get(AUTHORIZATION)
+        .and_then(|header| header.to_str().ok())
+        .and_then(|header| header.strip_prefix("Bearer "))
+        .filter(|token| !token.is_empty())
+        .map(str::to_owned)
+        .or_else(|| super::extract_session_from_cookies(headers))
+        .ok_or_else(node_jobs::unauthorized)?;
+    let session_id = session_id
+        .parse::<SessionId>()
+        .map_err(|_| node_jobs::unauthorized())?;
+
+    let now = Utc::now();
+    let identity_store = state.identity_store.lock().await;
+    let Some(mut session) = identity_store
+        .get_session(session_id)
+        .map_err(|_| node_jobs::unauthorized())?
+    else {
+        return Err(node_jobs::unauthorized());
+    };
+    if session.is_revoked() || session.validate_and_touch(now).is_err() {
+        return Err(node_jobs::unauthorized());
+    }
+    identity_store
+        .update_session_touch(session_id, now)
+        .map_err(|_| node_jobs::internal_error())?;
+    let bindings = identity_store
+        .get_user_role_bindings(session.user_id())
+        .map_err(|_| node_jobs::internal_error())?;
+
+    // WebsiteRecord is currently global and has no tenant_id. A session's tenant
+    // cannot safely scope these rows, so only a Global RoleBinding may authorize
+    // website routes until records gain tenant ownership and filtering.
+    AccessControl::evaluate_principal(session.user_id(), &bindings, permission, &Scope::Global)
+        .map_err(|_| ErrorResponse {
+            error: ErrorDetail {
+                code: "forbidden",
+                message: "Permission denied",
+            },
+        })
 }
 
 #[cfg(test)]
@@ -459,14 +509,19 @@ mod tests {
 
     const ADMIN_TOKEN: &str = "websites-test-admin-token";
 
-    fn test_app() -> (Router, TempDir) {
+    fn test_app() -> (
+        Router,
+        TempDir,
+        std::sync::Arc<tokio::sync::Mutex<identity::SqliteIdentityStore>>,
+    ) {
         let dir = tempfile::tempdir().unwrap();
         let db_path = dir.path().join("websites.sqlite");
+        let identity_store = std::sync::Arc::new(tokio::sync::Mutex::new(
+            identity::SqliteIdentityStore::open(&db_path).unwrap(),
+        ));
         let state = AppState {
             admin_token: std::sync::Arc::new(ADMIN_TOKEN.to_string()),
-            identity_store: std::sync::Arc::new(tokio::sync::Mutex::new(
-                identity::SqliteIdentityStore::open(&db_path).unwrap(),
-            )),
+            identity_store: identity_store.clone(),
             control_store: std::sync::Arc::new(tokio::sync::Mutex::new(
                 fusionpanel_control_store::ControlStore::new(&db_path).unwrap(),
             )),
@@ -475,7 +530,49 @@ mod tests {
             )),
             frontend_dir: None,
         };
-        (super::super::app(state), dir)
+        (super::super::app(state), dir, identity_store)
+    }
+
+    async fn session_token(
+        identity_store: &std::sync::Arc<tokio::sync::Mutex<identity::SqliteIdentityStore>>,
+        role: identity::Role,
+        scope: identity::Scope,
+    ) -> String {
+        let tenant_id = match &scope {
+            identity::Scope::Global => identity::TenantId::new_v4(),
+            identity::Scope::Tenant { tenant_id } | identity::Scope::Site { tenant_id, .. } => {
+                *tenant_id
+            }
+        };
+        session_token_with_roles(identity_store, tenant_id, vec![(role, scope)]).await
+    }
+
+    async fn session_token_with_roles(
+        identity_store: &std::sync::Arc<tokio::sync::Mutex<identity::SqliteIdentityStore>>,
+        tenant_id: identity::TenantId,
+        roles_and_scopes: Vec<(identity::Role, identity::Scope)>,
+    ) -> String {
+        let user = identity::User::new(
+            format!("website-test-{}", Uuid::new_v4()),
+            format!("{}@example.test", Uuid::new_v4()),
+            "synthetic-password-hash".to_string(),
+        )
+        .unwrap();
+        let session = identity::Session::new(user.id(), tenant_id, 3600, 1800).unwrap();
+        let token = session.id().to_string();
+        let identity_store = identity_store.lock().await;
+        identity_store.create_user(&user).unwrap();
+        for (role, scope) in roles_and_scopes {
+            identity_store
+                .save_role_binding(&identity::RoleBinding {
+                    user_id: user.id(),
+                    role,
+                    scope,
+                })
+                .unwrap();
+        }
+        identity_store.save_session(&session).unwrap();
+        token
     }
 
     async fn send(
@@ -549,7 +646,7 @@ mod tests {
 
     #[tokio::test]
     async fn website_routes_validate_auth_and_emit_the_agent_contract() {
-        let (app, _dir) = test_app();
+        let (app, _dir, _identity_store) = test_app();
         let unauthenticated = send(&app, "GET", "/v1/websites", None, None, None).await;
         assert_eq!(unauthenticated.status(), StatusCode::UNAUTHORIZED);
 
@@ -677,8 +774,113 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn website_routes_require_global_scoped_permissions() {
+        let (app, _dir, identity_store) = test_app();
+        let global_operator = session_token(
+            &identity_store,
+            identity::Role::site_operator(),
+            identity::Scope::Global,
+        )
+        .await;
+
+        let listed = send(
+            &app,
+            "GET",
+            "/v1/websites",
+            Some(&global_operator),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(listed.status(), StatusCode::OK);
+
+        let create = send(
+            &app,
+            "POST",
+            "/v1/websites",
+            Some(&global_operator),
+            Some("operator-create-denied"),
+            Some(json!({
+                "kind": "reverse_proxy",
+                "domain": "operator.example.com",
+                "upstream_url": "http://127.0.0.1:3000",
+            })),
+        )
+        .await;
+        assert_eq!(create.status(), StatusCode::FORBIDDEN);
+        assert_eq!(response_json(create).await["error"]["code"], "forbidden");
+
+        let delete = send(
+            &app,
+            "DELETE",
+            &format!("/v1/websites/{}", Uuid::new_v4()),
+            Some(&global_operator),
+            Some("operator-delete-denied"),
+            None,
+        )
+        .await;
+        assert_eq!(delete.status(), StatusCode::FORBIDDEN);
+
+        // TenantAdmin carries SiteRead, but WebsiteRecord has no tenant owner;
+        // tenant scope therefore cannot authorize the global website listing.
+        let tenant_admin = session_token(
+            &identity_store,
+            identity::Role::tenant_admin(),
+            identity::Scope::Tenant {
+                tenant_id: identity::TenantId::new_v4(),
+            },
+        )
+        .await;
+        let tenant_list = send(&app, "GET", "/v1/websites", Some(&tenant_admin), None, None).await;
+        assert_eq!(tenant_list.status(), StatusCode::FORBIDDEN);
+
+        // This is the binding shape produced by `fusionpanel-cli bootstrap operator`:
+        // tenant scope preserves the default session tenant, and global scope grants
+        // the explicit system-wide SuperAdmin access required by global WebsiteRecords.
+        let tenant_id = identity::TenantId::new_v4();
+        let super_admin = identity::Role::super_admin();
+        let global_admin = session_token_with_roles(
+            &identity_store,
+            tenant_id,
+            vec![
+                (super_admin.clone(), identity::Scope::Tenant { tenant_id }),
+                (super_admin, identity::Scope::Global),
+            ],
+        )
+        .await;
+        let create = send(
+            &app,
+            "POST",
+            "/v1/websites",
+            Some(&global_admin),
+            Some("global-admin-create"),
+            Some(json!({
+                "kind": "reverse_proxy",
+                "domain": "global-admin.example.com",
+                "upstream_url": "http://127.0.0.1:3000",
+            })),
+        )
+        .await;
+        assert_eq!(create.status(), StatusCode::ACCEPTED);
+        let created = response_json(create).await;
+        let site_id = created["site"]["id"].as_str().unwrap();
+        let delete = send(
+            &app,
+            "DELETE",
+            &format!("/v1/websites/{site_id}"),
+            Some(&global_admin),
+            Some("global-admin-delete"),
+            None,
+        )
+        .await;
+        // The 409 comes from provisioning state, proving SiteDelete authorized
+        // the request before the lifecycle guard ran.
+        assert_eq!(delete.status(), StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
     async fn agent_completion_persists_site_state_and_delete_waits_for_success() {
-        let (app, _dir) = test_app();
+        let (app, _dir, _identity_store) = test_app();
         let created = send(
             &app,
             "POST",
@@ -703,6 +905,23 @@ mod tests {
             created["job"]["payload"]["payload"]["spec"]["upstream_url"],
             "http://127.0.0.1:3000/api"
         );
+
+        let early_delete = send(
+            &app,
+            "DELETE",
+            &format!("/v1/websites/{site_id}"),
+            Some(ADMIN_TOKEN),
+            Some("delete-while-provisioning"),
+            None,
+        )
+        .await;
+        assert_eq!(early_delete.status(), StatusCode::CONFLICT);
+        let early_delete = response_json(early_delete).await;
+        assert_eq!(early_delete["error"]["code"], "conflict");
+        assert!(early_delete["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("still provisioning"));
 
         let registered = send(
             &app,
@@ -745,7 +964,7 @@ mod tests {
             "DELETE",
             &format!("/v1/websites/{site_id}"),
             Some(ADMIN_TOKEN),
-            Some("delete-app"),
+            Some("delete-while-provisioning"),
             None,
         )
         .await;
@@ -793,7 +1012,7 @@ mod tests {
             "DELETE",
             &format!("/v1/websites/{site_id}"),
             Some(ADMIN_TOKEN),
-            Some("delete-app"),
+            Some("delete-while-provisioning"),
             None,
         )
         .await;
