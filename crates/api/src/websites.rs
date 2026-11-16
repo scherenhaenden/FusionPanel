@@ -19,6 +19,8 @@ use uuid::Uuid;
 
 use super::{node_jobs, AppState, ErrorDetail, ErrorResponse};
 
+const MAX_UPSTREAM_URL_BYTES: usize = 2048;
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum CreateWebsiteRequest {
@@ -364,6 +366,7 @@ fn reject_existing_symlink_components(path: &FsPath) -> Result<(), ErrorResponse
 
 fn validate_upstream_url(upstream_url: &str) -> Result<String, ErrorResponse> {
     if upstream_url.is_empty()
+        || upstream_url.len() > MAX_UPSTREAM_URL_BYTES
         || !upstream_url.is_ascii()
         || upstream_url.chars().any(|character| {
             character.is_control()
@@ -848,5 +851,16 @@ mod tests {
         assert!(validate_upstream_url("http://example.com:").is_err());
         assert!(validate_upstream_url("http://bad_host:8080").is_err());
         assert!(validate_upstream_url("https://backend.example.com:8443/api").is_ok());
+
+        let prefix = "https://backend.example.com/";
+        let at_limit = format!(
+            "{prefix}{}",
+            "a".repeat(MAX_UPSTREAM_URL_BYTES - prefix.len())
+        );
+        let over_limit = format!("{at_limit}a");
+        assert_eq!(at_limit.len(), MAX_UPSTREAM_URL_BYTES);
+        assert!(validate_upstream_url(&at_limit).is_ok());
+        assert_eq!(over_limit.len(), MAX_UPSTREAM_URL_BYTES + 1);
+        assert!(validate_upstream_url(&over_limit).is_err());
     }
 }
