@@ -1,16 +1,22 @@
 name: CI Qualification
 
 on:
-  push:
-    branches:
-      - master
   pull_request:
     branches:
       - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-qualification-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   discovery:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       cargo_manifests: ${{ steps.discover.outputs.cargo_manifests }}
       package_jsons: ${{ steps.discover.outputs.package_jsons }}
@@ -22,8 +28,9 @@ jobs:
 
       - name: Detect Stale Base Merge
         if: github.event_name == 'pull_request'
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          PR_HEAD=${{ github.event.pull_request.head.sha }}
           TARGET_HEAD=$(git rev-parse origin/master)
           MERGE_BASE=$(git merge-base $PR_HEAD $TARGET_HEAD)
 
@@ -34,7 +41,15 @@ jobs:
 
       - name: Discover Manifests & Detect Orphan Tests
         id: discover
-        run: ./scripts/ci/discover.py
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            ./scripts/ci/discover.py --changed-from "$PR_BASE" --changed-to "$PR_HEAD"
+          else
+            ./scripts/ci/discover.py
+          fi
 
       - name: Detect Dropped Files
         run: |
@@ -48,6 +63,7 @@ jobs:
 
   validation:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: discovery
     steps:
       - name: Checkout code
@@ -62,6 +78,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Test changed-manifest discovery
+        run: python3 -m unittest discover -s scripts/ci/tests -p 'test_*.py'
+
       - name: Check Sprint 2 E2E fixture shell, seed and preflight
         run: |
           bash -n tests/e2e/browser/fixtures/sprint2/run.sh
@@ -75,6 +94,7 @@ jobs:
 
   dependency-lane:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [discovery, validation]
     steps:
       - name: Checkout code
@@ -99,9 +119,12 @@ jobs:
 
   compile-and-unit-cargo:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     needs: [discovery, dependency-lane]
+    if: needs.discovery.outputs.cargo_manifests != '[]'
     strategy:
       fail-fast: false
+      max-parallel: 3
       matrix:
         manifest: ${{ fromJson(needs.discovery.outputs.cargo_manifests) }}
     steps:
@@ -119,11 +142,9 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ matrix.manifest }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-sources-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ matrix.manifest }}-
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-sources-
 
       - name: Compile
         run: |
@@ -176,7 +197,7 @@ jobs:
           fi
 
       - name: Upload Logs
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: logs-cargo-${{ strategy.job-index }}
@@ -186,9 +207,12 @@ jobs:
 
   compile-and-unit-npm:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [discovery, dependency-lane]
+    if: needs.discovery.outputs.package_jsons != '[]'
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         manifest: ${{ fromJson(needs.discovery.outputs.package_jsons) }}
     steps:
@@ -199,18 +223,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Rust Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ matrix.manifest }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-${{ matrix.manifest }}-
-            ${{ runner.os }}-cargo-
 
       - name: Compile and Test
         run: |
@@ -265,7 +277,7 @@ jobs:
           fi
 
       - name: Upload Logs
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: logs-npm-${{ strategy.job-index }}
@@ -276,9 +288,8 @@ jobs:
   sprint2-browser-e2e:
     name: Sprint 2 browser E2E (Docker)
     runs-on: ubuntu-latest
-    if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
-      (github.event_name == 'pull_request' && github.base_ref == 'master')
+    timeout-minutes: 60
+    if: github.event_name == 'pull_request' && github.base_ref == 'master' && github.head_ref == 'sprint-2'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -314,11 +325,9 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-sprint2-e2e-${{ hashFiles('Cargo.lock', 'crates/agent/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-sources-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-sprint2-e2e-
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-sources-
 
       - name: Build actual API, CLI, and agent binaries
         if: steps.gate.outputs.run == 'true'

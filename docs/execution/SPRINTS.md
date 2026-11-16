@@ -32,6 +32,7 @@ master                                (verified sprint releases only)
    - Only when `sprint-<N>` is 100% green and documented, open the single sprint release PR **`sprint-<N>` -> `master`**.
 4. **Operational Safety**: Never `push`, `--force`, or `merge` pre-existing/remote user branches without explicit approval.
 5. **Priority Scope**: Deliver 100% end-to-end usable core infrastructure features first. **PHP management is explicitly deprioritized.**
+6. **CI Cost Control**: Atomic PRs into `sprint-<N>` run only their touched local unit tests. PRs to `master` run checks for changed packages; a Sprint release PR adds its required workspace and live E2E gates and builds the package once. The all-catalog audit is manual (`workflow_dispatch`), and the merge push does not repeat the release matrix.
 
 ---
 

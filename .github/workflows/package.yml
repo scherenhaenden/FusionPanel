@@ -2,6 +2,8 @@ name: Build development packages
 
 on:
   pull_request:
+    branches:
+      - master
   push:
     tags:
       - '[0-9][0-9][0-9][0-9].*'
@@ -17,6 +19,7 @@ concurrency:
 jobs:
   package:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     container: debian:bookworm
     steps:
       - name: Install build prerequisites
