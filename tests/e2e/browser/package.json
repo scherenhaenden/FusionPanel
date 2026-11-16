@@ -7,7 +7,8 @@
   "scripts": {
     "compile": "playwright test --list",
     "test": "playwright test",
-    "test:sprint2": "playwright test tests/nodes-jobs.spec.js"
+    "test:sprint2": "playwright test tests/nodes-jobs.spec.js",
+    "test:unit:sprint2-fixture": "node fixtures/sprint2/fixture-context.test.js"
   },
   "dependencies": {
     "@playwright/test": "^1.40.0"

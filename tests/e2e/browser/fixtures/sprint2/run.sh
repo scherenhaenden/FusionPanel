@@ -9,8 +9,11 @@ project_name="fp-s2-e2e-${GITHUB_RUN_ID:-local}-$$"
 state_dir=$(mktemp -d "${TMPDIR:-/tmp}/fusionpanel-sprint2-e2e.XXXXXX")
 log_file="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/fusionpanel-sprint2-compose-${GITHUB_RUN_ID:-local}-$$.log"
 
+export FUSIONPANEL_E2E_DISPOSABLE=1
 export FUSIONPANEL_E2E_REPO_ROOT="$repo_root"
 export FUSIONPANEL_E2E_STATE_DIR="$state_dir"
+export FUSIONPANEL_E2E_COMPOSE_PROJECT="$project_name"
+export FUSIONPANEL_E2E_COMPOSE_FILE="$compose_file"
 export FUSIONPANEL_E2E_IMAGE="fusionpanel-sprint2-e2e:${project_name}"
 export FUSIONPANEL_E2E_PORT="${FUSIONPANEL_E2E_PORT:-18080}"
 export FUSIONPANEL_E2E_UID="$(id -u)"
