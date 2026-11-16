@@ -9,6 +9,7 @@ RUN apt-get update \
       "nginx=${NGINX_PACKAGE_VERSION}" \
       ca-certificates \
       libgcc-s1 \
+      util-linux \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /etc/nginx/fusionpanel
 
