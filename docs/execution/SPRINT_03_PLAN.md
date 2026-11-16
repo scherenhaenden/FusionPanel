@@ -140,6 +140,8 @@ The repository already contains `modules/hosting/src/domain/site.rs`, Nginx gene
 
 ## 6. Sprint close gate
 
+This Sprint 3 scope is a subset of the broader S43 hosting E2E issue #45. S43 lists S07 (#10) and S26 (#28) as dependencies; both issues are closed. S37 (#40) remains open, so passing this sprint's static/reverse-proxy gate does not by itself accept or close #45. Keep that broader issue open until its remaining dependency and full S43 journeys are qualified.
+
 Run only after all three atomic PRs are merged into `sprint-3`:
 
 1. `cargo test --locked --workspace`.
