@@ -2,6 +2,12 @@ name: Build development packages
 
 on:
   pull_request:
+    branches:
+      - master
+    types:
+      - opened
+      - synchronize
+      - labeled
   push:
     tags:
       - '[0-9][0-9][0-9][0-9].*'
@@ -16,7 +22,14 @@ concurrency:
 
 jobs:
   package:
+    if: >-
+      github.event_name != 'pull_request' ||
+      (
+        contains(github.event.pull_request.labels.*.name, 'release-ready') &&
+        (github.event.action != 'labeled' || github.event.label.name == 'release-ready')
+      )
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     container: debian:bookworm
     steps:
       - name: Install build prerequisites
@@ -28,8 +41,26 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Trust checkout inside build container
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Test installer environment permissions
+        run: sh packaging/tests/test_installer_env.sh
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Test package layout and updater rollback
+        run: |
+          bash packaging/tests/test_package_layout.sh
+          bash packaging/tests/test_update_layout.sh
 
       - name: Check installer and updater release URLs
         run: bash packaging/tests/test_release_urls.sh

@@ -62,6 +62,14 @@ pub struct Job {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct JobLogEntry {
+    pub sequence: u64,
+    pub stream: String,
+    pub text: String,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Errors that can occur during job store operations.
 #[derive(Debug, Error)]
 pub enum JobStoreError {
@@ -82,4 +90,22 @@ pub enum JobStoreError {
         max_bytes: usize,
         actual_bytes: usize,
     },
+
+    #[error("Idempotency key was already used for a different job")]
+    IdempotencyConflict,
+
+    #[error("Job is not owned by this worker")]
+    WrongWorker,
+
+    #[error("Invalid job log stream")]
+    InvalidLogStream,
+
+    #[error("Job log text is {actual_bytes} bytes; maximum is {max_bytes} bytes")]
+    LogTextTooLong {
+        max_bytes: usize,
+        actual_bytes: usize,
+    },
+
+    #[error("Job log limit of {max_bytes} bytes exceeded")]
+    LogLimitExceeded { max_bytes: usize },
 }

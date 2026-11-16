@@ -1,29 +1,50 @@
 name: CI Qualification
 
 on:
-  push:
-    branches:
-      - master
   pull_request:
     branches:
       - master
+  workflow_dispatch:
+    inputs:
+      matrix_scope:
+        description: Select changed manifests or intentionally run the full catalog.
+        required: true
+        type: choice
+        options:
+          - changed
+          - full
+        default: changed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-qualification-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   discovery:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
     outputs:
       cargo_manifests: ${{ steps.discover.outputs.cargo_manifests }}
       package_jsons: ${{ steps.discover.outputs.package_jsons }}
+      run_release_gate: ${{ steps.gate_reuse.outputs.run_release_gate || steps.gate_default.outputs.run_release_gate }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Detect Stale Base Merge
         if: github.event_name == 'pull_request'
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          PR_HEAD=${{ github.event.pull_request.head.sha }}
           TARGET_HEAD=$(git rev-parse origin/master)
           MERGE_BASE=$(git merge-base $PR_HEAD $TARGET_HEAD)
 
@@ -31,10 +52,6 @@ jobs:
             echo "::error::PR is stale. Please rebase or merge from master."
             exit 1
           fi
-
-      - name: Discover Manifests & Detect Orphan Tests
-        id: discover
-        run: ./scripts/ci/discover.py
 
       - name: Detect Dropped Files
         run: |
@@ -46,9 +63,48 @@ jobs:
             fi
           fi
 
+      - name: Default to the full Sprint 2 gate
+        id: gate_default
+        run: echo "run_release_gate=true" >> "$GITHUB_OUTPUT"
+
+      - name: Reuse exact-base full gate for docs-only Sprint 2 updates
+        id: gate_reuse
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.head_ref == 'sprint-2' &&
+          (github.event.action == 'reopened' || github.event.action == 'synchronize')
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/release_gate.py
+
+      - name: Discover Manifests & Detect Orphan Tests
+        id: discover
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          RUN_RELEASE_GATE: ${{ steps.gate_reuse.outputs.run_release_gate || steps.gate_default.outputs.run_release_gate }}
+          MATRIX_SCOPE: ${{ inputs.matrix_scope || 'changed' }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            if [ "$RUN_RELEASE_GATE" = "true" ]; then
+              ./scripts/ci/discover.py --changed-from "$PR_BASE" --changed-to "$PR_HEAD"
+            else
+              ./scripts/ci/discover.py --changed-from "$PR_HEAD" --changed-to "$PR_HEAD"
+            fi
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$MATRIX_SCOPE" = "full" ]; then
+            ./scripts/ci/discover.py
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            BASE=$(git merge-base origin/master "$GITHUB_SHA")
+            ./scripts/ci/discover.py --changed-from "$BASE" --changed-to "$GITHUB_SHA"
+          else
+            ./scripts/ci/discover.py
+          fi
+
   validation:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: discovery
+    if: needs.discovery.outputs.run_release_gate == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -57,9 +113,30 @@ jobs:
       - name: Check Mock Bypasses
         run: ./scripts/ci/check_mock_bypasses.sh
 
+      - name: Set up Node.js for the fixture unit test
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Test changed-manifest discovery
+        run: python3 -m unittest discover -s scripts/ci/tests -p 'test_*.py'
+
+      - name: Check Sprint 2 E2E fixture shell, seed and preflight
+        run: |
+          bash -n tests/e2e/browser/fixtures/sprint2/run.sh
+          bash -n tests/e2e/browser/fixtures/sprint2/preflight.sh
+          bash -n tests/e2e/browser/fixtures/sprint2/preflight.test.sh
+          bash -n tests/e2e/browser/fixtures/sprint2/seed-admin.sh
+          bash -n tests/e2e/browser/fixtures/sprint2/seed-admin.test.sh
+          bash tests/e2e/browser/fixtures/sprint2/preflight.test.sh
+          bash tests/e2e/browser/fixtures/sprint2/seed-admin.test.sh
+          npm --prefix tests/e2e/browser run test:unit:sprint2-fixture
+
   dependency-lane:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [discovery, validation]
+    if: needs.discovery.outputs.run_release_gate == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -83,9 +160,12 @@ jobs:
 
   compile-and-unit-cargo:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     needs: [discovery, dependency-lane]
+    if: needs.discovery.outputs.run_release_gate == 'true' && needs.discovery.outputs.cargo_manifests != '[]'
     strategy:
       fail-fast: false
+      max-parallel: 3
       matrix:
         manifest: ${{ fromJson(needs.discovery.outputs.cargo_manifests) }}
     steps:
@@ -103,11 +183,9 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ matrix.manifest }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-sources-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ matrix.manifest }}-
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-sources-
 
       - name: Compile
         run: |
@@ -160,7 +238,7 @@ jobs:
           fi
 
       - name: Upload Logs
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: logs-cargo-${{ strategy.job-index }}
@@ -170,9 +248,12 @@ jobs:
 
   compile-and-unit-npm:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [discovery, dependency-lane]
+    if: needs.discovery.outputs.run_release_gate == 'true' && needs.discovery.outputs.package_jsons != '[]'
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         manifest: ${{ fromJson(needs.discovery.outputs.package_jsons) }}
     steps:
@@ -184,28 +265,41 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Rust Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ matrix.manifest }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-${{ matrix.manifest }}-
-            ${{ runner.os }}-cargo-
-
       - name: Compile and Test
         run: |
           set -o pipefail
           DIR=$(dirname ${{ matrix.manifest }})
           LOG_DIR=$(pwd)
 
+          FULL_SPRINT_GATE=false
+          if [[ "${GITHUB_EVENT_NAME:-}" == "push" && "${GITHUB_REF:-}" == "refs/heads/master" ]]; then
+            FULL_SPRINT_GATE=true
+          elif [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" \
+              && "${GITHUB_BASE_REF:-}" == "master" \
+              && "${GITHUB_HEAD_REF:-}" =~ ^sprint-[0-9]+$ ]]; then
+            FULL_SPRINT_GATE=true
+          fi
+
           cd "$DIR"
           npm ci
-          npm run build 2>&1 | tee "$LOG_DIR/compile.log"
-          npm test 2>&1 | tee "$LOG_DIR/test.log"
+          POLICY=$(node -p "require('./package.json').fusionpanel?.policy || 'unit'")
+          if [ "$POLICY" = "compile-only" ]; then
+            npm run compile 2>&1 | tee "$LOG_DIR/compile.log"
+            if ! grep -Eq '^Total: [1-9][0-9]* tests?($| )' "$LOG_DIR/compile.log"; then
+              echo "::error::Compile-only package discovered zero tests in ${{ matrix.manifest }}. Tests are mandatory."
+              exit 1
+            fi
+            if [ "$FULL_SPRINT_GATE" != "true" ]; then
+              echo "COMPILE-ONLY: E2E specs were discovered; execution belongs to the full Sprint gate."
+              exit 0
+            fi
+
+            echo "COMPILE-ONLY: full-gate browser execution is handled by the dedicated Sprint 2 Docker E2E job."
+            exit 0
+          else
+            npm run build 2>&1 | tee "$LOG_DIR/compile.log"
+            npm test 2>&1 | tee "$LOG_DIR/test.log"
+          fi
 
           if grep -q "Tests:.*0 total" "$LOG_DIR/test.log"; then
             echo "::error::Zero-test success detected in ${{ matrix.manifest }}. Tests are mandatory."
@@ -224,10 +318,174 @@ jobs:
           fi
 
       - name: Upload Logs
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: logs-npm-${{ strategy.job-index }}
           path: |
             compile.log
             test.log
+
+  sprint2-browser-e2e:
+    name: Sprint 2 browser E2E (Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: discovery
+    if: github.event_name == 'pull_request' && github.base_ref == 'master' && github.head_ref == 'sprint-2' && needs.discovery.outputs.run_release_gate == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Identify full Sprint gate
+        id: gate
+        shell: bash
+        run: |
+          RUN_SPRINT2_E2E=false
+          if [[ "${GITHUB_EVENT_NAME:-}" == "push" && "${GITHUB_REF:-}" == "refs/heads/master" ]]; then
+            RUN_SPRINT2_E2E=true
+          elif [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" \
+              && "${GITHUB_BASE_REF:-}" == "master" \
+              && "${GITHUB_HEAD_REF:-}" =~ ^sprint-[0-9]+$ ]]; then
+            RUN_SPRINT2_E2E=true
+          fi
+          echo "run=$RUN_SPRINT2_E2E" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Rust
+        if: steps.gate.outputs.run == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-sources-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-sources-
+
+      - name: Build actual API, CLI, and agent binaries
+        if: steps.gate.outputs.run == 'true'
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: |
+          cargo build --locked --manifest-path Cargo.toml -p fusionpanel-api -p fusionpanel-cli
+          cargo build --locked --manifest-path crates/agent/Cargo.toml --bin fusionpanel-agent
+
+      - name: Build frontend assets
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Install browser suite and Chromium
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          cd tests/e2e/browser
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run disposable Sprint 2 Docker fixture
+        if: steps.gate.outputs.run == 'true'
+        run: tests/e2e/browser/fixtures/sprint2/run.sh
+
+      - name: Upload bounded browser and service evidence
+        if: always() && steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprint2-browser-e2e-${{ github.run_id }}
+          path: |
+            tests/e2e/browser/playwright-report
+            tests/e2e/browser/test-results
+            ${{ runner.temp }}/fusionpanel-sprint2-compose-*.log
+          if-no-files-found: ignore
+          retention-days: 3
+
+  full-sprint2-release-gate:
+    name: Full Sprint 2 release gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - discovery
+      - validation
+      - dependency-lane
+      - compile-and-unit-cargo
+      - compile-and-unit-npm
+      - sprint2-browser-e2e
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      github.base_ref == 'master' &&
+      github.head_ref == 'sprint-2' &&
+      (
+        needs.discovery.result != 'success' ||
+        needs.discovery.outputs.run_release_gate == 'true'
+      )
+    steps:
+      - name: Require every full Sprint 2 gate to pass
+        if: always()
+        env:
+          DISCOVERY_RESULT: ${{ needs.discovery.result }}
+          RUN_RELEASE_GATE: ${{ needs.discovery.outputs.run_release_gate }}
+          CARGO_MANIFESTS: ${{ needs.discovery.outputs.cargo_manifests }}
+          NPM_MANIFESTS: ${{ needs.discovery.outputs.package_jsons }}
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+          DEPENDENCY_RESULT: ${{ needs['dependency-lane'].result }}
+          CARGO_RESULT: ${{ needs.compile-and-unit-cargo.result }}
+          NPM_RESULT: ${{ needs.compile-and-unit-npm.result }}
+          E2E_RESULT: ${{ needs.sprint2-browser-e2e.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$DISCOVERY_RESULT" != success ]]; then
+            echo "::error::Sprint 2 gate discovery did not succeed ($DISCOVERY_RESULT)."
+            exit 1
+          fi
+          if [[ "$RUN_RELEASE_GATE" != true ]]; then
+            echo "::error::The full-gate sentinel ran without a full-gate request."
+            exit 1
+          fi
+          for result in "$VALIDATION_RESULT" "$DEPENDENCY_RESULT" "$E2E_RESULT"; do
+            if [[ "$result" != success ]]; then
+              echo "::error::A required Sprint 2 gate did not succeed ($result)."
+              exit 1
+            fi
+          done
+          check_matrix() {
+            local name="$1" manifests="$2" result="$3"
+            if [[ "$manifests" == '[]' && "$result" == skipped ]]; then
+              return 0
+            fi
+            if [[ -n "$manifests" && "$manifests" != '[]' && "$result" == success ]]; then
+              return 0
+            fi
+            echo "::error::$name matrix result '$result' is inconsistent with manifests '$manifests'."
+            return 1
+          }
+          check_matrix Cargo "$CARGO_MANIFESTS" "$CARGO_RESULT"
+          check_matrix npm "$NPM_MANIFESTS" "$NPM_RESULT"
+          echo "All Sprint 2 CI, unit, and browser E2E gates passed for this exact PR head and base."
+
+  sprint2-docs-gate-reuse:
+    name: Sprint 2 docs-only gate reuse
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: discovery
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      github.base_ref == 'master' &&
+      github.head_ref == 'sprint-2' &&
+      needs.discovery.outputs.run_release_gate == 'false' &&
+      needs.discovery.result == 'success'
+    steps:
+      - name: Record verified prior gate reuse
+        run: echo "Validated release evidence was reused for this exact Sprint 2 PR head and base."

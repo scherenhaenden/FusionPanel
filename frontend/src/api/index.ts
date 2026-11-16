@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { HealthResponse, CapabilitiesResponse } from '../types';
+import { HealthResponse, CapabilitiesResponse, JobLogEntry, JobRecord, NodeRecord } from '../types';
 
 export const api = {
   getHealth: async (): Promise<HealthResponse> => {
@@ -23,6 +23,39 @@ export const api = {
 
   logout: async (): Promise<void> => {
     await apiClient.post('/v1/auth/logout');
+  },
+
+  // Nodes and jobs
+  getNodes: async (): Promise<NodeRecord[]> => {
+    const response = await apiClient.get<{ nodes: NodeRecord[] }>('/v1/nodes');
+    return response.data.nodes;
+  },
+
+  getJobs: async (): Promise<JobRecord[]> => {
+    const response = await apiClient.get<{ jobs: JobRecord[] }>('/v1/jobs');
+    return response.data.jobs;
+  },
+
+  getJob: async (id: string): Promise<JobRecord> => {
+    const response = await apiClient.get<{ job: JobRecord }>(`/v1/jobs/${encodeURIComponent(id)}`);
+    return response.data.job;
+  },
+
+  getJobLogs: async (id: string): Promise<JobLogEntry[]> => {
+    const response = await apiClient.get<{ logs: JobLogEntry[] }>(`/v1/jobs/${encodeURIComponent(id)}/logs`);
+    return response.data.logs;
+  },
+
+  createSystemInfoJob: async (): Promise<JobRecord> => {
+    const idempotencyKey = typeof globalThis.crypto?.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const response = await apiClient.post<{ job: JobRecord }>(
+      '/v1/jobs',
+      { operation: 'system.info', payload: {} },
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data.job;
   },
 
   // Websites

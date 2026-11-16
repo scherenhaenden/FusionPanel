@@ -1,6 +1,7 @@
 [Unit]
 Description=FusionPanel Agent Service
-After=network.target
+After=network.target fusionpanel.service
+Wants=fusionpanel.service
 Documentation=https://github.com/scherenhaenden/FusionPanel
 
 [Service]

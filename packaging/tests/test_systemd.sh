@@ -8,28 +8,38 @@ echo "Testing systemd unit files..."
 
 # Ensure systemd-analyze is installed
 if ! command -v systemd-analyze &> /dev/null; then
-    echo "BLOCKED: systemd-analyze is not installed. Skipping tests."
-    exit 0
+    echo "BLOCKED: systemd-analyze is not installed." >&2
+    exit 2
 fi
-
-mkdir -p /tmp/fusionpanel-test-bin
-touch /tmp/fusionpanel-test-bin/fusionpanel-api
-touch /tmp/fusionpanel-test-bin/fusionpanel-agent
-chmod +x /tmp/fusionpanel-test-bin/fusionpanel-api
-chmod +x /tmp/fusionpanel-test-bin/fusionpanel-agent
 
 # Create temporary modified unit files pointing to our fake binaries for testing
 TMP_UNIT_DIR=$(mktemp -d)
 trap 'rm -rf "${TMP_UNIT_DIR}"' EXIT
+mkdir -p "${TMP_UNIT_DIR}/bin"
+touch "${TMP_UNIT_DIR}/bin/fusionpanel-api"
+touch "${TMP_UNIT_DIR}/bin/fusionpanel-agent"
+chmod +x "${TMP_UNIT_DIR}/bin/fusionpanel-api" "${TMP_UNIT_DIR}/bin/fusionpanel-agent"
 
-sed 's|/opt/fusionpanel/bin/fusionpanel-api|/tmp/fusionpanel-test-bin/fusionpanel-api|g' "${SYSTEMD_DIR}/fusionpanel.service" > "${TMP_UNIT_DIR}/fusionpanel.service"
-sed 's|/opt/fusionpanel/bin/fusionpanel-agent|/tmp/fusionpanel-test-bin/fusionpanel-agent|g' "${SYSTEMD_DIR}/fusionpanel-agent.service" > "${TMP_UNIT_DIR}/fusionpanel-agent.service"
+sed "s|/usr/local/bin/fusionpanel-api|${TMP_UNIT_DIR}/bin/fusionpanel-api|g" "${SYSTEMD_DIR}/fusionpanel.service" > "${TMP_UNIT_DIR}/fusionpanel.service"
+sed "s|/usr/local/bin/fusionpanel-agent|${TMP_UNIT_DIR}/bin/fusionpanel-agent|g" "${SYSTEMD_DIR}/fusionpanel-agent.service" > "${TMP_UNIT_DIR}/fusionpanel-agent.service"
 
 # Update env file paths
-sed -i 's|/etc/fusionpanel/fusionpanel.env|/tmp/fusionpanel.env|g' "${TMP_UNIT_DIR}/fusionpanel.service"
-sed -i 's|/etc/fusionpanel/fusionpanel-agent.env|/tmp/fusionpanel-agent.env|g' "${TMP_UNIT_DIR}/fusionpanel-agent.service"
-touch /tmp/fusionpanel.env
-touch /tmp/fusionpanel-agent.env
+sed -i "s|/etc/fusionpanel/fusionpanel.env|${TMP_UNIT_DIR}/fusionpanel.env|g" "${TMP_UNIT_DIR}/fusionpanel.service"
+sed -i "s|/etc/fusionpanel/fusionpanel-agent.env|${TMP_UNIT_DIR}/fusionpanel-agent.env|g" "${TMP_UNIT_DIR}/fusionpanel-agent.service"
+touch "${TMP_UNIT_DIR}/fusionpanel.env" "${TMP_UNIT_DIR}/fusionpanel-agent.env"
+
+if ! grep -q '^After=network.target fusionpanel.service$' "${SYSTEMD_DIR}/fusionpanel-agent.service"; then
+    echo "FAIL: agent must start after the API service."
+    exit 1
+fi
+if ! grep -q '^Wants=fusionpanel.service$' "${SYSTEMD_DIR}/fusionpanel-agent.service"; then
+    echo "FAIL: agent should request startup of the API service without coupling its restart lifecycle."
+    exit 1
+fi
+if grep -q '^Requires=fusionpanel.service$' "${SYSTEMD_DIR}/fusionpanel-agent.service"; then
+    echo "FAIL: agent must remain independently restartable when the API restarts."
+    exit 1
+fi
 
 # Note: systemd-analyze will complain about missing users if fusionpanel user doesn't exist on the host
 # We will temporarily mock the user line for the analyzer if it doesn't exist
@@ -39,9 +49,6 @@ if ! id fusionpanel &>/dev/null; then
 fi
 
 echo "Verifying fusionpanel.service..."
-systemd-analyze verify "${TMP_UNIT_DIR}/fusionpanel.service"
-
-echo "Verifying fusionpanel-agent.service..."
-systemd-analyze verify "${TMP_UNIT_DIR}/fusionpanel-agent.service"
+systemd-analyze verify "${TMP_UNIT_DIR}/fusionpanel.service" "${TMP_UNIT_DIR}/fusionpanel-agent.service"
 
 echo "Systemd unit verification passed."
