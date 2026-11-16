@@ -62,6 +62,11 @@ chmod 0750 -- \
   "$FUSIONPANEL_NGINX_MANAGED_ROOT/sites-enabled" \
   "$FUSIONPANEL_NGINX_MANAGED_ROOT/staging" \
   /run/fusionpanel-nginx
+for temp_path in body fastcgi proxy scgi uwsgi; do
+  temp_dir="/var/lib/nginx/$temp_path"
+  mkdir -p -- "$temp_dir"
+  chmod 0770 -- "$temp_dir"
+done
 nginx -v
 nginx -t -q -c "$FUSIONPANEL_NGINX_CONFIG"
 nginx -g 'daemon off;' -c "$FUSIONPANEL_NGINX_CONFIG" &

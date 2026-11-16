@@ -237,6 +237,19 @@ if ! grep -Eq '^[[:space:]]+max-file: "([2-9]|[1-9][0-9]+)"$' \
   printf 'FAIL: Compose log rotation must retain at least two files for compressed Docker logs.\n' >&2
   exit 1
 fi
+if ! grep -Fq '/var/lib/nginx:rw,noexec,nosuid,nodev,size=16m,uid=0,gid=33,mode=2770' \
+  "$fixture_dir/docker-compose.yml"; then
+  printf 'FAIL: the Nginx temp tmpfs must be owned by its root master and www-data group.\n' >&2
+  exit 1
+fi
+if ! grep -Fq 'for temp_path in body fastcgi proxy scgi uwsgi; do' "$fixture_dir/start-node.sh" \
+  || ! grep -Fq 'chmod 0770 -- "$temp_dir"' "$fixture_dir/start-node.sh" \
+  || ! grep -Fq "test \"\$\$(stat -c '%u:%g:%a' /var/lib/nginx/body)\" = '0:33:770'" \
+    "$fixture_dir/docker-compose.yml"; then
+  printf 'FAIL: Nginx temp paths must be pre-created for the master and verified for the www-data worker.\n' >&2
+  exit 1
+fi
+printf 'PASS: Nginx temp paths are writable by the master and www-data workers, but not the agent.\n'
 printf 'PASS: isolated BuildKit cache has a 512 MiB GC cap and no global prune.\n'
 
 if grep -Eq '^[[:space:]]*install -d.*[[:space:]](-o|--owner|-g|--group)([[:space:]=]|$)' \
