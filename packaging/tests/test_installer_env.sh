@@ -53,6 +53,7 @@ assert_mode() {
 assert_line 'FUSIONPANEL_LISTEN=127.0.0.1:9090' "$api_env"
 assert_line 'FUSIONPANEL_DATABASE_URL=/var/lib/fusionpanel/fusionpanel.db' "$api_env"
 assert_line 'FUSIONPANEL_ADMIN_TOKEN=synthetic-token-for-test' "$api_env"
+assert_line 'FUSIONPANEL_FRONTEND_DIR=/usr/local/lib/fusionpanel/versions/current/bin/frontend/dist' "$api_env"
 assert_line 'FUSIONPANEL_AGENT_MODE=http' "$agent_env"
 assert_line 'FUSIONPANEL_API_URL=http://127.0.0.1:9090' "$agent_env"
 assert_line 'FUSIONPANEL_ADMIN_TOKEN=synthetic-token-for-test' "$agent_env"

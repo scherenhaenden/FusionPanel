@@ -5,6 +5,10 @@ root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 label=${1:?Usage: build-package.sh PACKAGE_LABEL OUTPUT_DIR [MANIFEST_PATH]}
 output_dir=${2:?Usage: build-package.sh PACKAGE_LABEL OUTPUT_DIR [MANIFEST_PATH]}
 manifest=${3:-}
+cargo_bin=${FUSIONPANEL_CARGO:-cargo}
+npm_bin=${FUSIONPANEL_NPM:-npm}
+target_dir=${CARGO_TARGET_DIR:-"$root/target"}
+frontend_dist=${FUSIONPANEL_FRONTEND_DIST:-"$root/frontend/dist"}
 
 if [[ ! "$label" =~ ^[a-zA-Z0-9][a-zA-Z0-9.+_-]*$ ]]; then
     echo "Invalid package label" >&2
@@ -29,10 +33,26 @@ else
     unset FUSIONPANEL_BUILD_VERSION
 fi
 
-cargo build --locked --release --manifest-path "$root/Cargo.toml" -p fusionpanel-api
-cargo build --locked --release --manifest-path "$root/crates/agent/Cargo.toml" --bin fusionpanel-agent
-install -m 755 "$root/target/release/fusionpanel-api" "$staging/fusionpanel-api"
-install -m 755 "$root/crates/agent/target/release/fusionpanel-agent" "$staging/fusionpanel-agent"
+"$cargo_bin" build --locked --release --manifest-path "$root/Cargo.toml" \
+    --target-dir "$target_dir" -p fusionpanel-api -p fusionpanel-cli
+"$cargo_bin" build --locked --release --manifest-path "$root/crates/agent/Cargo.toml" \
+    --target-dir "$target_dir" --bin fusionpanel-agent
+"$npm_bin" ci --prefix "$root/frontend"
+"$npm_bin" --prefix "$root/frontend" run build -- --outDir "$frontend_dist" --emptyOutDir
+
+for binary in fusionpanel-api fusionpanel-agent fusionpanel-cli; do
+    [[ -x "$target_dir/release/$binary" ]] || {
+        echo "BLOCKED: release binary missing or not executable: $target_dir/release/$binary" >&2
+        exit 1
+    }
+    install -m 755 "$target_dir/release/$binary" "$staging/$binary"
+done
+[[ -f "$frontend_dist/index.html" ]] || {
+    echo "BLOCKED: frontend build did not produce $frontend_dist/index.html" >&2
+    exit 1
+}
+mkdir -p "$staging/frontend/dist"
+cp -a "$frontend_dist/." "$staging/frontend/dist/"
 if [[ -n "$manifest" ]]; then
     install -m 644 "$manifest" "$staging/RELEASE_MANIFEST.json"
     install -m 644 "$manifest" "$output_dir/RELEASE_MANIFEST.json"
