@@ -141,4 +141,37 @@ fi
 grep -Fxq 'FUSIONPANEL_LISTEN=127.0.0.1:9090' "$TEST_DIR/config/fusionpanel.env"
 [[ "$(grep -c '^start fusionpanel.service fusionpanel-agent.service$' "$TEST_DIR/logs/systemctl.log")" -eq 1 ]]
 
+# Upgrade the exact legacy local-agent file emitted by the prior installer.
+printf 'FUSIONPANEL_AGENT_ENDPOINT=http://127.0.0.1:9090\n' > "$TEST_DIR/config/fusionpanel-agent.env"
+sh "$ROOT_DIR/packaging/update.sh" 0.3.0-legacy-test
+[[ "$(readlink "$TEST_DIR/versions/current")" == '0.3.0-legacy-test' ]]
+grep -Fxq 'FUSIONPANEL_AGENT_MODE=http' "$TEST_DIR/config/fusionpanel-agent.env"
+grep -Fxq 'FUSIONPANEL_API_URL=http://127.0.0.1:9090' "$TEST_DIR/config/fusionpanel-agent.env"
+grep -Fxq 'FUSIONPANEL_ADMIN_TOKEN=old-admin-secret' "$TEST_DIR/config/fusionpanel-agent.env"
+[[ "$(grep -c '^FUSIONPANEL_NODE_NAME=' "$TEST_DIR/config/fusionpanel-agent.env")" -eq 1 ]]
+! grep -q '^FUSIONPANEL_AGENT_ENDPOINT=' "$TEST_DIR/config/fusionpanel-agent.env"
+[[ "$(stat -c '%a' "$TEST_DIR/config/fusionpanel-agent.env")" == '600' ]]
+
+# A legacy endpoint that disagrees with the local API listener fails before
+# stopping services or changing the active release, without exposing tokens.
+: > "$TEST_DIR/logs/systemctl.log"
+printf 'FUSIONPANEL_AGENT_ENDPOINT=http://127.0.0.1:9191\n' > "$TEST_DIR/config/fusionpanel-agent.env"
+set +e
+migration_output=$(sh "$ROOT_DIR/packaging/update.sh" 0.3.0-legacy-mismatch 2>&1)
+migration_status=$?
+set -e
+if [[ "$migration_status" -eq 0 ]]; then
+    echo 'FAIL: inconsistent legacy API endpoint was accepted' >&2
+    exit 1
+fi
+case "$migration_output" in
+    *old-admin-secret*)
+        echo 'FAIL: legacy migration exposed the API admin token' >&2
+        exit 1
+        ;;
+esac
+[[ "$(readlink "$TEST_DIR/versions/current")" == '0.3.0-legacy-test' ]]
+grep -Fxq 'FUSIONPANEL_AGENT_ENDPOINT=http://127.0.0.1:9191' "$TEST_DIR/config/fusionpanel-agent.env"
+! grep -q '^stop fusionpanel.service fusionpanel-agent.service$' "$TEST_DIR/logs/systemctl.log"
+
 echo 'Updater package-layout and rollback tests passed.'

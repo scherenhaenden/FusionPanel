@@ -17,6 +17,8 @@ export PATH
 
 FUSIONPANEL_INSTALLER_NO_RUN=1
 export FUSIONPANEL_INSTALLER_NO_RUN
+# shellcheck source=packaging/layout.sh
+. "$SCRIPT_DIR/../layout.sh"
 # shellcheck disable=SC1090
 . "$INSTALL_SCRIPT"
 
@@ -100,6 +102,43 @@ if ! grep -Fqx "root:root $TEST_DIR/stage/config/fusionpanel-agent.env" "$TEST_D
     echo "FAIL: preserved agent environment must be made root-owned" >&2
     exit 1
 fi
+
+# The previous local installer wrote only this endpoint. Migrate it using the
+# existing local API credential after checking the listener and staged token.
+mkdir -p "$TEST_DIR/legacy-migration"
+legacy_api="$TEST_DIR/legacy-migration/existing-api.env"
+staged_api="$TEST_DIR/legacy-migration/staged-api.env"
+legacy_agent="$TEST_DIR/legacy-migration/existing-agent.env"
+staged_agent_dir="$TEST_DIR/legacy-migration/staged"
+printf 'FUSIONPANEL_LISTEN=127.0.0.1:9090\nFUSIONPANEL_ADMIN_TOKEN=synthetic-existing-token\n' > "$legacy_api"
+cp "$legacy_api" "$staged_api"
+write_runtime_env_files "$staged_agent_dir" "9090" "synthetic-existing-token" "migration-node"
+printf 'FUSIONPANEL_AGENT_ENDPOINT=http://127.0.0.1:9090\n' > "$legacy_agent"
+fusionpanel_migrate_legacy_local_agent_env \
+    "$legacy_agent" "$legacy_api" "$staged_api" "$staged_agent_dir/fusionpanel-agent.env"
+assert_line 'FUSIONPANEL_AGENT_MODE=http' "$staged_agent_dir/fusionpanel-agent.env"
+assert_line 'FUSIONPANEL_API_URL=http://127.0.0.1:9090' "$staged_agent_dir/fusionpanel-agent.env"
+assert_line 'FUSIONPANEL_ADMIN_TOKEN=synthetic-existing-token' "$staged_agent_dir/fusionpanel-agent.env"
+assert_line 'FUSIONPANEL_NODE_NAME=migration-node' "$staged_agent_dir/fusionpanel-agent.env"
+if grep -q '^FUSIONPANEL_AGENT_ENDPOINT=' "$staged_agent_dir/fusionpanel-agent.env"; then
+    echo "FAIL: migrated agent environment retained the obsolete endpoint key" >&2
+    exit 1
+fi
+
+# A mismatched token must stop migration without exposing either credential.
+printf 'FUSIONPANEL_ADMIN_TOKEN=synthetic-different-token\n' > "$TEST_DIR/legacy-migration/mismatched-api.env"
+if migration_error=$(fusionpanel_migrate_legacy_local_agent_env \
+    "$legacy_agent" "$legacy_api" "$TEST_DIR/legacy-migration/mismatched-api.env" \
+    "$staged_agent_dir/fusionpanel-agent.env" 2>&1); then
+    echo "FAIL: mismatched staged API token was accepted for legacy migration" >&2
+    exit 1
+fi
+case "$migration_error" in
+    *synthetic-existing-token*|*synthetic-different-token*)
+        echo "FAIL: legacy migration exposed an API credential" >&2
+        exit 1
+        ;;
+esac
 
 ln -s "$remote_agent_env" "$TEST_DIR/symlink-agent.env"
 if preserve_agent_env_file "$TEST_DIR/symlink-agent.env" "$TEST_DIR/stage/config/fusionpanel-agent.env" 2>/dev/null; then

@@ -156,9 +156,20 @@ preserve_agent_env_file() {
         echo "Error: Existing agent environment is not a regular file." >&2
         return 1
     fi
-    if ! cp "$existing_env" "$staged_env"; then
-        echo "Error: Could not preserve the existing agent environment file." >&2
-        return 1
+    if fusionpanel_is_legacy_local_agent_env "$existing_env"; then
+        if [ "$#" -lt 4 ]; then
+            echo "Error: Legacy local agent configuration requires both existing and staged API configuration." >&2
+            return 1
+        fi
+        if ! fusionpanel_migrate_legacy_local_agent_env \
+            "$existing_env" "$3" "$4" "$staged_env"; then
+            return 1
+        fi
+    else
+        if ! cp "$existing_env" "$staged_env"; then
+            echo "Error: Could not preserve the existing agent environment file." >&2
+            return 1
+        fi
     fi
     if ! chown root:root "$staged_env"; then
         echo "Error: Could not make the staged agent environment root-owned." >&2
@@ -342,7 +353,8 @@ install() {
     node_name=$(normalize_node_name "$(uname -n 2>/dev/null || true)")
     write_runtime_env_files "$TMP_DIR/config" "$PORT" "$admin_token" "$node_name" \
         "$versions_dir/current/bin/frontend/dist"
-    preserve_agent_env_file "$sysconfdir/fusionpanel-agent.env" "$TMP_DIR/config/fusionpanel-agent.env"
+    preserve_agent_env_file "$sysconfdir/fusionpanel-agent.env" "$TMP_DIR/config/fusionpanel-agent.env" \
+        "$sysconfdir/fusionpanel.env" "$TMP_DIR/config/fusionpanel.env"
 
     # Atomic move logic: copy to temporary path in final destination, then rename to ensure no incomplete installs.
     mkdir -p "$versions_dir"

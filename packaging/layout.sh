@@ -16,6 +16,191 @@ fusionpanel_validate_payload() {
     fi
 }
 
+fusionpanel_normalize_node_name() {
+    fusionpanel_node_name=$(printf '%s' "$1" | LC_ALL=C tr -c 'A-Za-z0-9._-' '-')
+    fusionpanel_node_name=$(printf '%s' "$fusionpanel_node_name" | sed 's/^[.-]*//; s/[.-]*$//')
+    if [ -z "$fusionpanel_node_name" ]; then
+        fusionpanel_node_name="fusionpanel-node"
+    fi
+    printf '%s' "$fusionpanel_node_name"
+}
+
+fusionpanel_unique_env_value() {
+    awk -v key="$2" '
+        index($0, key "=") == 1 {
+            count++
+            value = substr($0, length(key) + 2)
+        }
+        END {
+            if (count != 1 || value == "") exit 1
+            print value
+        }
+    ' "$1"
+}
+
+fusionpanel_is_legacy_local_agent_env() {
+    [ -f "$1" ] || return 1
+    awk '
+        /^[[:space:]]*$/ || /^[[:space:]]*#/ { next }
+        /^FUSIONPANEL_AGENT_ENDPOINT=/ { endpoint_count++; next }
+        { other_assignment = 1 }
+        END { exit !(endpoint_count == 1 && !other_assignment) }
+    ' "$1"
+}
+
+fusionpanel_normalize_port() {
+    awk -v port="$1" 'BEGIN {
+        if (port !~ /^[0-9]+$/ || port + 0 < 1 || port + 0 > 65535) exit 1
+        printf "%d\n", port + 0
+    }'
+}
+
+fusionpanel_local_http_endpoint_port() {
+    fusionpanel_endpoint=$1
+    case "$fusionpanel_endpoint" in
+        http://127.0.0.1:*) fusionpanel_endpoint_port=${fusionpanel_endpoint#http://127.0.0.1:} ;;
+        http://localhost:*) fusionpanel_endpoint_port=${fusionpanel_endpoint#http://localhost:} ;;
+        http://\[::1\]:*) fusionpanel_endpoint_port=${fusionpanel_endpoint#http://\[::1\]:} ;;
+        *) return 1 ;;
+    esac
+    case "$fusionpanel_endpoint_port" in
+        */) fusionpanel_endpoint_port=${fusionpanel_endpoint_port%/} ;;
+    esac
+    fusionpanel_normalize_port "$fusionpanel_endpoint_port"
+}
+
+fusionpanel_local_listen_port() {
+    fusionpanel_listen_addr=$1
+    case "$fusionpanel_listen_addr" in
+        \[*\]:*)
+            fusionpanel_listen_host=${fusionpanel_listen_addr%%]*}
+            fusionpanel_listen_host=${fusionpanel_listen_host#\[}
+            fusionpanel_listen_port=${fusionpanel_listen_addr##*:}
+            ;;
+        *:*)
+            fusionpanel_listen_host=${fusionpanel_listen_addr%:*}
+            fusionpanel_listen_port=${fusionpanel_listen_addr##*:}
+            ;;
+        *) return 1 ;;
+    esac
+    case "$fusionpanel_listen_host" in
+        127.0.0.1|localhost|0.0.0.0|\*|::1|::) ;;
+        *) return 1 ;;
+    esac
+    fusionpanel_normalize_port "$fusionpanel_listen_port"
+}
+
+fusionpanel_valid_node_name() {
+    case "$1" in
+        ''|*[!A-Za-z0-9._-]*) return 1 ;;
+    esac
+    [ "${#1}" -le 128 ]
+}
+
+fusionpanel_migrate_legacy_local_agent_env() {
+    fusionpanel_legacy_agent_env=$1
+    fusionpanel_existing_api_env=$2
+    fusionpanel_staged_api_env=$3
+    fusionpanel_staged_agent_env=$4
+
+    if ! fusionpanel_is_legacy_local_agent_env "$fusionpanel_legacy_agent_env"; then
+        return 0
+    fi
+
+    fusionpanel_endpoint=$(fusionpanel_unique_env_value \
+        "$fusionpanel_legacy_agent_env" FUSIONPANEL_AGENT_ENDPOINT) || {
+        echo "Error: Legacy agent configuration is ambiguous; refusing automatic migration." >&2
+        return 1
+    }
+    fusionpanel_endpoint_port=$(fusionpanel_local_http_endpoint_port "$fusionpanel_endpoint") || {
+        echo "Error: Legacy agent endpoint is not a supported local HTTP endpoint; refusing automatic migration." >&2
+        return 1
+    }
+
+    fusionpanel_existing_token=$(fusionpanel_unique_env_value \
+        "$fusionpanel_existing_api_env" FUSIONPANEL_ADMIN_TOKEN) || {
+        echo "Error: Cannot migrate legacy agent configuration without one existing API admin token." >&2
+        return 1
+    }
+    fusionpanel_staged_token=$(fusionpanel_unique_env_value \
+        "$fusionpanel_staged_api_env" FUSIONPANEL_ADMIN_TOKEN) || {
+        echo "Error: Cannot verify the staged API admin token for legacy agent migration." >&2
+        return 1
+    }
+    case "$fusionpanel_existing_token" in
+        *[!A-Za-z0-9._~+/=-]*|'')
+            echo "Error: Existing API admin token cannot be migrated safely." >&2
+            return 1
+            ;;
+    esac
+    if [ "$fusionpanel_existing_token" != "$fusionpanel_staged_token" ]; then
+        echo "Error: Existing and staged API credentials do not match; refusing agent migration." >&2
+        return 1
+    fi
+
+    fusionpanel_existing_listen=$(fusionpanel_unique_env_value \
+        "$fusionpanel_existing_api_env" FUSIONPANEL_LISTEN) || {
+        echo "Error: Cannot verify the existing local API listener for legacy agent migration." >&2
+        return 1
+    }
+    fusionpanel_staged_listen=$(fusionpanel_unique_env_value \
+        "$fusionpanel_staged_api_env" FUSIONPANEL_LISTEN) || {
+        echo "Error: Cannot verify the staged local API listener for legacy agent migration." >&2
+        return 1
+    }
+    fusionpanel_existing_listen_port=$(fusionpanel_local_listen_port "$fusionpanel_existing_listen") || {
+        echo "Error: Existing API listener is not local; refusing legacy agent migration." >&2
+        return 1
+    }
+    fusionpanel_staged_listen_port=$(fusionpanel_local_listen_port "$fusionpanel_staged_listen") || {
+        echo "Error: Staged API listener is not local; refusing legacy agent migration." >&2
+        return 1
+    }
+    if [ "$fusionpanel_existing_listen_port" != "$fusionpanel_endpoint_port" ] \
+        || [ "$fusionpanel_staged_listen_port" != "$fusionpanel_endpoint_port" ]; then
+        echo "Error: Legacy agent endpoint does not match the existing and staged local API listeners." >&2
+        return 1
+    fi
+
+    fusionpanel_node_name=$(fusionpanel_unique_env_value \
+        "$fusionpanel_staged_agent_env" FUSIONPANEL_NODE_NAME 2>/dev/null || true)
+    if [ -z "$fusionpanel_node_name" ]; then
+        fusionpanel_node_name=$(fusionpanel_normalize_node_name "$(uname -n 2>/dev/null || true)")
+    fi
+    if ! fusionpanel_valid_node_name "$fusionpanel_node_name"; then
+        echo "Error: Cannot safely select a node name for legacy agent migration." >&2
+        return 1
+    fi
+
+    fusionpanel_migration_tmp="${fusionpanel_staged_agent_env}.migration.$$"
+    if [ -e "$fusionpanel_migration_tmp" ] || [ -L "$fusionpanel_migration_tmp" ]; then
+        echo "Error: Temporary agent configuration path already exists; refusing migration." >&2
+        return 1
+    fi
+    (
+        umask 077
+        printf 'FUSIONPANEL_AGENT_MODE=http\n'
+        printf 'FUSIONPANEL_API_URL=%s\n' "$fusionpanel_endpoint"
+        printf 'FUSIONPANEL_ADMIN_TOKEN=%s\n' "$fusionpanel_existing_token"
+        printf 'FUSIONPANEL_NODE_NAME=%s\n' "$fusionpanel_node_name"
+    ) > "$fusionpanel_migration_tmp" || {
+        rm -f "$fusionpanel_migration_tmp"
+        echo "Error: Could not stage migrated agent configuration." >&2
+        return 1
+    }
+    chmod 0600 "$fusionpanel_migration_tmp" || {
+        rm -f "$fusionpanel_migration_tmp"
+        echo "Error: Could not secure migrated agent configuration." >&2
+        return 1
+    }
+    mv -f "$fusionpanel_migration_tmp" "$fusionpanel_staged_agent_env" || {
+        rm -f "$fusionpanel_migration_tmp"
+        echo "Error: Could not activate migrated agent configuration." >&2
+        return 1
+    }
+    echo "Migrated the legacy local agent configuration using the existing API credentials."
+}
+
 fusionpanel_publish_version_dir() {
     staged_dir=$1
     install_dir=$2
