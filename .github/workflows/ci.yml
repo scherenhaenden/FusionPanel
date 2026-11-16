@@ -63,6 +63,7 @@ jobs:
           bash -n tests/e2e/browser/fixtures/sprint2/preflight.sh
           bash -n tests/e2e/browser/fixtures/sprint2/preflight.test.sh
           bash tests/e2e/browser/fixtures/sprint2/preflight.test.sh
+          npm --prefix tests/e2e/browser run test:unit:sprint2-fixture
 
   dependency-lane:
     runs-on: ubuntu-latest
