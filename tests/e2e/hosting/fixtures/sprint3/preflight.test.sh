@@ -243,8 +243,8 @@ if ! grep -Fq '/var/lib/nginx:rw,noexec,nosuid,nodev,size=16m,uid=0,gid=33,mode=
   exit 1
 fi
 if ! grep -Fq 'for temp_path in body fastcgi proxy scgi uwsgi; do' "$fixture_dir/start-node.sh" \
-  || ! grep -Fq 'chmod 2770 -- "$temp_dir"' "$fixture_dir/start-node.sh" \
-  || ! grep -Fq "test \"\$\$(stat -c '%u:%g:%a' /var/lib/nginx/body)\" = '0:33:2770'" \
+  || ! grep -Fq 'chmod 0770 -- "$temp_dir"' "$fixture_dir/start-node.sh" \
+  || ! grep -Fq "test \"\$\$(stat -c '%u:%g:%a' /var/lib/nginx/body)\" = '0:33:770'" \
     "$fixture_dir/docker-compose.yml"; then
   printf 'FAIL: Nginx temp paths must be pre-created for the master and verified for the www-data worker.\n' >&2
   exit 1

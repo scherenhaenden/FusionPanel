@@ -65,7 +65,7 @@ chmod 0750 -- \
 for temp_path in body fastcgi proxy scgi uwsgi; do
   temp_dir="/var/lib/nginx/$temp_path"
   mkdir -p -- "$temp_dir"
-  chmod 2770 -- "$temp_dir"
+  chmod 0770 -- "$temp_dir"
 done
 nginx -v
 nginx -t -q -c "$FUSIONPANEL_NGINX_CONFIG"

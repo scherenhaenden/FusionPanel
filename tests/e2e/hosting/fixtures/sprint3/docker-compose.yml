@@ -119,7 +119,7 @@ services:
           && test -s /run/nginx.pid
           && kill -0 "$$(cat /run/nginx.pid)"
           && nginx -t -q -c /etc/nginx/nginx.conf
-          && test "$$(stat -c '%u:%g:%a' /var/lib/nginx/body)" = '0:33:2770'
+          && test "$$(stat -c '%u:%g:%a' /var/lib/nginx/body)" = '0:33:770'
           && setpriv --reuid="$${FUSIONPANEL_S3_AGENT_UID}" --regid="$${FUSIONPANEL_S3_AGENT_GID}" --groups=2000 --no-new-privs -- test ! -w /var/lib/nginx/body
       interval: 2s
       timeout: 3s
