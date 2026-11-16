@@ -7,6 +7,9 @@ edition = "2021"
 license = "AGPL-3.0-only"
 
 [dependencies]
+fusionpanel-agent-protocol = { path = "../agent-protocol" }
+hosting = { path = "../../modules/hosting" }
+uuid = { version = "1.10.0", features = ["v4", "serde"] }
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = { version = "0.21", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
 futures-util = "0.3"
