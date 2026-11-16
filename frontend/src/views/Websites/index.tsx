@@ -1,69 +1,311 @@
-import React, { useState, useEffect } from 'react';
-import { SiteList, Site } from './SiteList';
+import React, { useEffect, useState } from 'react';
+import { api, CreateWebsiteRequest, WebsiteRecord } from '../../api';
+import { JobRecord } from '../../types';
+import { CreateSiteModal } from './CreateSiteModal';
 import { SiteDetail } from './SiteDetail';
-import { CreateSiteModal, CreateSiteFormData } from './CreateSiteModal';
-import { api } from '../../api';
+import { SiteList } from './SiteList';
+
+const POLL_INTERVAL_MS = 2500;
+
+type PendingOperation = {
+  siteId: string;
+  domain: string;
+  action: 'create' | 'delete';
+  job: JobRecord;
+};
+
+const messageFromError = (error: unknown, fallback: string): string => {
+  const value = error as { response?: { data?: { error?: { message?: string } } }; message?: string };
+  return value.response?.data?.error?.message || value.message || fallback;
+};
+
+const statusFromError = (error: unknown): number | undefined => {
+  const value = error as { response?: { status?: number } };
+  return value.response?.status;
+};
+
+const upsertSite = (sites: WebsiteRecord[], site: WebsiteRecord): WebsiteRecord[] => {
+  const exists = sites.some((current) => current.id === site.id);
+  return exists
+    ? sites.map((current) => (current.id === site.id ? site : current))
+    : [site, ...sites];
+};
 
 export const WebsitesView: React.FC = () => {
-  const [sites, setSites] = useState<Site[]>([]);
-  const [selectedSite, setSelectedSite] = useState<Site | null>(null);
+  const [sites, setSites] = useState<WebsiteRecord[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [pendingOperations, setPendingOperations] = useState<PendingOperation[]>([]);
+  const [deletingSiteIds, setDeletingSiteIds] = useState<string[]>([]);
+
+  const selectedSite = selectedSiteId ? sites.find((site) => site.id === selectedSiteId) || null : null;
 
   const loadSites = async () => {
+    setLoadError(null);
     setIsLoading(true);
-    setError(null);
     try {
-      const data = await api.getSites();
-      setSites(data);
-    } catch (e: any) {
-      setError(e?.response?.data?.error?.message || e.message || 'Failed to load sites');
+      setSites(await api.getSites());
+    } catch (error) {
+      setLoadError(messageFromError(error, 'Could not load websites.'));
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadSites();
+    void loadSites();
   }, []);
 
-  const handleCreateSite = async (data: CreateSiteFormData) => {
-    setError(null);
+  const pendingSiteIds = Array.from(new Set([
+    ...pendingOperations.map((operation) => operation.siteId),
+    ...deletingSiteIds,
+  ]));
+  const sitesToPoll = sites.filter((site) => (
+    site.state === 'provisioning'
+    || site.state === 'deleting'
+    || pendingOperations.some((operation) => operation.siteId === site.id)
+  ));
+  const pollingSignature = sitesToPoll
+    .map((site) => {
+      const operation = pendingOperations.find((pending) => pending.siteId === site.id);
+      return `${site.id}:${site.state}:${operation?.action || ''}:${operation?.job.id || ''}`;
+    })
+    .sort()
+    .join('|');
+
+  useEffect(() => {
+    if (!pollingSignature) return undefined;
+
+    let current = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const poll = async () => {
+      for (const site of sitesToPoll) {
+        if (!current) return;
+        const operation = pendingOperations.find((pending) => pending.siteId === site.id);
+
+        try {
+          const refreshedSite = await api.getSite(site.id);
+          if (!current) return;
+          setSites((currentSites) => upsertSite(currentSites, refreshedSite));
+
+          let refreshedJob = operation?.job;
+          if (operation) {
+            try {
+              refreshedJob = await api.getJob(operation.job.id);
+              if (!current) return;
+              setPendingOperations((currentOperations) => currentOperations.map((pending) => (
+                pending.siteId === operation.siteId ? { ...pending, job: refreshedJob as JobRecord } : pending
+              )));
+            } catch (jobError) {
+              if (current) setOperationError(messageFromError(jobError, `Could not refresh job for ${site.domain}.`));
+            }
+          }
+
+          if (operation?.action === 'create' && (refreshedSite.state === 'active' || refreshedSite.state === 'failed')) {
+            setPendingOperations((currentOperations) => currentOperations.filter((pending) => pending.siteId !== site.id));
+            if (refreshedSite.state === 'active') {
+              setOperationError(null);
+              setNotice(`${refreshedSite.domain} is active.`);
+            } else {
+              setNotice(null);
+              setOperationError(refreshedSite.last_error || `${refreshedSite.domain} provisioning failed.`);
+            }
+          } else if (
+            operation?.action === 'delete'
+            && refreshedJob
+            && (refreshedJob.state === 'failed' || refreshedJob.state === 'cancelled')
+            && refreshedSite.state !== 'deleting'
+          ) {
+            setPendingOperations((currentOperations) => currentOperations.filter((pending) => pending.siteId !== site.id));
+            setNotice(null);
+            setOperationError(refreshedJob.error_text || `${refreshedSite.domain} could not be deleted.`);
+          }
+        } catch (error) {
+          if (!current) return;
+          if (statusFromError(error) === 404) {
+            setSites((currentSites) => currentSites.filter((currentSite) => currentSite.id !== site.id));
+            if (operation?.action === 'delete') {
+              setPendingOperations((currentOperations) => currentOperations.filter((pending) => pending.siteId !== site.id));
+              setOperationError(null);
+              setNotice(`${site.domain} was deleted and is no longer available.`);
+            } else if (operation?.action === 'create') {
+              setPendingOperations((currentOperations) => currentOperations.filter((pending) => pending.siteId !== site.id));
+              setNotice(null);
+              setOperationError(`${site.domain} disappeared while it was being provisioned.`);
+            } else {
+              setNotice(`${site.domain} is no longer available; the list has been updated.`);
+            }
+            setSelectedSiteId((currentId) => (currentId === site.id ? null : currentId));
+          } else {
+            setOperationError(messageFromError(error, `Could not refresh ${site.domain} state.`));
+          }
+        }
+      }
+
+      if (current) timer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
+    };
+
+    timer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
+    return () => {
+      current = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [pollingSignature]);
+
+  const handleCreateSite = async (request: CreateWebsiteRequest) => {
+    setCreateError(null);
+    setOperationError(null);
+    setNotice(null);
+    setIsCreating(true);
     try {
-      const newSite = await api.createSite(data);
-      setSites([...sites, newSite]);
+      const response = await api.createSite(request);
+      setSites((currentSites) => upsertSite(currentSites, response.site));
       setIsCreateModalOpen(false);
-    } catch (e: any) {
-      setError(e?.response?.data?.error?.message || e.message || 'Failed to create site');
+
+      if (response.site.state === 'provisioning') {
+        setPendingOperations((currentOperations) => [
+          ...currentOperations.filter((operation) => operation.siteId !== response.site.id),
+          { siteId: response.site.id, domain: response.site.domain, action: 'create', job: response.job },
+        ]);
+        setNotice(`Provisioning ${response.site.domain}; waiting for the agent to report its persisted state.`);
+      } else if (response.site.state === 'active') {
+        setNotice(`${response.site.domain} is active.`);
+      } else {
+        setOperationError(response.site.last_error || `${response.site.domain} provisioning failed.`);
+      }
+    } catch (error) {
+      setCreateError(messageFromError(error, 'Could not create website.'));
+    } finally {
+      setIsCreating(false);
     }
   };
 
+  const handleSelectSite = async (site: WebsiteRecord) => {
+    setSelectedSiteId(site.id);
+    setDetailError(null);
+    setIsDetailLoading(true);
+    try {
+      const detail = await api.getSite(site.id);
+      setSites((currentSites) => upsertSite(currentSites, detail));
+    } catch (error) {
+      setDetailError(messageFromError(error, `Could not load details for ${site.domain}.`));
+    } finally {
+      setIsDetailLoading(false);
+    }
+  };
+
+  const handleDeleteSite = async (site: WebsiteRecord) => {
+    setOperationError(null);
+    setNotice(null);
+    setDeletingSiteIds((currentIds) => currentIds.includes(site.id) ? currentIds : [...currentIds, site.id]);
+    try {
+      const response = await api.deleteSite(site.id);
+      setSites((currentSites) => upsertSite(currentSites, response.site));
+      setPendingOperations((currentOperations) => [
+        ...currentOperations.filter((operation) => operation.siteId !== site.id),
+        { siteId: site.id, domain: site.domain, action: 'delete', job: response.job },
+      ]);
+      setSelectedSiteId((currentId) => (currentId === site.id ? null : currentId));
+      setNotice(`Deletion queued for ${site.domain}; waiting for the API to confirm it is gone.`);
+    } catch (error) {
+      setOperationError(messageFromError(error, `Could not delete ${site.domain}.`));
+    } finally {
+      setDeletingSiteIds((currentIds) => currentIds.filter((id) => id !== site.id));
+    }
+  };
+
+  const handleCloseDetails = () => {
+    setSelectedSiteId(null);
+    setDetailError(null);
+    setIsDetailLoading(false);
+  };
+
   return (
-    <div className="websites-view">
-      <div className="websites-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h1>Websites & Virtual Hosts</h1>
-        {!selectedSite && (
-          <button onClick={() => setIsCreateModalOpen(true)}>Create Site</button>
+    <main className="space-y-6">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Websites</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">Create and manage static sites and reverse proxies.</p>
+        </div>
+        {!selectedSiteId && (
+          <button
+            type="button"
+            onClick={() => { setCreateError(null); setIsCreateModalOpen(true); }}
+            className="rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
+          >
+            Create website
+          </button>
         )}
-      </div>
+      </header>
 
-      {error && <div className="error-banner text-red-500 mb-4">{error} <button onClick={loadSites} className="underline ml-2">Retry</button></div>}
+      {notice && <div role="status" aria-live="polite" className="rounded border border-blue-200 bg-blue-50 px-4 py-3 text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">{notice}</div>}
+      {loadError && (
+        <div role="alert" className="rounded border border-red-300 bg-red-50 px-4 py-3 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+          <p>{loadError}</p>
+          <button type="button" onClick={() => void loadSites()} className="mt-2 underline">Retry</button>
+        </div>
+      )}
+      {operationError && (
+        <div role="alert" className="rounded border border-red-300 bg-red-50 px-4 py-3 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+          {operationError}
+        </div>
+      )}
 
-      {isLoading ? (
-        <div>Loading...</div>
-      ) : selectedSite ? (
-        <SiteDetail site={selectedSite} onClose={() => setSelectedSite(null)} />
+      {pendingOperations.length > 0 && (
+        <section aria-labelledby="pending-website-operations" className="rounded border border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
+          <h2 id="pending-website-operations" className="font-medium text-gray-900 dark:text-white">Pending website operations</h2>
+          <ul className="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-200">
+            {pendingOperations.map((operation) => (
+              <li key={operation.siteId}>
+                {operation.action === 'create' ? 'Provisioning' : 'Deleting'} {operation.domain}; job {operation.job.id} is {operation.job.state}.
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {isLoading && sites.length === 0 ? (
+        <p role="status" className="py-8 text-center text-gray-600 dark:text-gray-300">Loading websites…</p>
+      ) : loadError && sites.length === 0 ? (
+        <p role="status" className="py-8 text-center text-gray-600 dark:text-gray-300">Website list is unavailable until the request succeeds.</p>
+      ) : selectedSiteId ? (
+        <section>
+          {isDetailLoading && <p role="status" className="mb-3 text-gray-600 dark:text-gray-300">Refreshing website details…</p>}
+          {detailError && (
+            <div role="alert" className="mb-4 rounded border border-red-300 bg-red-50 px-4 py-3 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+              <p>{detailError}</p>
+              {selectedSite && <button type="button" onClick={() => void handleSelectSite(selectedSite)} className="mt-2 underline">Retry</button>}
+            </div>
+          )}
+          {selectedSite && <SiteDetail site={selectedSite} onClose={handleCloseDetails} />}
+          {!selectedSite && !isDetailLoading && <p role="status">Website not found.</p>}
+        </section>
       ) : (
-        <SiteList sites={sites} onSelectSite={setSelectedSite} />
+        <SiteList
+          sites={sites}
+          pendingSiteIds={pendingSiteIds}
+          onSelectSite={(site) => { void handleSelectSite(site); }}
+          onDeleteSite={(site) => { void handleDeleteSite(site); }}
+        />
       )}
 
       <CreateSiteModal
         isOpen={isCreateModalOpen}
+        isSubmitting={isCreating}
+        submitError={createError}
         onClose={() => setIsCreateModalOpen(false)}
         onSubmit={handleCreateSite}
       />
-    </div>
+    </main>
   );
 };
 
