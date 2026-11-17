@@ -4,9 +4,18 @@ import { api, FileEntry, WebsiteRecord } from '../../api';
 
 function extractErrorMessage(err: unknown, fallback: string): string {
   if (typeof err === 'object' && err !== null && 'response' in err) {
-    const resp = (err as { response?: { data?: { error?: string; message?: string } } }).response;
-    const msg = resp?.data?.message || resp?.data?.error;
-    if (msg) return msg;
+    const resp = (err as { response?: { data?: { error?: unknown; message?: unknown } } }).response;
+    const data = resp?.data;
+    if (typeof data?.message === 'string' && data.message) return data.message;
+    if (typeof data?.error === 'string' && data.error) return data.error;
+    if (
+      typeof data?.error === 'object' &&
+      data.error !== null &&
+      'message' in data.error &&
+      typeof (data.error as { message?: unknown }).message === 'string'
+    ) {
+      return (data.error as { message: string }).message;
+    }
   }
   if (err instanceof Error && err.message) return err.message;
   return fallback;

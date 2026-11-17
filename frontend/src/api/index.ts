@@ -52,7 +52,7 @@ export interface FileRenameResponse {
   to: string;
 }
 
-export type CronJobState = 'provisioning' | 'active' | 'failed' | 'deleting';
+export type CronJobState = 'provisioning' | 'ready' | 'failed' | 'deleting';
 
 export interface CronJobRecord {
   id: string;
