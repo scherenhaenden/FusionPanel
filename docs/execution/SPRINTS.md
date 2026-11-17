@@ -103,9 +103,11 @@ The Sprint 2 agent defaults to HTTP mode. Existing deployments that use the lega
 
 ---
 
-## 6. Active Sprint 3 (Websites & Reverse Proxy)
+## 6. Sprint Progress & Next Backlog (Sprint 5: Databases Core)
 
-Sprint 3 is based on the completed Sprint 2 release through merged base-refresh PR [#620](https://github.com/scherenhaenden/FusionPanel/pull/620). Website UI, Nginx apply, tenant-scoped API, and E2E fixture work are integrated through PRs #621–#630 on `sprint-3`. The release gate is still blocked: the latest disposable Docker/Playwright run marks its first static site `failed` rather than `active`, so reverse-proxy, delete, and rollback acceptance remain unverified. Issue [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) remains open. See [the 16 November Sprint 3 handoff](./SPRINT_03_HANDOFF_2026-11-16.md) and [the implementation plan](./SPRINT_03_PLAN.md) before resuming.
+* **Sprint 3 (Websites & Reverse Proxy — `0.4.0-dev.1`)**: **DONE** — merged into `master` via [PR #640](https://github.com/scherenhaenden/FusionPanel/pull/640) (`678fab8`) with all 14 CI checks passing and disposable Docker Nginx/Playwright E2E verified.
+* **Sprint 4 (TLS / SSL Core — `0.5.0-dev.1`)**: **DONE** — implemented across `feat/sprint-4-tls-api` ([PR #644](https://github.com/scherenhaenden/FusionPanel/pull/644)), `feat/sprint-4-acme-runner` ([PR #645](https://github.com/scherenhaenden/FusionPanel/pull/645)), `feat/sprint-4-tls-ui` ([PR #646](https://github.com/scherenhaenden/FusionPanel/pull/646)), and `test/sprint-4-tls-e2e-fixture` ([PR #647](https://github.com/scherenhaenden/FusionPanel/pull/647)). Verified end-to-end against Pebble ACME HTTP-01 + Nginx `:443` + Custom PEM rollback + TLS removal in Playwright, alongside full workspace, `modules/hosting`, `crates/agent`, and `frontend` test suites. See [the Sprint 4 implementation plan](./SPRINT_04_PLAN.md).
+* **Next — Sprint 5 (Databases Core — PG & MariaDB)**: Ready to branch `sprint-5` from `master` after Sprint 4 release merge.
 
 ### Sprint 2 focused release gate — 16 November 2026
 
