@@ -464,7 +464,9 @@ fn handle_request(bytes: &[u8], operations: &dyn ManagedSiteOperations) -> Respo
         | Operation::SiteValidate(_)
         | Operation::DatabaseApply(_)
         | Operation::DatabaseDelete(_)
-        | Operation::DatabaseUserCreate(_) => {
+        | Operation::DatabaseUserCreate(_)
+        | Operation::BackupCreate(_)
+        | Operation::BackupRestore(_) => {
             return error_response(
                 request_id,
                 "unsupported_operation",

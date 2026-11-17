@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "chrono",
  "databases",
  "fusionpanel-agent-protocol",
  "futures-util",
@@ -342,7 +343,7 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "fusionpanel-agent-protocol"
-version = "0.6.0-dev.1"
+version = "0.7.0-dev.1"
 dependencies = [
  "serde",
  "serde_json",

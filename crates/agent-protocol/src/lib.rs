@@ -35,6 +35,10 @@ pub enum Operation {
     DatabaseDelete(DatabaseDeletePayload),
     #[serde(rename = "database.user.create")]
     DatabaseUserCreate(DatabaseUserCreatePayload),
+    #[serde(rename = "backup.create")]
+    BackupCreate(BackupCreatePayload),
+    #[serde(rename = "backup.restore")]
+    BackupRestore(BackupRestorePayload),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -139,6 +143,68 @@ pub struct DatabaseUserCreatePayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum BackupTarget {
+    Site {
+        site_id: Uuid,
+        domain: String,
+        document_root: String,
+    },
+    Database {
+        database_id: Uuid,
+        name: String,
+        engine: DatabaseEngineKind,
+    },
+    Bundle {
+        site_id: Uuid,
+        domain: String,
+        document_root: String,
+        database_id: Uuid,
+        database_name: String,
+        engine: DatabaseEngineKind,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum BackupDestination {
+    Local {
+        base_dir: String,
+    },
+    S3 {
+        endpoint: String,
+        bucket: String,
+        region: String,
+        access_key: String,
+        secret_key: String,
+        #[serde(default)]
+        prefix: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct BackupCreatePayload {
+    pub backup_id: Uuid,
+    pub tenant_id: Uuid,
+    pub archive_key: String,
+    pub target: BackupTarget,
+    pub destination: BackupDestination,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct BackupRestorePayload {
+    pub backup_id: Uuid,
+    pub tenant_id: Uuid,
+    pub archive_key: String,
+    pub target: BackupTarget,
+    pub destination: BackupDestination,
+    #[serde(default)]
+    pub expected_sha256: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Response {
     pub version: u32,
@@ -175,6 +241,9 @@ pub enum ValidationError {
     InvalidDatabaseId,
     InvalidDatabaseIdentifier,
     InvalidDatabasePassword,
+    InvalidBackupId,
+    InvalidBackupArchiveKey,
+    InvalidBackupDestination,
 }
 
 impl Request {
@@ -192,6 +261,8 @@ impl Request {
             Operation::DatabaseApply(payload) => payload.validate(),
             Operation::DatabaseDelete(payload) => payload.validate(),
             Operation::DatabaseUserCreate(payload) => payload.validate(),
+            Operation::BackupCreate(payload) => payload.validate(),
+            Operation::BackupRestore(payload) => payload.validate(),
         }
     }
 }
@@ -375,6 +446,143 @@ pub fn valid_database_identifier(value: &str) -> bool {
             | "fusionpanel"
             | "rdsadmin"
     )
+}
+
+impl BackupTarget {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        match self {
+            Self::Site {
+                site_id,
+                domain,
+                document_root,
+            } => SiteApplyPayload {
+                site_id: *site_id,
+                domain: domain.clone(),
+                spec: SiteSpec::Static {
+                    document_root: document_root.clone(),
+                },
+            }
+            .validate(),
+            Self::Database {
+                database_id,
+                name,
+                engine,
+            } => DatabaseApplyPayload {
+                database_id: *database_id,
+                name: name.clone(),
+                engine: *engine,
+            }
+            .validate(),
+            Self::Bundle {
+                site_id,
+                domain,
+                document_root,
+                database_id,
+                database_name,
+                engine,
+            } => {
+                SiteApplyPayload {
+                    site_id: *site_id,
+                    domain: domain.clone(),
+                    spec: SiteSpec::Static {
+                        document_root: document_root.clone(),
+                    },
+                }
+                .validate()?;
+                DatabaseApplyPayload {
+                    database_id: *database_id,
+                    name: database_name.clone(),
+                    engine: *engine,
+                }
+                .validate()
+            }
+        }
+    }
+}
+
+impl BackupDestination {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        match self {
+            Self::Local { base_dir } => {
+                if base_dir.contains('\0')
+                    || base_dir.contains("..")
+                    || (!base_dir.starts_with("/var/backups/fusionpanel")
+                        && !base_dir.starts_with("/srv/fusionpanel/backups")
+                        && !base_dir.starts_with("/tmp/fusionpanel-backups"))
+                {
+                    return Err(ValidationError::InvalidBackupDestination);
+                }
+                Ok(())
+            }
+            Self::S3 {
+                endpoint,
+                bucket,
+                region,
+                access_key,
+                secret_key,
+                prefix,
+            } => {
+                if !valid_http_upstream_url(endpoint)
+                    || bucket.trim().is_empty()
+                    || bucket.contains('/')
+                    || bucket.contains("..")
+                    || region.trim().is_empty()
+                    || access_key.trim().is_empty()
+                    || secret_key.trim().is_empty()
+                {
+                    return Err(ValidationError::InvalidBackupDestination);
+                }
+                if let Some(prefix) = prefix {
+                    if prefix.contains('\0') || prefix.contains("..") {
+                        return Err(ValidationError::InvalidBackupDestination);
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+fn valid_archive_key(key: &str) -> bool {
+    !key.is_empty()
+        && key.len() <= 255
+        && !key.starts_with('/')
+        && !key.contains('\0')
+        && !key.contains("..")
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '-' | '_' | '.'))
+}
+
+impl BackupCreatePayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.backup_id.is_nil() || self.tenant_id.is_nil() {
+            return Err(ValidationError::InvalidBackupId);
+        }
+        if !valid_archive_key(&self.archive_key) {
+            return Err(ValidationError::InvalidBackupArchiveKey);
+        }
+        self.target.validate()?;
+        self.destination.validate()
+    }
+}
+
+impl BackupRestorePayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.backup_id.is_nil() || self.tenant_id.is_nil() {
+            return Err(ValidationError::InvalidBackupId);
+        }
+        if !valid_archive_key(&self.archive_key) {
+            return Err(ValidationError::InvalidBackupArchiveKey);
+        }
+        if let Some(sha) = &self.expected_sha256 {
+            if sha.len() != 64 || !sha.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(ValidationError::InvalidBackupArchiveKey);
+            }
+        }
+        self.target.validate()?;
+        self.destination.validate()
+    }
 }
 
 fn valid_certificate_pem(pem: &str) -> bool {
@@ -1158,6 +1366,59 @@ mod tests {
         assert_eq!(
             empty_password.validate(),
             Err(ValidationError::InvalidDatabasePassword)
+        );
+    }
+
+    #[test]
+    fn test_backup_create_and_restore_validation() {
+        let valid_create = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::BackupCreate(BackupCreatePayload {
+                backup_id: Uuid::new_v4(),
+                tenant_id: Uuid::new_v4(),
+                archive_key: "tenant-1/backup-1.tar.gz".to_string(),
+                target: BackupTarget::Bundle {
+                    site_id: Uuid::new_v4(),
+                    domain: "app.local".to_string(),
+                    document_root: "/srv/fusionpanel/sites/app.local".to_string(),
+                    database_id: Uuid::new_v4(),
+                    database_name: "app_db".to_string(),
+                    engine: DatabaseEngineKind::Postgresql,
+                },
+                destination: BackupDestination::S3 {
+                    endpoint: "http://127.0.0.1:9000".to_string(),
+                    bucket: "fusionpanel-backups".to_string(),
+                    region: "us-east-1".to_string(),
+                    access_key: "minioadmin".to_string(),
+                    secret_key: "minioadmin".to_string(),
+                    prefix: Some("sprint6".to_string()),
+                },
+            }),
+        };
+        assert!(valid_create.validate().is_ok());
+
+        let bad_key = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::BackupRestore(BackupRestorePayload {
+                backup_id: Uuid::new_v4(),
+                tenant_id: Uuid::new_v4(),
+                archive_key: "../escape.tar.gz".to_string(),
+                target: BackupTarget::Site {
+                    site_id: Uuid::new_v4(),
+                    domain: "app.local".to_string(),
+                    document_root: "/srv/fusionpanel/sites/app.local".to_string(),
+                },
+                destination: BackupDestination::Local {
+                    base_dir: "/var/backups/fusionpanel".to_string(),
+                },
+                expected_sha256: None,
+            }),
+        };
+        assert_eq!(
+            bad_key.validate(),
+            Err(ValidationError::InvalidBackupArchiveKey)
         );
     }
 }
