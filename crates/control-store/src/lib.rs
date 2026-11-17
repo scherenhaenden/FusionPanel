@@ -7,12 +7,14 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod backups;
+mod cron;
 mod databases;
 mod dns;
 mod tls;
 mod websites;
 
 pub use backups::{BackupOperation, BackupOperationReservation, BackupRecord, BackupState};
+pub use cron::{CronJobRecord, CronJobState, CronOperation, CronOperationReservation};
 
 pub use databases::{
     DatabaseEngine, DatabaseOperation, DatabaseOperationReservation, DatabaseRecord, DatabaseState,
@@ -357,6 +359,39 @@ impl ControlStore {
                 "#,
             )?;
             tx.pragma_update(None, "user_version", 8)?;
+        }
+
+        if user_version < 9 {
+            tx.execute_batch(
+                r#"
+                CREATE TABLE cron_jobs (
+                    cron_id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    schedule TEXT NOT NULL,
+                    command TEXT NOT NULL,
+                    enabled INTEGER NOT NULL,
+                    state TEXT NOT NULL CHECK (state IN ('provisioning', 'ready', 'failed', 'deleting')),
+                    last_run_at TEXT,
+                    last_run_status TEXT,
+                    last_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    operation_request_id TEXT NOT NULL
+                );
+                CREATE INDEX idx_cron_jobs_tenant_id ON cron_jobs (tenant_id);
+                CREATE TABLE cron_operations (
+                    idempotency_key TEXT PRIMARY KEY,
+                    fingerprint TEXT NOT NULL,
+                    operation TEXT NOT NULL CHECK (operation IN ('cron.apply', 'cron.delete', 'cron.run_now')),
+                    cron_id TEXT NOT NULL,
+                    request_id TEXT NOT NULL,
+                    snapshot TEXT NOT NULL,
+                    job_id TEXT
+                );
+                "#,
+            )?;
+            tx.pragma_update(None, "user_version", 9)?;
         }
 
         tx.commit()?;
@@ -988,7 +1023,7 @@ mod tests {
             let user_version: u32 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(user_version, 8);
+            assert_eq!(user_version, 9);
             let website_tables: u32 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('websites', 'website_operations')",
@@ -1048,7 +1083,7 @@ mod tests {
         let user_version: u32 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(user_version, 8);
+        assert_eq!(user_version, 9);
         let has_tenant_id: bool = conn
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM pragma_table_info('websites') WHERE name = 'tenant_id')",

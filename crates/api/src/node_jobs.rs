@@ -215,6 +215,17 @@ async fn enqueue_job(
             },
         });
     }
+    if matches!(
+        body.operation.as_str(),
+        "cron.apply" | "cron.delete" | "cron.run_now"
+    ) {
+        return Err(ErrorResponse {
+            error: ErrorDetail {
+                code: "bad_request",
+                message: "Use the Cron API for cron operations",
+            },
+        });
+    }
     let key = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
@@ -421,6 +432,7 @@ async fn complete_job(
     super::databases::record_completion(&state, &completed).await?;
     super::backups::record_completion(&state, &completed).await?;
     super::dns::record_completion(&state, &completed).await?;
+    super::cron::record_completion(&state, &completed).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
