@@ -90,6 +90,55 @@ export interface DatabaseUserOperationResponse {
   job?: JobRecord;
 }
 
+export type BackupState = 'creating' | 'ready' | 'restoring' | 'failed';
+export type BackupTargetKind = 'site' | 'database' | 'bundle';
+export type BackupDestinationKind = 'local' | 's3';
+
+export type BackupTargetRequest =
+  | { kind: 'site'; site_id: string }
+  | { kind: 'database'; database_id: string }
+  | { kind: 'bundle'; site_id: string; database_id: string };
+
+export type BackupDestination =
+  | { kind: 'local'; base_dir: string }
+  | {
+      kind: 's3';
+      endpoint: string;
+      bucket: string;
+      region: string;
+      access_key: string;
+      secret_key: string;
+      prefix?: string;
+    };
+
+export interface BackupRecord {
+  id: string;
+  tenant_id?: string;
+  archive_key: string;
+  target: BackupTargetRequest;
+  destination_kind: BackupDestinationKind;
+  destination_summary: string;
+  state: BackupState;
+  manifest_sha256: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateBackupRequest {
+  target: BackupTargetRequest;
+  destination: BackupDestination;
+}
+
+export interface RestoreBackupRequest {
+  destination?: BackupDestination;
+}
+
+export interface BackupOperationResponse {
+  backup: BackupRecord;
+  job: JobRecord;
+}
+
 export const createIdempotencyKey = (): string => {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
@@ -249,18 +298,38 @@ export const api = {
   },
 
   // Backups
-  getBackups: async (): Promise<any[]> => {
-    const response = await apiClient.get<any[]>('/v1/backups');
+  getBackups: async (): Promise<BackupRecord[]> => {
+    const response = await apiClient.get<{ backups: BackupRecord[] } | BackupRecord[]>('/v1/backups');
+    return Array.isArray(response.data) ? response.data : response.data.backups;
+  },
+
+  getBackup: async (backupId: string): Promise<BackupRecord> => {
+    const response = await apiClient.get<{ backup: BackupRecord } | BackupRecord>(
+      `/v1/backups/${encodeURIComponent(backupId)}`,
+    );
+    return 'backup' in response.data ? response.data.backup : response.data;
+  },
+
+  createBackup: async (
+    data: CreateBackupRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<BackupOperationResponse> => {
+    const response = await apiClient.post<BackupOperationResponse>('/v1/backups', data, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
     return response.data;
   },
 
-  createBackup: async (data: any): Promise<any> => {
-    const response = await apiClient.post<any>('/v1/backups', data);
-    return response.data;
-  },
-
-  restoreBackup: async (id: string): Promise<any> => {
-    const response = await apiClient.post<any>(`/v1/backups/${id}/restore`);
+  restoreBackup: async (
+    backupId: string,
+    data: RestoreBackupRequest = {},
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<BackupOperationResponse> => {
+    const response = await apiClient.post<BackupOperationResponse>(
+      `/v1/backups/${encodeURIComponent(backupId)}/restore`,
+      data,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
     return response.data;
   },
 

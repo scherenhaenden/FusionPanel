@@ -1,101 +1,116 @@
-import React, { useState, useEffect } from 'react';
-import { BackupArchive, BackupScope } from './types';
+import React, { useCallback, useEffect, useState } from 'react';
+import { api, DatabaseRecord, WebsiteRecord } from '../../api';
 import { ArchiveList } from './ArchiveList';
 import { BackupModal } from './BackupModal';
 import { RestoreWizard } from './RestoreWizard';
-import { api } from '../../api';
-import './index.css';
+import { BackupRecord, CreateBackupRequest, RestoreBackupRequest } from './types';
 
 export const BackupsView: React.FC = () => {
-  const [archives, setArchives] = useState<BackupArchive[]>([]);
-  const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
-  const [selectedArchiveForRestore, setSelectedArchiveForRestore] = useState<BackupArchive | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [backups, setBackups] = useState<BackupRecord[]>([]);
+  const [sites, setSites] = useState<WebsiteRecord[]>([]);
+  const [databases, setDatabases] = useState<DatabaseRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [jobStatus, setJobStatus] = useState<string | null>(null);
+  const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
+  const [selectedBackupForRestore, setSelectedBackupForRestore] = useState<BackupRecord | null>(null);
 
-  const loadBackups = async () => {
-    setIsLoading(true);
-    setError(null);
+  const loadData = useCallback(async () => {
     try {
-      const data = await api.getBackups();
-      setArchives(data || []);
-    } catch (e: any) {
-      setError(e?.response?.data?.error?.message || e.message || 'Failed to load backups');
+      const [backupList, siteList, dbList] = await Promise.all([
+        api.getBackups(),
+        api.getSites().catch(() => [] as WebsiteRecord[]),
+        api.getDatabases().catch(() => [] as DatabaseRecord[]),
+      ]);
+      setBackups(Array.isArray(backupList) ? backupList : []);
+      setSites(Array.isArray(siteList) ? siteList : []);
+      setDatabases(Array.isArray(dbList) ? dbList : []);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load backups.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadBackups();
   }, []);
 
-  const handleBackup = async (scope: BackupScope) => {
-    setError(null);
-    setJobStatus('Starting backup job...');
-    try {
-      const newArchive = await api.createBackup({ scope });
-      setJobStatus('Backup created successfully.');
-      setArchives([newArchive, ...archives]);
-      setIsBackupModalOpen(false);
-      setTimeout(() => setJobStatus(null), 3000);
-    } catch (e: any) {
-      setJobStatus(null);
-      setError(e?.response?.data?.error?.message || e.message || 'Failed to start backup');
-    }
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const hasPendingOperation = backups.some(
+    (backup) => backup.state === 'creating' || backup.state === 'restoring',
+  );
+
+  useEffect(() => {
+    if (!hasPendingOperation) return;
+    const timer = window.setInterval(() => {
+      void api
+        .getBackups()
+        .then((next) => setBackups(Array.isArray(next) ? next : []))
+        .catch(() => undefined);
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [hasPendingOperation]);
+
+  const handleCreateBackup = async (request: CreateBackupRequest) => {
+    const response = await api.createBackup(request);
+    setBackups((prev) => [response.backup, ...prev.filter((item) => item.id !== response.backup.id)]);
+    await loadData();
   };
 
-  const handleRestore = async (archiveId: string) => {
-    setError(null);
-    setJobStatus('Starting restore job...');
-    try {
-      await api.restoreBackup(archiveId);
-      console.log(`Restoring backup: ${archiveId}`);
-      setSelectedArchiveForRestore(null);
-      setJobStatus('Restore started successfully.');
-      setTimeout(() => setJobStatus(null), 3000);
-    } catch (e: any) {
-      setJobStatus(null);
-      setError(e?.response?.data?.error?.message || e.message || 'Failed to restore backup');
-    }
+  const handleConfirmRestore = async (backupId: string, request: RestoreBackupRequest) => {
+    const response = await api.restoreBackup(backupId, request);
+    setBackups((prev) =>
+      prev.map((item) => (item.id === response.backup.id ? response.backup : item)),
+    );
+    await loadData();
   };
 
   return (
-    <div className="backups-view">
-      <div className="header-actions">
-        <h2>Backup & Restore Management</h2>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-xl font-semibold text-white">Backups & Snapshots</h2>
+          <p className="text-sm text-slate-400">
+            Create consistent site, database, or bundle snapshots to local or S3 storage and restore on demand.
+          </p>
+        </div>
         <button
-          className="btn-primary"
+          type="button"
           onClick={() => setIsBackupModalOpen(true)}
+          className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-md transition-colors"
         >
           Backup Now
         </button>
       </div>
 
-      {jobStatus && <div className="info-banner text-blue-600 mb-4">{jobStatus}</div>}
-      {error && <div className="error-banner text-red-500 mb-4">{error} <button onClick={loadBackups} className="underline ml-2">Retry</button></div>}
-
-      {isLoading ? (
-        <div>Loading...</div>
-      ) : (
-        <ArchiveList
-          archives={archives}
-          onRestoreClick={(archive) => setSelectedArchiveForRestore(archive)}
-        />
+      {error && (
+        <div className="p-3 bg-red-950/60 border border-red-800 rounded text-sm text-red-300">
+          {error}
+        </div>
       )}
+
+      <ArchiveList
+        backups={backups}
+        sites={sites}
+        databases={databases}
+        onRestoreClick={(backup) => setSelectedBackupForRestore(backup)}
+        loading={loading}
+      />
 
       <BackupModal
         isOpen={isBackupModalOpen}
+        sites={sites}
+        databases={databases}
         onClose={() => setIsBackupModalOpen(false)}
-        onBackup={handleBackup}
+        onCreate={handleCreateBackup}
       />
 
       <RestoreWizard
-        isOpen={!!selectedArchiveForRestore}
-        archive={selectedArchiveForRestore}
-        onClose={() => setSelectedArchiveForRestore(null)}
-        onRestore={handleRestore}
+        backup={selectedBackupForRestore}
+        sites={sites}
+        databases={databases}
+        onClose={() => setSelectedBackupForRestore(null)}
+        onConfirmRestore={handleConfirmRestore}
       />
     </div>
   );
