@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod backups;
 mod databases;
 mod node_jobs;
 mod websites;
@@ -263,6 +264,7 @@ fn app(state: AppState) -> Router {
         .merge(node_jobs::routes())
         .merge(websites::routes())
         .merge(databases::routes())
+        .merge(backups::routes())
         .fallback(fallback_handler)
         .with_state(state)
         .merge(auth_router)
