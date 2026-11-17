@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 mod backups;
 mod databases;
+mod dns;
 mod tls;
 mod websites;
 
@@ -16,6 +17,10 @@ pub use backups::{BackupOperation, BackupOperationReservation, BackupRecord, Bac
 pub use databases::{
     DatabaseEngine, DatabaseOperation, DatabaseOperationReservation, DatabaseRecord, DatabaseState,
     DatabaseUserRecord, DatabaseUserState,
+};
+pub use dns::{
+    DnsOperation, DnsOperationReservation, DnsRecordEntry, DnsRecordMutation, DnsZoneRecord,
+    DnsZoneState, DnsZoneWithRecords,
 };
 pub use tls::{
     WebsiteTlsMode, WebsiteTlsOperation, WebsiteTlsOperationReservation, WebsiteTlsRecord,
@@ -308,6 +313,50 @@ impl ControlStore {
                 "#,
             )?;
             tx.pragma_update(None, "user_version", 7)?;
+        }
+
+        if user_version < 8 {
+            tx.execute_batch(
+                r#"
+                CREATE TABLE dns_zones (
+                    zone_id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    domain TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                    serial INTEGER NOT NULL,
+                    default_ttl INTEGER NOT NULL,
+                    state TEXT NOT NULL CHECK (state IN ('provisioning', 'ready', 'failed', 'deleting')),
+                    last_error TEXT,
+                    last_probe_result TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    operation_request_id TEXT NOT NULL
+                );
+                CREATE INDEX idx_dns_zones_tenant_id ON dns_zones (tenant_id);
+                CREATE TABLE dns_records (
+                    record_id TEXT PRIMARY KEY,
+                    zone_id TEXT NOT NULL,
+                    tenant_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    record_type TEXT NOT NULL CHECK (record_type IN ('A', 'AAAA', 'CNAME', 'MX', 'TXT')),
+                    value TEXT NOT NULL,
+                    ttl INTEGER NOT NULL,
+                    priority INTEGER,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX idx_dns_records_zone_id ON dns_records (zone_id);
+                CREATE TABLE dns_operations (
+                    idempotency_key TEXT PRIMARY KEY,
+                    fingerprint TEXT NOT NULL,
+                    operation TEXT NOT NULL CHECK (operation IN ('dns.zone.apply', 'dns.zone.delete', 'dns.probe')),
+                    zone_id TEXT NOT NULL,
+                    request_id TEXT NOT NULL,
+                    snapshot TEXT NOT NULL,
+                    job_id TEXT
+                );
+                "#,
+            )?;
+            tx.pragma_update(None, "user_version", 8)?;
         }
 
         tx.commit()?;
@@ -939,7 +988,7 @@ mod tests {
             let user_version: u32 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(user_version, 7);
+            assert_eq!(user_version, 8);
             let website_tables: u32 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('websites', 'website_operations')",
@@ -999,7 +1048,7 @@ mod tests {
         let user_version: u32 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(user_version, 7);
+        assert_eq!(user_version, 8);
         let has_tenant_id: bool = conn
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM pragma_table_info('websites') WHERE name = 'tenant_id')",
