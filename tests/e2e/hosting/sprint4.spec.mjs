@@ -56,9 +56,11 @@ async function waitForWebsite(page, siteId, expectedState) {
 }
 
 async function assertNginxHttpResponse(page, domain, status, bodyText) {
-  const response = await page.request.get(`${nginxUrl}/`, { headers: { Host: domain } });
-  expect(response.status()).toBe(status);
-  if (bodyText) expect(await response.text()).toContain(bodyText);
+  await expect.poll(async () => {
+    const response = await page.request.get(`${nginxUrl}/`, { headers: { Host: domain } });
+    const body = await response.text();
+    return { status: response.status(), hasBody: !bodyText || body.includes(bodyText) };
+  }, { timeout: 15_000, intervals: [200, 500, 1_000] }).toEqual({ status, hasBody: true });
 }
 
 function fetchHttpsWithSni(domain) {
