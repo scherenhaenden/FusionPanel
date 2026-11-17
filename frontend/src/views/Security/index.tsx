@@ -16,17 +16,61 @@ export default function SecurityRulesUI() {
   const [showSshWarning, setShowSshWarning] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [mfaSecret, setMfaSecret] = useState<string | null>(null);
+  const [mfaUri, setMfaUri] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaStatusMsg, setMfaStatusMsg] = useState<string | null>(null);
 
   const loadRules = async () => {
     setIsLoading(true);
     setApiError(null);
     try {
-      const data = await api.getSecurityRules();
+      const [data, mfa] = await Promise.all([api.getSecurityRules(), api.getMfaStatus()]);
       setRules(data || []);
+      setMfaEnabled(Boolean(mfa?.enabled));
     } catch (e: any) {
       setApiError(e?.response?.data?.error?.message || e.message || 'Failed to load security rules');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleEnrollMfa = async () => {
+    setApiError(null);
+    setMfaStatusMsg(null);
+    try {
+      const res = await api.enrollMfa();
+      setMfaSecret(res.secret);
+      setMfaUri(res.otpauth_url);
+    } catch (e: any) {
+      setApiError(e?.response?.data?.error?.message || e.message || 'Failed to enroll MFA');
+    }
+  };
+
+  const handleVerifyMfa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setApiError(null);
+    try {
+      const res = await api.verifyMfa(mfaCode.trim());
+      setMfaEnabled(res.enabled);
+      setMfaSecret(null);
+      setMfaUri(null);
+      setMfaCode('');
+      setMfaStatusMsg('Two-factor authentication is now enabled.');
+    } catch (e: any) {
+      setApiError(e?.response?.data?.error?.message || e.message || 'Invalid TOTP code');
+    }
+  };
+
+  const handleDisableMfa = async () => {
+    setApiError(null);
+    try {
+      await api.disableMfa();
+      setMfaEnabled(false);
+      setMfaStatusMsg('Two-factor authentication disabled.');
+    } catch (e: any) {
+      setApiError(e?.response?.data?.error?.message || e.message || 'Failed to disable MFA');
     }
   };
 
@@ -118,7 +162,68 @@ export default function SecurityRulesUI() {
     <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
       <h1>Security & Firewall Rules</h1>
 
-      {apiError && <div className="error-banner text-red-500 mb-4">{apiError} <button onClick={loadRules} className="underline ml-2">Retry</button></div>}
+      {apiError && <div role="alert" className="error-banner text-red-500 mb-4">{apiError} <button onClick={loadRules} className="underline ml-2">Retry</button></div>}
+
+      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Two-Factor Authentication (TOTP MFA)</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Status: <strong>{mfaEnabled ? 'Enabled' : 'Disabled'}</strong>
+            </p>
+          </div>
+          {!mfaEnabled ? (
+            <button
+              type="button"
+              onClick={handleEnrollMfa}
+              className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Enable MFA
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleDisableMfa}
+              className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+            >
+              Disable MFA
+            </button>
+          )}
+        </div>
+        {mfaStatusMsg && (
+          <p role="status" className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">
+            {mfaStatusMsg}
+          </p>
+        )}
+        {mfaSecret && (
+          <form onSubmit={handleVerifyMfa} className="mt-4 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-700">
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              Add this TOTP secret to your authenticator app: <code className="font-mono font-semibold">{mfaSecret}</code>
+            </p>
+            {mfaUri && (
+              <p className="break-all text-xs font-mono text-gray-500 dark:text-gray-400">{mfaUri}</p>
+            )}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                aria-label="TOTP Code"
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value)}
+                placeholder="6-digit code"
+                maxLength={6}
+                required
+                className="rounded border border-gray-300 px-3 py-1.5 font-mono text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+              />
+              <button
+                type="submit"
+                className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+              >
+                Verify & Enable
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
 
       {showSshWarning && (
         <div style={{ backgroundColor: '#ffcccc', color: '#cc0000', padding: '10px', marginBottom: '20px', borderRadius: '4px', border: '1px solid #cc0000' }}>

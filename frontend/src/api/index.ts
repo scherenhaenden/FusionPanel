@@ -81,6 +81,59 @@ export interface CronOperationResponse {
   job: JobRecord;
 }
 
+export interface AdminUserRecord {
+  id: string;
+  username: string;
+  email: string;
+  status: string;
+  roles: string[];
+  created_at: string;
+}
+
+export interface CreateAdminUserRequest {
+  username: string;
+  email: string;
+  password: string;
+  role: string;
+}
+
+export interface ApiTokenRecord {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  name: string;
+  scopes: string[];
+  created_at: string;
+  revoked_at: string | null;
+}
+
+export interface CreateApiTokenResponse {
+  token: string;
+  record: ApiTokenRecord;
+}
+
+export interface AuditLogRecord {
+  id: string;
+  tenant_id: string;
+  actor_id: string;
+  action: string;
+  resource_type: string;
+  resource_id: string;
+  outcome: string;
+  detail: string | null;
+  created_at: string;
+}
+
+export interface MfaStatusResponse {
+  enabled: boolean;
+}
+
+export interface MfaEnrollResponse {
+  secret: string;
+  otpauth_url: string;
+  enabled: boolean;
+}
+
 export type WebsiteTlsMode = 'custom_pem' | 'acme_http01';
 export type WebsiteTlsState = 'disabled' | 'provisioning' | 'active' | 'failed' | 'deleting';
 
@@ -640,10 +693,68 @@ export const api = {
     return response.data;
   },
 
+  // Administration, RBAC, API Tokens, Audit & MFA
+  getAdminUsers: async (): Promise<AdminUserRecord[]> => {
+    const response = await apiClient.get<{ users: AdminUserRecord[] }>('/v1/admin/users');
+    return response.data.users;
+  },
+
+  createAdminUser: async (data: CreateAdminUserRequest): Promise<AdminUserRecord> => {
+    const response = await apiClient.post<{ user: AdminUserRecord }>('/v1/admin/users', data);
+    return response.data.user;
+  },
+
+  deleteAdminUser: async (userId: string): Promise<void> => {
+    await apiClient.delete(`/v1/admin/users/${encodeURIComponent(userId)}`);
+  },
+
+  getApiTokens: async (): Promise<ApiTokenRecord[]> => {
+    const response = await apiClient.get<{ tokens: ApiTokenRecord[] }>('/v1/admin/tokens');
+    return response.data.tokens;
+  },
+
+  createApiToken: async (name: string, scopes: string[]): Promise<CreateApiTokenResponse> => {
+    const response = await apiClient.post<CreateApiTokenResponse>('/v1/admin/tokens', {
+      name,
+      scopes,
+    });
+    return response.data;
+  },
+
+  revokeApiToken: async (tokenId: string): Promise<void> => {
+    await apiClient.delete(`/v1/admin/tokens/${encodeURIComponent(tokenId)}`);
+  },
+
+  getAuditLogs: async (limit = 100): Promise<AuditLogRecord[]> => {
+    const response = await apiClient.get<{ audit_logs: AuditLogRecord[] }>('/v1/audit', {
+      params: { limit },
+    });
+    return response.data.audit_logs;
+  },
+
+  getMfaStatus: async (): Promise<MfaStatusResponse> => {
+    const response = await apiClient.get<MfaStatusResponse>('/v1/auth/mfa');
+    return response.data;
+  },
+
+  enrollMfa: async (): Promise<MfaEnrollResponse> => {
+    const response = await apiClient.post<MfaEnrollResponse>('/v1/auth/mfa/enroll', {});
+    return response.data;
+  },
+
+  verifyMfa: async (code: string): Promise<MfaStatusResponse> => {
+    const response = await apiClient.post<MfaStatusResponse>('/v1/auth/mfa/verify', { code });
+    return response.data;
+  },
+
+  disableMfa: async (): Promise<void> => {
+    await apiClient.delete('/v1/auth/mfa');
+  },
+
   // Security
   getSecurityRules: async (): Promise<any[]> => {
-    const response = await apiClient.get<any[]>('/v1/security/rules');
-    return response.data;
+    const response = await apiClient.get<{ rules?: any[] } | any[]>('/v1/security/rules');
+    return Array.isArray(response.data) ? response.data : (response.data.rules ?? []);
   },
 
   addSecurityRule: async (data: any): Promise<any> => {
