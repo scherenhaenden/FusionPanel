@@ -174,7 +174,10 @@ async fn enqueue_job(
     if !authorized_operator(&state, &headers).await {
         return Err(unauthorized());
     }
-    if matches!(body.operation.as_str(), "site.apply" | "site.delete") {
+    if matches!(
+        body.operation.as_str(),
+        "site.apply" | "site.delete" | "tls.apply" | "tls.delete"
+    ) {
         return Err(ErrorResponse {
             error: ErrorDetail {
                 code: "bad_request",
@@ -233,7 +236,10 @@ async fn list_jobs(
         .lock()
         .await
         .list()
-        .map_err(map_job_error)?;
+        .map_err(map_job_error)?
+        .into_iter()
+        .map(sanitize_job_for_operator)
+        .collect();
     Ok(Json(json!({ "jobs": jobs })))
 }
 
@@ -251,7 +257,24 @@ async fn get_job(
         .await
         .get(&id)
         .map_err(map_job_error)?;
-    Ok(Json(json!({ "job": job })))
+    Ok(Json(json!({ "job": sanitize_job_for_operator(job) })))
+}
+
+pub(super) fn sanitize_job_for_operator(mut job: Job) -> Job {
+    if let Some(source) = job
+        .payload
+        .get_mut("payload")
+        .and_then(|p| p.get_mut("source"))
+        .and_then(Value::as_object_mut)
+    {
+        if source.contains_key("private_key_pem") {
+            source.insert(
+                "private_key_pem".to_string(),
+                Value::String("[REDACTED]".to_string()),
+            );
+        }
+    }
+    job
 }
 
 async fn get_job_logs(
