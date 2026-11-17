@@ -201,8 +201,8 @@ mod tests {
             ],
         );
 
-        assert!(rendered.contains(&format!("0 3 * * * www-data /usr/bin/true")));
-        assert!(rendered.contains(&format!("# */5 * * * * www-data /bin/echo paused")));
+        assert!(rendered.contains("0 3 * * * www-data /usr/bin/true"));
+        assert!(rendered.contains("# */5 * * * * www-data /bin/echo paused"));
     }
 
     #[tokio::test]

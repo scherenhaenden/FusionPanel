@@ -4,7 +4,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use crate::error::IdentityError;
-use crate::rbac::RoleBinding;
+use crate::rbac::{RoleBinding, Scope};
 use crate::session::Session;
 use crate::types::{SessionId, TenantId, User, UserId, UserStatus};
 
@@ -587,5 +587,132 @@ impl SqliteIdentityStore {
             })?;
 
         Ok(exists)
+    }
+
+    pub fn list_users_for_tenant(&self, tenant_id: TenantId) -> Result<Vec<User>, IdentityError> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, username, email, status, password_hash, created_at, updated_at
+                 FROM users
+                 ORDER BY created_at ASC, username ASC",
+            )
+            .map_err(|e| IdentityError::Storage {
+                message: format!("Failed to prepare tenant users query: {}", e),
+            })?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
+                ))
+            })
+            .map_err(|e| IdentityError::Storage {
+                message: format!("Failed to list tenant users: {}", e),
+            })?;
+
+        let mut users = Vec::new();
+        for row in rows {
+            let (id_str, username, email, status_str, password_hash, created_str, updated_str) =
+                row.map_err(|e| IdentityError::Storage {
+                    message: format!("Failed to read user row: {}", e),
+                })?;
+            let uid = UserId::from_str(&id_str)?;
+            let bindings = self.get_user_role_bindings(uid)?;
+            let belongs = bindings.iter().any(|b| match b.scope {
+                Scope::Global => true,
+                Scope::Tenant { tenant_id: t } => t == tenant_id,
+                Scope::Site { tenant_id: t, .. } => t == tenant_id,
+            });
+            if !belongs {
+                continue;
+            }
+            let status = UserStatus::from_str(&status_str)?;
+            let created_at = DateTime::parse_from_rfc3339(&created_str)
+                .map_err(|e| IdentityError::Storage {
+                    message: format!("Invalid created_at timestamp in store: {}", e),
+                })?
+                .with_timezone(&Utc);
+            let updated_at = DateTime::parse_from_rfc3339(&updated_str)
+                .map_err(|e| IdentityError::Storage {
+                    message: format!("Invalid updated_at timestamp in store: {}", e),
+                })?
+                .with_timezone(&Utc);
+            users.push(User::from_persisted(
+                uid,
+                username,
+                email,
+                status,
+                password_hash,
+                created_at,
+                updated_at,
+            )?);
+        }
+        Ok(users)
+    }
+
+    pub fn delete_user_for_tenant(
+        &self,
+        tenant_id: TenantId,
+        user_id: UserId,
+    ) -> Result<bool, IdentityError> {
+        let bindings = self.get_user_role_bindings(user_id)?;
+        let matching_scopes: Vec<String> = bindings
+            .iter()
+            .filter(|b| match b.scope {
+                Scope::Tenant { tenant_id: t } => t == tenant_id,
+                Scope::Site { tenant_id: t, .. } => t == tenant_id,
+                Scope::Global => false,
+            })
+            .filter_map(|b| serde_json::to_string(&b.scope).ok())
+            .collect();
+        if matching_scopes.is_empty() {
+            return Ok(false);
+        }
+        for scope_json in matching_scopes {
+            self.conn
+                .execute(
+                    "DELETE FROM role_bindings WHERE user_id = ?1 AND scope_json = ?2",
+                    params![user_id.to_string(), scope_json],
+                )
+                .map_err(|e| IdentityError::Storage {
+                    message: format!("Failed to delete user role bindings: {}", e),
+                })?;
+        }
+        let remaining_bindings: i64 = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM role_bindings WHERE user_id = ?1",
+                params![user_id.to_string()],
+                |row| row.get(0),
+            )
+            .map_err(|e| IdentityError::Storage {
+                message: format!("Failed to check remaining role bindings: {}", e),
+            })?;
+        if remaining_bindings == 0 {
+            self.conn
+                .execute(
+                    "DELETE FROM sessions WHERE user_id = ?1",
+                    params![user_id.to_string()],
+                )
+                .map_err(|e| IdentityError::Storage {
+                    message: format!("Failed to delete user sessions: {}", e),
+                })?;
+            self.conn
+                .execute(
+                    "DELETE FROM users WHERE id = ?1",
+                    params![user_id.to_string()],
+                )
+                .map_err(|e| IdentityError::Storage {
+                    message: format!("Failed to delete user: {}", e),
+                })?;
+        }
+        Ok(true)
     }
 }

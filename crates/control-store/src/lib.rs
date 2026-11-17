@@ -10,11 +10,13 @@ mod backups;
 mod cron;
 mod databases;
 mod dns;
+mod security;
 mod tls;
 mod websites;
 
 pub use backups::{BackupOperation, BackupOperationReservation, BackupRecord, BackupState};
 pub use cron::{CronJobRecord, CronJobState, CronOperation, CronOperationReservation};
+pub use security::{ApiTokenRecord, AuditLogEntry, SecurityRuleRecord, UserMfaRecord};
 
 pub use databases::{
     DatabaseEngine, DatabaseOperation, DatabaseOperationReservation, DatabaseRecord, DatabaseState,
@@ -392,6 +394,54 @@ impl ControlStore {
                 "#,
             )?;
             tx.pragma_update(None, "user_version", 9)?;
+        }
+
+        if user_version < 10 {
+            tx.execute_batch(
+                r#"
+                CREATE TABLE api_tokens (
+                    token_id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    token_hash TEXT NOT NULL UNIQUE,
+                    scopes_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    revoked_at TEXT
+                );
+                CREATE INDEX idx_api_tokens_tenant_id ON api_tokens (tenant_id);
+                CREATE TABLE audit_logs (
+                    id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    actor_id TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    resource_type TEXT NOT NULL,
+                    resource_id TEXT NOT NULL,
+                    outcome TEXT NOT NULL,
+                    detail TEXT,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX idx_audit_logs_tenant_id ON audit_logs (tenant_id);
+                CREATE TABLE user_mfa (
+                    user_id TEXT PRIMARY KEY,
+                    totp_secret TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE security_rules (
+                    rule_id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    rule_type TEXT NOT NULL,
+                    target TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX idx_security_rules_tenant_id ON security_rules (tenant_id);
+                "#,
+            )?;
+            tx.pragma_update(None, "user_version", 10)?;
         }
 
         tx.commit()?;
@@ -1023,7 +1073,7 @@ mod tests {
             let user_version: u32 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(user_version, 9);
+            assert_eq!(user_version, 10);
             let website_tables: u32 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('websites', 'website_operations')",
@@ -1083,7 +1133,7 @@ mod tests {
         let user_version: u32 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(user_version, 9);
+        assert_eq!(user_version, 10);
         let has_tenant_id: bool = conn
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM pragma_table_info('websites') WHERE name = 'tenant_id')",

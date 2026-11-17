@@ -1,0 +1,31 @@
+# Product readiness snapshot — 17 November 2026
+
+**Inventory:** [all 162 features and 63 packages](READINESS_CATALOG_2026-11-17.md) · [complete machine-readable data](READINESS_SNAPSHOT_2026-11-17.json).
+
+## Baselines and confidence
+
+- Local `master`: `f8b955ec2db38a9cb52a22f61d08aad0ac8e5105` (`0.7.0-dev.1`). Local checked-out `sprint-7`: `62329b18d4df3680b59352e25b3d3373737b28a2` (`0.8.0-dev.1`). The GitHub connector showed [PR #672](https://github.com/scherenhaenden/FusionPanel/pull/672) **open**, with those head and base SHAs at capture. Thus Sprint 7 is not part of this master baseline. `gh` network access failed; no independent release list or full current CI status was obtained.
+- Comparison: the [10 November snapshot](READINESS_SNAPSHOT_2026-11-10.md), source `3e7862c5edbed38c50d04ff88beb43e5c7233a91`. Local master has nine first-parent commits and 302 net changed paths since then; sprint-7 adds 26 net changed paths over local master. Path changes are not test results.
+- The previous **8.02% feature / 43.49% package** scores and 3 accepted packages refer to 6 November, not today. The [atomic catalog](READINESS_CATALOG_2026-11-17.md) recalculates **provisional evidence-gate averages of 9.34% for features and 44.76% for packages**, using the previous gate values plus five feature and four package adjustments grounded in reported sprint evidence. These mixed-date values are planning indicators, not a fully requalified current completion or acceptance rate: unchanged gates are carried from 6 November. The historical feature sheets and checklists may contain superseded claims.
+- This update inspected local Git trees, sprint plans, the catalog, and selected fixture assertions, and checked the open PR through the GitHub connector. **No product tests or deployment were run for this snapshot.** E2E results below are attributed to the project's records, at the sprint evidence baseline; they are not independent re-executions or proof against the exact current SHA. No production services were contacted.
+
+## User journeys and evidence
+
+| Journey | Master at capture | Documented evidence and boundaries |
+|---|---|---|
+| Sign-in, session and dashboard | Integrated; scoped E2E reported | [Sprint 1](SPRINTS.md) reports bootstrap, SPA login, authenticated API, API restart with SQLite session, logout and revocation. Complete user administration and MFA remain Sprint 9. |
+| Local node and jobs | Integrated; scoped E2E reported | [Sprint 2 final gate](SPRINTS.md) records CI [43873222372](https://github.com/scherenhaenden/FusionPanel/actions/runs/43873222372), including browser and API/agent restart. Remote transport, multiple nodes and the VM-backed migration test remain unqualified. |
+| Static site and reverse proxy | Integrated; scoped E2E reported | [Sprint 3](SPRINTS.md) records Docker/Playwright on `b475316`: real HTTP 200, invalid upstream rollback, deletion and preservation of unrelated vhost. An earlier [failed handoff](SPRINT_03_HANDOFF_2026-11-16.md) is historical, superseded by the later reported pass. Other hosting variants are not established. |
+| HTTPS | Integrated; scoped E2E reported | [Sprint 4](SPRINTS.md) records Pebble ACME HTTP-01 and Nginx HTTPS; this does not demonstrate a production Let's Encrypt issuance or all certificate modes. |
+| PostgreSQL and MariaDB | Integrated; scoped E2E reported | [Sprint 5](SPRINTS.md) records PostgreSQL 15 and MariaDB 11.4. The [fixture](../../tests/e2e/hosting/sprint5.spec.mjs) checks real client credentials, access to one database and denial to another database, and deletion. This is database-level isolation evidence, not a complete proof of all panel tenant boundaries. |
+| Backup and restore | Integrated; scoped E2E reported | [Sprint 6](SPRINTS.md) records MinIO S3-compatible backup of a static site and PostgreSQL followed by restoration and file/row checks. This is one scenario; independent disaster recovery, MariaDB restore, scheduled backups and other destinations require their own proof. |
+| DNS and DKIM TXT | Sprint 7 only; PR open | [Sprint 7](SPRINT_07_PLAN.md) and [fixture](../../tests/e2e/hosting/sprint7.spec.mjs) describe BIND9 A and DKIM TXT queries, UI probe and record update/delete; [SPRINTS.md](SPRINTS.md) reports the E2E passed. This does not qualify public DNS propagation, all record types, SPF, DNSSEC or mail delivery, and has not been merged into master at capture. |
+| Clean install / release | Partial evidence; not qualified for production | [Sprint 2 handoff](SPRINT_02_HANDOFF_2026-11-15.md) records an earlier actual artifact smoke in disposable Ubuntu 24.04 without systemd activation; the final gate produced a separate candidate artifact. A clean Debian install with systemd, upgrade and rollback for the current release remains unverified here. Current published releases were not checked. |
+
+## Recovery and remaining work
+
+The 10 November report listed 100 paths removed by PR #513. Comparing those exact names against local master shows **99 present and one absent**, `update_lib.patch`. This is a path-presence comparison, not a semantic comparison or proof that all recovered components are exported, integrated or work. The earlier claim that 98 paths were missing is historical and must not be applied to this baseline.
+
+The remaining catalog has broad areas with no new individual acceptance in this update: containers, deployment, WordPress, monitoring, migration, mail, advanced security, multi-node operation and most administration. Existing source or component tests are not equivalent to an integrated product journey. Sprint 8 plans file manager and cron; Sprint 9 user administration/RBAC/MFA; Sprint 10 observability; Sprint 11 mail and Debian packaging. PHP management is explicitly deprioritized in [SPRINTS.md](SPRINTS.md). These are plans, not evidence of completion.
+
+Priority for a dependable next score: (1) requalify the scoped flows at an immutable candidate SHA and retain logs; (2) complete clean Debian install, service activation, restart, upgrade and rollback; (3) test current integration and tenant isolation against real dependencies; (4) review each of the 162 feature and 63 package acceptance checklists and record pass, fail, blocked or not run with evidence. Do not infer full feature acceptance from a sprint label or a file diff.

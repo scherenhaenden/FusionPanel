@@ -1,77 +1,141 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import MockAdapter from 'axios-mock-adapter';
 import AdministrationView from '../views/Administration';
+import SecurityRulesUI from '../views/Security';
+import { apiClient } from '../api/client';
 
-describe('AdministrationView', () => {
-  it('renders the Administration title and tabs', () => {
-    render(<AdministrationView />);
+describe('AdministrationView & SecurityRulesUI', () => {
+  let mock: MockAdapter;
 
-    // Check title
-    expect(screen.getByText('Administration')).toBeInTheDocument();
-
-    // Check tabs
-    expect(screen.getByText('Operators')).toBeInTheDocument();
-    expect(screen.getByText('Audit Logs')).toBeInTheDocument();
+  beforeEach(() => {
+    mock = new MockAdapter(apiClient);
+    mock.onGet('/v1/admin/users').reply(200, {
+      users: [
+        {
+          id: 'user-1',
+          username: 'admin',
+          email: 'admin@example.com',
+          status: 'active',
+          roles: ['SuperAdmin'],
+          created_at: '2026-11-17T16:00:00Z',
+        },
+      ],
+    });
+    mock.onGet('/v1/admin/tokens').reply(200, {
+      tokens: [
+        {
+          id: 'tok-1',
+          tenant_id: 'tenant-1',
+          user_id: 'user-1',
+          name: 'ci-reader',
+          scopes: ['sites:read'],
+          created_at: '2026-11-17T16:00:00Z',
+          revoked_at: null,
+        },
+      ],
+    });
+    mock.onGet('/v1/audit').reply(200, {
+      audit_logs: [
+        {
+          id: 'aud-1',
+          tenant_id: 'tenant-1',
+          actor_id: 'user-1',
+          action: 'user.create',
+          resource_type: 'user',
+          resource_id: 'user-1',
+          outcome: 'success',
+          detail: 'admin (SuperAdmin)',
+          created_at: '2026-11-17T16:00:00Z',
+        },
+      ],
+    });
+    mock.onGet('/v1/security/rules').reply(200, { rules: [] });
+    mock.onGet('/v1/auth/mfa').reply(200, { enabled: false });
   });
 
-  it('renders the Operators tab by default and switches to Audit Logs', () => {
+  afterEach(() => {
+    mock.restore();
+    jest.clearAllMocks();
+  });
+
+  it('renders Operators, API Tokens, and Audit Logs tabs with live data', async () => {
     render(<AdministrationView />);
 
-    // Check that operators are rendered
-    expect(screen.getByText('admin@example.com')).toBeInTheDocument();
-    expect(screen.getByText('Invite Operator')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('admin@example.com')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Operators')).toBeInTheDocument();
+    expect(screen.getByText('API Tokens')).toBeInTheDocument();
+    expect(screen.getByText('Audit Logs')).toBeInTheDocument();
 
-    // Switch to Audit Logs
-    const auditTab = screen.getByText('Audit Logs');
-    fireEvent.click(auditTab);
+    fireEvent.click(screen.getByText('API Tokens'));
+    expect(screen.getByText('ci-reader')).toBeInTheDocument();
 
-    // Check that audit logs are rendered
-    expect(screen.getByText('Successful login')).toBeInTheDocument();
-    // Invite button should not be present
+    fireEvent.click(screen.getByText('Audit Logs'));
+    expect(screen.getByText('user.create')).toBeInTheDocument();
     expect(screen.queryByText('Invite Operator')).not.toBeInTheDocument();
   });
 
-  it('opens and closes the Invite Operator modal', () => {
+  it('opens and closes the Invite Operator modal and creates API token', async () => {
+    mock.onPost('/v1/admin/tokens').reply(201, {
+      token: 'fp_tok_secret123',
+      record: {
+        id: 'tok-2',
+        tenant_id: 'tenant-1',
+        user_id: 'user-1',
+        name: 'deploy-key',
+        scopes: ['sites:read'],
+        created_at: '2026-11-17T16:00:00Z',
+        revoked_at: null,
+      },
+    });
+
     render(<AdministrationView />);
 
-    const inviteBtn = screen.getByText('Invite Operator');
-    fireEvent.click(inviteBtn);
+    await waitFor(() => {
+      expect(screen.getByText('Invite Operator')).toBeInTheDocument();
+    });
 
-    // Check that the modal opened
+    fireEvent.click(screen.getByText('Invite Operator'));
     expect(screen.getByText('Email Address')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send Invite' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    // Close modal
-    const cancelBtn = screen.getByText('Cancel');
-    fireEvent.click(cancelBtn);
+    fireEvent.click(screen.getByText('API Tokens'));
+    fireEvent.change(screen.getByLabelText('Token Name'), { target: { value: 'deploy-key' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create API Token' }));
 
-    // Check that it's closed
-    expect(screen.queryByText('Email Address')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('fp_tok_secret123');
+    });
   });
 
-  it('verifies the presence of dark mode classes', () => {
-    const { container } = render(<AdministrationView />);
-    const heading = screen.getByText('Administration');
-    // Ensure dark mode text classes are present
-    expect(heading).toHaveClass('dark:text-white');
+  it('enrolls and verifies TOTP MFA in SecurityRulesUI', async () => {
+    mock.onPost('/v1/auth/mfa/enroll').reply(200, {
+      secret: 'JBSWY3DPEHPK3PXP',
+      otpauth_url: 'otpauth://totp/FusionPanel:user-1?secret=JBSWY3DPEHPK3PXP',
+      enabled: false,
+    });
+    mock.onPost('/v1/auth/mfa/verify').reply(200, { enabled: true });
 
-    // Check main container or elements for dark background classes
-    // The table container has dark:bg-gray-800
-    const tableContainer = container.querySelector('.dark\\:bg-gray-800');
-    expect(tableContainer).toBeInTheDocument();
-  });
+    render(<SecurityRulesUI />);
 
-  it('can be loaded via routing', () => {
-    render(
-      <MemoryRouter initialEntries={['/administration']}>
-        <Routes>
-          <Route path="/administration" element={<AdministrationView />} />
-        </Routes>
-      </MemoryRouter>
-    );
-    expect(screen.getByText('Administration')).toBeInTheDocument();
-    expect(screen.getByText('Operators')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Enable MFA' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enable MFA' }));
+    await waitFor(() => {
+      expect(screen.getByText('JBSWY3DPEHPK3PXP')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('TOTP Code'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify & Enable' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Two-factor authentication is now enabled.');
+    });
   });
 });
