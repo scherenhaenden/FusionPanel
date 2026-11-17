@@ -66,7 +66,7 @@ impl HeartbeatTransport for HmacWsTransport {
             .map_err(|_| DaemonError::TransportFailed)?;
 
         ws_stream
-            .send(Message::Text(payload_str))
+            .send(Message::Text(payload_str.into()))
             .await
             .map_err(|_| DaemonError::TransportFailed)?;
 

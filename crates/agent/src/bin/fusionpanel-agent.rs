@@ -165,7 +165,7 @@ async fn run_legacy_protocol_loop(
         };
         let response = handle_legacy_request(&request, &mut metrics_collector, secret).await;
         websocket
-            .send(Message::Text(serde_json::to_string(&response)?))
+            .send(Message::Text(serde_json::to_string(&response)?.into()))
             .await?;
     }
     Ok(())
