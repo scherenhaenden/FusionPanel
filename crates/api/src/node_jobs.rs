@@ -196,6 +196,14 @@ async fn enqueue_job(
             },
         });
     }
+    if matches!(body.operation.as_str(), "backup.create" | "backup.restore") {
+        return Err(ErrorResponse {
+            error: ErrorDetail {
+                code: "bad_request",
+                message: "Use the Backups API for backup operations",
+            },
+        });
+    }
     let key = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
@@ -287,6 +295,17 @@ pub(super) fn sanitize_job_for_operator(mut job: Job) -> Job {
             if source.contains_key("private_key_pem") {
                 source.insert(
                     "private_key_pem".to_string(),
+                    Value::String("[REDACTED]".to_string()),
+                );
+            }
+        }
+        if let Some(dest) = payload_obj
+            .get_mut("destination")
+            .and_then(Value::as_object_mut)
+        {
+            if dest.contains_key("secret_key") {
+                dest.insert(
+                    "secret_key".to_string(),
                     Value::String("[REDACTED]".to_string()),
                 );
             }
@@ -389,6 +408,7 @@ async fn complete_job(
         .map_err(map_job_error)?;
     super::websites::record_completion(&state, &completed).await?;
     super::databases::record_completion(&state, &completed).await?;
+    super::backups::record_completion(&state, &completed).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

@@ -6,9 +6,12 @@ use std::path::Path;
 use thiserror::Error;
 use uuid::Uuid;
 
+mod backups;
 mod databases;
 mod tls;
 mod websites;
+
+pub use backups::{BackupOperation, BackupOperationReservation, BackupRecord, BackupState};
 
 pub use databases::{
     DatabaseEngine, DatabaseOperation, DatabaseOperationReservation, DatabaseRecord, DatabaseState,
@@ -273,6 +276,38 @@ impl ControlStore {
                 "#,
             )?;
             tx.pragma_update(None, "user_version", 6)?;
+        }
+
+        if user_version < 7 {
+            tx.execute_batch(
+                r#"
+                CREATE TABLE backups (
+                    backup_id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    archive_key TEXT NOT NULL,
+                    target_json TEXT NOT NULL,
+                    destination_kind TEXT NOT NULL CHECK (destination_kind IN ('local', 's3')),
+                    destination_summary TEXT NOT NULL,
+                    state TEXT NOT NULL CHECK (state IN ('creating', 'ready', 'restoring', 'failed')),
+                    manifest_sha256 TEXT,
+                    last_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    operation_request_id TEXT NOT NULL
+                );
+                CREATE INDEX idx_backups_tenant_id ON backups (tenant_id);
+                CREATE TABLE backup_operations (
+                    idempotency_key TEXT PRIMARY KEY,
+                    fingerprint TEXT NOT NULL,
+                    operation TEXT NOT NULL CHECK (operation IN ('backup.create', 'backup.restore')),
+                    backup_id TEXT NOT NULL,
+                    request_id TEXT NOT NULL,
+                    snapshot TEXT NOT NULL,
+                    job_id TEXT
+                );
+                "#,
+            )?;
+            tx.pragma_update(None, "user_version", 7)?;
         }
 
         tx.commit()?;
@@ -904,7 +939,7 @@ mod tests {
             let user_version: u32 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(user_version, 6);
+            assert_eq!(user_version, 7);
             let website_tables: u32 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('websites', 'website_operations')",
@@ -964,7 +999,7 @@ mod tests {
         let user_version: u32 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(user_version, 6);
+        assert_eq!(user_version, 7);
         let has_tenant_id: bool = conn
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM pragma_table_info('websites') WHERE name = 'tenant_id')",
