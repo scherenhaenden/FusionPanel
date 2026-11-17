@@ -51,10 +51,22 @@ export const RestoreWizard: React.FC<RestoreWizardProps> = ({
     setSecretKey('');
     setError(null);
     if (backup?.destination_kind === 's3') {
-      const stripped = backup.destination_summary.replace(/^s3:\/\//, '');
-      const [parsedBucket, ...rest] = stripped.split('/');
-      if (parsedBucket) setBucket(parsedBucket);
-      if (rest.length > 0) setPrefix(rest.join('/'));
+      if (backup.destination_summary.startsWith('http://') || backup.destination_summary.startsWith('https://')) {
+        try {
+          const parsed = new URL(backup.destination_summary);
+          setEndpoint(parsed.origin);
+          const [parsedBucket, ...rest] = parsed.pathname.replace(/^\/+/, '').split('/').filter(Boolean);
+          if (parsedBucket) setBucket(parsedBucket);
+          if (rest.length > 0) setPrefix(rest.join('/'));
+        } catch {
+          // Ignore malformed URL summary and let user enter S3 fields manually
+        }
+      } else {
+        const stripped = backup.destination_summary.replace(/^s3:\/\//, '');
+        const [parsedBucket, ...rest] = stripped.split('/');
+        if (parsedBucket) setBucket(parsedBucket);
+        if (rest.length > 0) setPrefix(rest.join('/'));
+      }
     }
   }, [backup]);
 

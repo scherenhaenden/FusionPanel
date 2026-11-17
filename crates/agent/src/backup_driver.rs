@@ -161,6 +161,7 @@ async fn archive_directory(source_dir: &Path, archive_path: &Path) -> Result<(),
 async fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<(), String> {
     fs::create_dir_all(dest_dir).map_err(|e| format!("failed to prepare restore dir: {e}"))?;
     let output = Command::new("tar")
+        .arg("--no-overwrite-dir")
         .arg("-C")
         .arg(dest_dir)
         .arg("-xzf")
