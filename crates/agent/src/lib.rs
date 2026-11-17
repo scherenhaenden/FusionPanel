@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod acme;
 pub mod daemon;
 pub mod executor;
 pub mod files;

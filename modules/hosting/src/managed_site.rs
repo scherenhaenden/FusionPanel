@@ -58,6 +58,26 @@ pub trait ManagedSiteOperations: Send + Sync {
     ) -> Result<(), ManagedSiteError>;
 
     fn delete_site(&self, site_id: Uuid, domain: &str) -> Result<(), ManagedSiteError>;
+
+    fn apply_site_tls(
+        &self,
+        _site_id: Uuid,
+        _domain: &str,
+        _spec: &ManagedSiteSpec,
+        _cert_pem: &str,
+        _key_pem: &str,
+    ) -> Result<(), ManagedSiteError> {
+        Err(ManagedSiteError::HelperUnavailable)
+    }
+
+    fn delete_site_tls(
+        &self,
+        _site_id: Uuid,
+        _domain: &str,
+        _spec: &ManagedSiteSpec,
+    ) -> Result<(), ManagedSiteError> {
+        Err(ManagedSiteError::HelperUnavailable)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,6 +95,9 @@ pub trait ManagedSiteFs: Send + Sync {
     fn read_link(&self, path: &Path) -> Result<PathBuf, ManagedSiteError>;
     fn read_file(&self, path: &Path) -> Result<Vec<u8>, ManagedSiteError>;
     fn write_new_file(&self, path: &Path, content: &[u8]) -> Result<(), ManagedSiteError>;
+    fn write_new_secret_file(&self, path: &Path, content: &[u8]) -> Result<(), ManagedSiteError> {
+        self.write_new_file(path, content)
+    }
     fn create_symlink(&self, target: &Path, link: &Path) -> Result<(), ManagedSiteError>;
     fn rename(&self, from: &Path, to: &Path) -> Result<(), ManagedSiteError>;
     fn remove_file(&self, path: &Path) -> Result<(), ManagedSiteError>;
@@ -147,6 +170,24 @@ impl ManagedSiteFs for StdManagedSiteFs {
         {
             use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o640);
+        }
+        let mut file = options.open(path).map_err(|_| ManagedSiteError::Io)?;
+        if file.write_all(content).is_err() || file.sync_all().is_err() {
+            drop(file);
+            let _ = fs::remove_file(path);
+            return Err(ManagedSiteError::Io);
+        }
+        Ok(())
+    }
+
+    fn write_new_secret_file(&self, path: &Path, content: &[u8]) -> Result<(), ManagedSiteError> {
+        use std::io::Write;
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
         }
         let mut file = options.open(path).map_err(|_| ManagedSiteError::Io)?;
         if file.write_all(content).is_err() || file.sync_all().is_err() {
@@ -740,6 +781,166 @@ impl ManagedSiteOperations for NginxSiteAdapter {
         self.remove_if_file(&old_path);
         Ok(())
     }
+
+    fn apply_site_tls(
+        &self,
+        site_id: Uuid,
+        domain: &str,
+        spec: &ManagedSiteSpec,
+        cert_pem: &str,
+        key_pem: &str,
+    ) -> Result<(), ManagedSiteError> {
+        let _transaction = self
+            .transaction_lock
+            .lock()
+            .map_err(|_| ManagedSiteError::Io)?;
+        if site_id.is_nil()
+            || !valid_domain(domain)
+            || cert_pem.trim().is_empty()
+            || key_pem.trim().is_empty()
+        {
+            return Err(ManagedSiteError::InvalidInput);
+        }
+        match spec {
+            ManagedSiteSpec::Static { document_root } => {
+                self.validate_document_root(domain, document_root)?;
+            }
+            ManagedSiteSpec::ReverseProxy { upstream_url } => {
+                if !valid_upstream_url(upstream_url) {
+                    return Err(ManagedSiteError::InvalidInput);
+                }
+            }
+        }
+
+        let layout = self.prepare_layout()?;
+        let certs_root = self.managed_root.join("certs");
+        let site_certs_dir = certs_root.join(site_id.to_string());
+        self.filesystem.ensure_directory(&certs_root)?;
+        self.filesystem.ensure_directory(&site_certs_dir)?;
+
+        let prior_target = self.current_target(&layout, site_id, domain)?;
+        let nonce = Uuid::new_v4();
+        let cert_path = site_certs_dir.join(format!("fullchain-{nonce}.pem"));
+        let key_path = site_certs_dir.join(format!("privkey-{nonce}.pem"));
+
+        self.filesystem
+            .write_new_file(&cert_path, cert_pem.as_bytes())?;
+        if let Err(err) = self
+            .filesystem
+            .write_new_secret_file(&key_path, key_pem.as_bytes())
+        {
+            self.remove_if_file(&cert_path);
+            return Err(err);
+        }
+
+        let config = render_site_with_tls(site_id, domain, spec, &cert_path, &key_path);
+        let candidate_path = layout.available.join(format!("{site_id}-{nonce}.conf"));
+        if let Err(err) = self
+            .filesystem
+            .write_new_file(&candidate_path, config.as_bytes())
+        {
+            self.remove_if_file(&cert_path);
+            self.remove_if_file(&key_path);
+            return Err(err);
+        }
+
+        let test_path = match self.write_candidate_test_config(
+            &layout,
+            Some(&candidate_path),
+            Some(domain),
+            nonce,
+        ) {
+            Ok(path) => path,
+            Err(error) => {
+                self.remove_if_file(&candidate_path);
+                self.remove_if_file(&cert_path);
+                self.remove_if_file(&key_path);
+                return Err(error);
+            }
+        };
+        if self.nginx.validate_candidate(&test_path).is_err() {
+            self.remove_if_file(&test_path);
+            self.remove_if_file(&candidate_path);
+            self.remove_if_file(&cert_path);
+            self.remove_if_file(&key_path);
+            return Err(ManagedSiteError::CandidateRejected);
+        }
+
+        let active = layout.enabled.join(format!("{domain}.conf"));
+        if let Err(error) = self.atomic_replace_link(&layout, domain, &candidate_path, nonce) {
+            self.remove_if_file(&test_path);
+            self.remove_if_file(&candidate_path);
+            self.remove_if_file(&cert_path);
+            self.remove_if_file(&key_path);
+            return Err(error);
+        }
+
+        let required_include = self.required_include();
+        if self.nginx.validate_active(&required_include).is_err() {
+            let rollback =
+                self.restore_link(&layout, domain, prior_target.as_deref(), Uuid::new_v4());
+            self.remove_if_file(&test_path);
+            self.remove_if_file(&candidate_path);
+            self.remove_if_file(&cert_path);
+            self.remove_if_file(&key_path);
+            return match rollback {
+                Ok(()) => Err(ManagedSiteError::ActiveConfigRejected),
+                Err(_) => Err(ManagedSiteError::RollbackFailed),
+            };
+        }
+        if self.nginx.reload().is_err() {
+            let rollback = self.rollback_after_reload_failure(
+                &layout,
+                domain,
+                prior_target.as_deref(),
+                Uuid::new_v4(),
+            );
+            self.remove_if_file(&test_path);
+            self.remove_if_file(&candidate_path);
+            self.remove_if_file(&cert_path);
+            self.remove_if_file(&key_path);
+            return rollback.and(Err(ManagedSiteError::ReloadFailed));
+        }
+
+        self.remove_if_file(&test_path);
+        if let Some(old_target) = prior_target {
+            let old_path = if old_target.is_absolute() {
+                old_target
+            } else {
+                active
+                    .parent()
+                    .ok_or(ManagedSiteError::UnsafePath)?
+                    .join(old_target)
+            };
+            if old_path != candidate_path {
+                self.remove_if_file(&old_path);
+            }
+        }
+        if let Ok(entries) = self.filesystem.list_directory(&site_certs_dir) {
+            for entry in entries {
+                if entry != cert_path && entry != key_path {
+                    self.remove_if_file(&entry);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn delete_site_tls(
+        &self,
+        site_id: Uuid,
+        domain: &str,
+        spec: &ManagedSiteSpec,
+    ) -> Result<(), ManagedSiteError> {
+        self.apply_site(site_id, domain, spec)?;
+        let site_certs_dir = self.managed_root.join("certs").join(site_id.to_string());
+        if let Ok(entries) = self.filesystem.list_directory(&site_certs_dir) {
+            for entry in entries {
+                self.remove_if_file(&entry);
+            }
+        }
+        Ok(())
+    }
 }
 
 struct Layout {
@@ -972,13 +1173,43 @@ fn valid_upstream_url(raw: &str) -> bool {
 
 fn render_static_site(site_id: Uuid, domain: &str, document_root: &str) -> String {
     format!(
-        "# FusionPanel managed site: id={site_id} domain={domain}\nserver {{\n    listen 80;\n    server_name {domain};\n    root {document_root};\n    location / {{\n        try_files $uri $uri/ =404;\n    }}\n}}\n"
+        "# FusionPanel managed site: id={site_id} domain={domain}\nserver {{\n    listen 80;\n    server_name {domain};\n    root {document_root};\n    location ^~ /.well-known/acme-challenge/ {{\n        alias /run/fusionpanel-acme/;\n    }}\n    location / {{\n        try_files $uri $uri/ =404;\n    }}\n}}\n"
     )
 }
 
 fn render_reverse_proxy_site(site_id: Uuid, domain: &str, upstream_url: &str) -> String {
     format!(
-        "# FusionPanel managed site: id={site_id} domain={domain}\nserver {{\n    listen 80;\n    server_name {domain};\n    location / {{\n        proxy_pass {upstream_url};\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }}\n}}\n"
+        "# FusionPanel managed site: id={site_id} domain={domain}\nserver {{\n    listen 80;\n    server_name {domain};\n    location ^~ /.well-known/acme-challenge/ {{\n        alias /run/fusionpanel-acme/;\n    }}\n    location / {{\n        proxy_pass {upstream_url};\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }}\n}}\n"
+    )
+}
+
+fn render_site_with_tls(
+    site_id: Uuid,
+    domain: &str,
+    spec: &ManagedSiteSpec,
+    cert_path: &Path,
+    key_path: &Path,
+) -> String {
+    let base = match spec {
+        ManagedSiteSpec::Static { document_root } => {
+            render_static_site(site_id, domain, document_root)
+        }
+        ManagedSiteSpec::ReverseProxy { upstream_url } => {
+            render_reverse_proxy_site(site_id, domain, upstream_url)
+        }
+    };
+    let ssl_body = match spec {
+        ManagedSiteSpec::Static { document_root } => format!(
+            "    root {document_root};\n    location / {{\n        try_files $uri $uri/ =404;\n    }}\n"
+        ),
+        ManagedSiteSpec::ReverseProxy { upstream_url } => format!(
+            "    location / {{\n        proxy_pass {upstream_url};\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto https;\n    }}\n"
+        ),
+    };
+    format!(
+        "{base}server {{\n    listen 443 ssl;\n    server_name {domain};\n    ssl_certificate {};\n    ssl_certificate_key {};\n{ssl_body}}}\n",
+        cert_path.display(),
+        key_path.display(),
     )
 }
 
