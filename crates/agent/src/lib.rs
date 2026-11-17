@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod acme;
+pub mod backup_driver;
 pub mod daemon;
 pub mod database_driver;
 pub mod executor;
