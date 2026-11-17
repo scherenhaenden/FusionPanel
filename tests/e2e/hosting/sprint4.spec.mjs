@@ -157,7 +157,7 @@ test('provisions ACME HTTP-01 and Custom PEM TLS via UI, rolls back invalid PEM,
     upstreamUrl: 'http://upstream.sprint3.test:8080',
   });
   await waitForWebsite(page, customSiteEnv.site.id, 'active');
-  await assertNginxHttpResponse(page, customDomain, 200, 'Sprint 3 upstream marker');
+  await assertNginxHttpResponse(page, customDomain, 200, 'Sprint 3 upstream service marker');
 
   await page.getByRole('button', { name: `View details for ${customDomain}` }).click();
   await expect(page.getByRole('heading', { name: customDomain })).toBeVisible();
@@ -168,7 +168,7 @@ test('provisions ACME HTTP-01 and Custom PEM TLS via UI, rolls back invalid PEM,
   await page.getByLabel('Private key PEM').fill('-----BEGIN PRIVATE KEY-----\nINVALID\n-----END PRIVATE KEY-----');
   await page.getByRole('button', { name: 'Enable TLS' }).click();
   await expect(page.getByText('Failed (Custom PEM)')).toBeVisible({ timeout: 60_000 });
-  await assertNginxHttpResponse(page, customDomain, 200, 'Sprint 3 upstream marker');
+  await assertNginxHttpResponse(page, customDomain, 200, 'Sprint 3 upstream service marker');
 
   // 2b. Valid Custom PEM succeeds and serves upstream over HTTPS :443
   const { certPem, keyPem } = generateSelfSignedPem(customDomain);
@@ -176,7 +176,7 @@ test('provisions ACME HTTP-01 and Custom PEM TLS via UI, rolls back invalid PEM,
   await page.getByLabel('Private key PEM').fill(keyPem);
   await page.getByRole('button', { name: 'Enable TLS' }).click();
   await expect(page.getByText('Active (Custom PEM)')).toBeVisible({ timeout: 60_000 });
-  expect(fetchHttpsWithSni(customDomain)).toContain('Sprint 3 upstream marker');
+  expect(fetchHttpsWithSni(customDomain)).toContain('Sprint 3 upstream service marker');
 
   const customCert = await getServerCertificate(customDomain);
   expect(customCert.subject?.CN).toBe(customDomain);
@@ -184,5 +184,5 @@ test('provisions ACME HTTP-01 and Custom PEM TLS via UI, rolls back invalid PEM,
   // 2c. Remove TLS reverts site to HTTP-only cleanly
   await page.getByRole('button', { name: 'Remove TLS' }).click();
   await expect(page.getByText('Disabled')).toBeVisible({ timeout: 60_000 });
-  await assertNginxHttpResponse(page, customDomain, 200, 'Sprint 3 upstream marker');
+  await assertNginxHttpResponse(page, customDomain, 200, 'Sprint 3 upstream service marker');
 });
