@@ -769,14 +769,14 @@ fn map_store_error(error: fusionpanel_control_store::StoreError) -> ErrorRespons
     }
 }
 
-struct WebsiteAuthorizationContext {
-    tenant_id: identity::TenantId,
-    is_admin_token: bool,
-    user_id: Option<identity::UserId>,
-    role_bindings: Vec<identity::RoleBinding>,
+pub(super) struct WebsiteAuthorizationContext {
+    pub(super) tenant_id: identity::TenantId,
+    pub(super) is_admin_token: bool,
+    pub(super) user_id: Option<identity::UserId>,
+    pub(super) role_bindings: Vec<identity::RoleBinding>,
 }
 
-fn require_website_permission(
+pub(super) fn require_website_permission(
     context: &WebsiteAuthorizationContext,
     permission: Permission,
     site_id: Option<Uuid>,
@@ -804,7 +804,7 @@ fn require_website_permission(
     )
 }
 
-async fn website_authorization_context(
+pub(super) async fn website_authorization_context(
     state: &AppState,
     headers: &HeaderMap,
 ) -> Result<WebsiteAuthorizationContext, ErrorResponse> {

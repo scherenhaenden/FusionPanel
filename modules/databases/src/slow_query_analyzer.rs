@@ -22,7 +22,10 @@ pub fn parse_slow_query_logs(log: &str) -> Vec<SlowQueryLogEntry> {
     let mut current_query = String::new();
 
     for line in log.lines() {
-        if line.starts_with("# Time:") || line.starts_with("# User@Host:") || line.starts_with("# Thread_id:") {
+        if line.starts_with("# Time:")
+            || line.starts_with("# User@Host:")
+            || line.starts_with("# Thread_id:")
+        {
             continue;
         }
 
@@ -58,10 +61,8 @@ pub fn parse_slow_query_logs(log: &str) -> Vec<SlowQueryLogEntry> {
                             rows_sent = parts[i + 1].parse().unwrap_or(0);
                         }
                     }
-                    "Rows_examined:" => {
-                        if i + 1 < parts.len() {
-                            rows_examined = parts[i + 1].parse().unwrap_or(0);
-                        }
+                    "Rows_examined:" if i + 1 < parts.len() => {
+                        rows_examined = parts[i + 1].parse().unwrap_or(0);
                     }
                     _ => {}
                 }
@@ -100,7 +101,11 @@ pub fn parse_slow_query_logs(log: &str) -> Vec<SlowQueryLogEntry> {
 }
 
 pub fn analyze_slow_query(entry: &SlowQueryLogEntry) -> AnomalyScore {
-    let sent = if entry.rows_sent == 0 { 1.0 } else { entry.rows_sent as f64 };
+    let sent = if entry.rows_sent == 0 {
+        1.0
+    } else {
+        entry.rows_sent as f64
+    };
     let examined = entry.rows_examined as f64;
     let examined_to_sent_ratio = examined / sent;
 
@@ -109,7 +114,8 @@ pub fn analyze_slow_query(entry: &SlowQueryLogEntry) -> AnomalyScore {
         score = 0.0;
     }
 
-    let index_recommended = examined_to_sent_ratio > 100.0 && entry.rows_examined > 1000 && entry.query_time > 0.5;
+    let index_recommended =
+        examined_to_sent_ratio > 100.0 && entry.rows_examined > 1000 && entry.query_time > 0.5;
 
     AnomalyScore {
         examined_to_sent_ratio,

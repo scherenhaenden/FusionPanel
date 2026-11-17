@@ -6,9 +6,14 @@ use std::path::Path;
 use thiserror::Error;
 use uuid::Uuid;
 
+mod databases;
 mod tls;
 mod websites;
 
+pub use databases::{
+    DatabaseEngine, DatabaseOperation, DatabaseOperationReservation, DatabaseRecord, DatabaseState,
+    DatabaseUserRecord, DatabaseUserState,
+};
 pub use tls::{
     WebsiteTlsMode, WebsiteTlsOperation, WebsiteTlsOperationReservation, WebsiteTlsRecord,
     WebsiteTlsState,
@@ -62,6 +67,10 @@ pub enum StoreError {
     WebsiteOperationInProgress,
     #[error("Idempotency key was reused for a different operation")]
     IdempotencyConflict,
+    #[error("Database request conflicts with existing state: {0}")]
+    DatabaseConflict(String),
+    #[error("Database operation is still in progress")]
+    DatabaseOperationInProgress,
 }
 
 pub struct ControlStore {
@@ -221,6 +230,49 @@ impl ControlStore {
                 "#,
             )?;
             tx.pragma_update(None, "user_version", 5)?;
+        }
+
+        if user_version < 6 {
+            tx.execute_batch(
+                r#"
+                CREATE TABLE databases (
+                    database_id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    engine TEXT NOT NULL CHECK (engine IN ('postgresql', 'mariadb')),
+                    state TEXT NOT NULL CHECK (state IN ('creating', 'ready', 'failed', 'deleting')),
+                    last_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    operation_request_id TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX idx_databases_name_engine ON databases (LOWER(name), engine);
+                CREATE INDEX idx_databases_tenant_id ON databases (tenant_id);
+                CREATE TABLE database_users (
+                    user_id TEXT PRIMARY KEY,
+                    database_id TEXT NOT NULL,
+                    tenant_id TEXT NOT NULL,
+                    username TEXT NOT NULL,
+                    state TEXT NOT NULL CHECK (state IN ('creating', 'ready', 'failed')),
+                    last_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    operation_request_id TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX idx_database_users_db_username ON database_users (database_id, LOWER(username));
+                CREATE TABLE database_operations (
+                    idempotency_key TEXT PRIMARY KEY,
+                    fingerprint TEXT NOT NULL,
+                    operation TEXT NOT NULL CHECK (operation IN ('database.apply', 'database.delete', 'database.user.create')),
+                    database_id TEXT NOT NULL,
+                    request_id TEXT NOT NULL,
+                    snapshot TEXT NOT NULL,
+                    user_snapshot TEXT,
+                    job_id TEXT
+                );
+                "#,
+            )?;
+            tx.pragma_update(None, "user_version", 6)?;
         }
 
         tx.commit()?;
@@ -852,7 +904,7 @@ mod tests {
             let user_version: u32 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(user_version, 5);
+            assert_eq!(user_version, 6);
             let website_tables: u32 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('websites', 'website_operations')",
@@ -912,7 +964,7 @@ mod tests {
         let user_version: u32 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(user_version, 5);
+        assert_eq!(user_version, 6);
         let has_tenant_id: bool = conn
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM pragma_table_info('websites') WHERE name = 'tenant_id')",

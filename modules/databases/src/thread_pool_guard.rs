@@ -51,8 +51,10 @@ impl ThreadPoolGuard {
 
         if metrics.active_threads > 0 && metrics.idle_threads == 0 && metrics.queued_requests > 0 {
             state = ThreadPoolState::WorkerStarvation;
-            recommended_size = Some(metrics.active_threads + metrics.queued_requests.min(16)); // Recommend scaling up
-        } else if metrics.active_threads > 0 && metrics.queued_requests > metrics.active_threads * 2 {
+            recommended_size = Some(metrics.active_threads + metrics.queued_requests.min(16));
+        // Recommend scaling up
+        } else if metrics.active_threads > 0 && metrics.queued_requests > metrics.active_threads * 2
+        {
             // Threshold for latency spike
             state = ThreadPoolState::QueueLatencySpike;
         }

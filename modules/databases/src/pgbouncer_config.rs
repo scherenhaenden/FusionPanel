@@ -51,7 +51,10 @@ impl PgBouncerConfig {
 
         ini.push_str("[databases]\n");
         for db in &self.databases {
-            ini.push_str(&format!("{} = host={} port={} dbname={}", db.name, db.host, db.port, db.dbname));
+            ini.push_str(&format!(
+                "{} = host={} port={} dbname={}",
+                db.name, db.host, db.port, db.dbname
+            ));
             if let Some(auth_user) = &db.auth_user {
                 ini.push_str(&format!(" auth_user={}", auth_user));
             }
@@ -74,7 +77,10 @@ impl PgBouncerConfig {
     pub fn generate_userlist(&self) -> String {
         let mut list = String::new();
         for user in &self.users {
-            list.push_str(&format!("\"{}\" \"{}\"\n", user.username, user.password_hash));
+            list.push_str(&format!(
+                "\"{}\" \"{}\"\n",
+                user.username, user.password_hash
+            ));
         }
         list
     }

@@ -67,13 +67,11 @@ fn test_evaluate_connections_idle_no_action() {
     };
     let guard = PostgresPoolGuard::new(config);
 
-    let connections = vec![
-        ConnectionInfo {
-            pid: 301,
-            state: ConnectionState::Idle,
-            duration_in_state: Duration::from_secs(3600), // Very long idle
-        },
-    ];
+    let connections = vec![ConnectionInfo {
+        pid: 301,
+        state: ConnectionState::Idle,
+        duration_in_state: Duration::from_secs(3600), // Very long idle
+    }];
 
     let signals = guard.evaluate_connections(&connections);
 

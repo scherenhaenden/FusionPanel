@@ -29,9 +29,7 @@ fn test_parse_metrics_missing() {
 
 #[test]
 fn test_parse_metrics_invalid() {
-    let vars = vec![
-        ("ThreadPool_idle_threads".to_string(), "invalid".to_string()),
-    ];
+    let vars = vec![("ThreadPool_idle_threads".to_string(), "invalid".to_string())];
     let metrics = ThreadPoolMetrics::parse(&vars);
     assert_eq!(metrics.idle_threads, 0);
 }

@@ -74,22 +74,31 @@ impl SentinelClusterManager {
         let n = self.sentinels.len();
 
         if n < 3 {
-            return Err(SentinelError::SplitBrainRisk("At least 3 sentinels are required for a robust cluster".to_string()));
+            return Err(SentinelError::SplitBrainRisk(
+                "At least 3 sentinels are required for a robust cluster".to_string(),
+            ));
         }
 
-        if n % 2 == 0 {
-            return Err(SentinelError::SplitBrainRisk("An odd number of sentinels is recommended to avoid split-brain".to_string()));
+        if n.is_multiple_of(2) {
+            return Err(SentinelError::SplitBrainRisk(
+                "An odd number of sentinels is recommended to avoid split-brain".to_string(),
+            ));
         }
 
         let optimal_quorum = self.calculate_optimal_quorum();
         if let Some(q) = self.master.configured_quorum {
             if q != optimal_quorum {
-                return Err(SentinelError::InvalidQuorum(format!("Configured quorum {} does not match optimal quorum {}", q, optimal_quorum)));
+                return Err(SentinelError::InvalidQuorum(format!(
+                    "Configured quorum {} does not match optimal quorum {}",
+                    q, optimal_quorum
+                )));
             }
         }
 
         if self.master.auth_pass.is_none() {
-            return Err(SentinelError::MissingAuth("Master requires an auth-pass for secure sentinel communication".to_string()));
+            return Err(SentinelError::MissingAuth(
+                "Master requires an auth-pass for secure sentinel communication".to_string(),
+            ));
         }
 
         Ok(())
@@ -97,20 +106,35 @@ impl SentinelClusterManager {
 
     /// Generates the `sentinel.conf` content for a sentinel instance monitoring this master.
     pub fn generate_sentinel_conf(&self) -> String {
-        let quorum = self.master.configured_quorum.unwrap_or_else(|| self.calculate_optimal_quorum());
+        let quorum = self
+            .master
+            .configured_quorum
+            .unwrap_or_else(|| self.calculate_optimal_quorum());
         let master_name = &self.master.name;
 
         let mut lines = Vec::new();
 
-        lines.push(format!("sentinel monitor {} {} {} {}", master_name, self.master.ip, self.master.port, quorum));
+        lines.push(format!(
+            "sentinel monitor {} {} {} {}",
+            master_name, self.master.ip, self.master.port, quorum
+        ));
 
         if let Some(auth_pass) = &self.master.auth_pass {
             lines.push(format!("sentinel auth-pass {} {}", master_name, auth_pass));
         }
 
-        lines.push(format!("sentinel down-after-milliseconds {} {}", master_name, self.master.down_after_milliseconds));
-        lines.push(format!("sentinel parallel-syncs {} {}", master_name, self.master.parallel_syncs));
-        lines.push(format!("sentinel failover-timeout {} {}", master_name, self.master.failover_timeout));
+        lines.push(format!(
+            "sentinel down-after-milliseconds {} {}",
+            master_name, self.master.down_after_milliseconds
+        ));
+        lines.push(format!(
+            "sentinel parallel-syncs {} {}",
+            master_name, self.master.parallel_syncs
+        ));
+        lines.push(format!(
+            "sentinel failover-timeout {} {}",
+            master_name, self.master.failover_timeout
+        ));
 
         lines.join("\n")
     }
@@ -134,51 +158,84 @@ impl SentinelClusterManager {
 
             if parts[0] == "sentinel" {
                 if parts.len() < 4 {
-                    return Err(SentinelError::InvalidConfig(format!("Invalid sentinel config line: {}", line)));
+                    return Err(SentinelError::InvalidConfig(format!(
+                        "Invalid sentinel config line: {}",
+                        line
+                    )));
                 }
 
                 match parts[1] {
                     "monitor" => {
                         if parts.len() != 6 {
-                            return Err(SentinelError::InvalidConfig(format!("Invalid monitor line: {}", line)));
+                            return Err(SentinelError::InvalidConfig(format!(
+                                "Invalid monitor line: {}",
+                                line
+                            )));
                         }
                         name = Some(parts[2].to_string());
                         ip = Some(parts[3].to_string());
-                        port = Some(parts[4].parse().map_err(|_| SentinelError::InvalidConfig(format!("Invalid port: {}", parts[4])))?);
-                        configured_quorum = Some(parts[5].parse().map_err(|_| SentinelError::InvalidConfig(format!("Invalid quorum: {}", parts[5])))?);
+                        port = Some(parts[4].parse().map_err(|_| {
+                            SentinelError::InvalidConfig(format!("Invalid port: {}", parts[4]))
+                        })?);
+                        configured_quorum = Some(parts[5].parse().map_err(|_| {
+                            SentinelError::InvalidConfig(format!("Invalid quorum: {}", parts[5]))
+                        })?);
                     }
                     "auth-pass" => {
                         if parts.len() != 4 {
-                            return Err(SentinelError::InvalidConfig(format!("Invalid auth-pass line: {}", line)));
+                            return Err(SentinelError::InvalidConfig(format!(
+                                "Invalid auth-pass line: {}",
+                                line
+                            )));
                         }
                         auth_pass = Some(parts[3].to_string());
                     }
                     "down-after-milliseconds" => {
                         if parts.len() != 4 {
-                            return Err(SentinelError::InvalidConfig(format!("Invalid down-after-milliseconds line: {}", line)));
+                            return Err(SentinelError::InvalidConfig(format!(
+                                "Invalid down-after-milliseconds line: {}",
+                                line
+                            )));
                         }
-                        down_after_milliseconds = Some(parts[3].parse().map_err(|_| SentinelError::InvalidConfig(format!("Invalid ms: {}", parts[3])))?);
+                        down_after_milliseconds = Some(parts[3].parse().map_err(|_| {
+                            SentinelError::InvalidConfig(format!("Invalid ms: {}", parts[3]))
+                        })?);
                     }
                     "parallel-syncs" => {
                         if parts.len() != 4 {
-                            return Err(SentinelError::InvalidConfig(format!("Invalid parallel-syncs line: {}", line)));
+                            return Err(SentinelError::InvalidConfig(format!(
+                                "Invalid parallel-syncs line: {}",
+                                line
+                            )));
                         }
-                        parallel_syncs = Some(parts[3].parse().map_err(|_| SentinelError::InvalidConfig(format!("Invalid syncs: {}", parts[3])))?);
+                        parallel_syncs = Some(parts[3].parse().map_err(|_| {
+                            SentinelError::InvalidConfig(format!("Invalid syncs: {}", parts[3]))
+                        })?);
                     }
                     "failover-timeout" => {
                         if parts.len() != 4 {
-                            return Err(SentinelError::InvalidConfig(format!("Invalid failover-timeout line: {}", line)));
+                            return Err(SentinelError::InvalidConfig(format!(
+                                "Invalid failover-timeout line: {}",
+                                line
+                            )));
                         }
-                        failover_timeout = Some(parts[3].parse().map_err(|_| SentinelError::InvalidConfig(format!("Invalid failover-timeout: {}", parts[3])))?);
+                        failover_timeout = Some(parts[3].parse().map_err(|_| {
+                            SentinelError::InvalidConfig(format!(
+                                "Invalid failover-timeout: {}",
+                                parts[3]
+                            ))
+                        })?);
                     }
                     _ => {}
                 }
             }
         }
 
-        let name = name.ok_or_else(|| SentinelError::InvalidConfig("Missing monitor directive".to_string()))?;
+        let name = name
+            .ok_or_else(|| SentinelError::InvalidConfig("Missing monitor directive".to_string()))?;
         let ip = ip.ok_or_else(|| SentinelError::InvalidConfig("Missing master ip".to_string()))?;
-        let port = port.ok_or_else(|| SentinelError::InvalidConfig("Missing master port".to_string()))?;
+        let port =
+            port.ok_or_else(|| SentinelError::InvalidConfig("Missing master port".to_string()))?;
 
         Ok(MasterConfig {
             name,

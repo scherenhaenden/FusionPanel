@@ -15,6 +15,7 @@ pub enum ReplicationState {
 pub struct Lsn(pub u64);
 
 impl Lsn {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         let parts: Vec<&str> = s.split('/').collect();
         if parts.len() != 2 {

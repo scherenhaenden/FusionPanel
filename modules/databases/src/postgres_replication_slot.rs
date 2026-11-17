@@ -79,9 +79,15 @@ impl ReplicationSlotMonitor {
         Ok(current.saturating_sub(slot))
     }
 
-    pub fn evaluate_slot(&self, current_lsn: &str, slot: &ReplicationSlot) -> Result<SlotEvaluation, MonitorError> {
+    pub fn evaluate_slot(
+        &self,
+        current_lsn: &str,
+        slot: &ReplicationSlot,
+    ) -> Result<SlotEvaluation, MonitorError> {
         let lsn_to_compare = if slot.slot_type == "logical" {
-            slot.confirmed_flush_lsn.as_deref().or(slot.restart_lsn.as_deref())
+            slot.confirmed_flush_lsn
+                .as_deref()
+                .or(slot.restart_lsn.as_deref())
         } else {
             slot.restart_lsn.as_deref()
         };
@@ -105,9 +111,7 @@ impl ReplicationSlotMonitor {
                     RecommendedAction::SafeDrop
                 }
             }
-            (false, LagSeverity::Normal) => {
-                RecommendedAction::SafeDrop
-            }
+            (false, LagSeverity::Normal) => RecommendedAction::SafeDrop,
             (true, LagSeverity::Critical) => RecommendedAction::Pause,
             (true, _) => RecommendedAction::None,
         };

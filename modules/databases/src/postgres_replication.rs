@@ -17,11 +17,7 @@ impl Lsn {
     }
 
     pub fn diff(&self, other: &Lsn) -> u64 {
-        if self.0 >= other.0 {
-            self.0 - other.0
-        } else {
-            other.0 - self.0
-        }
+        self.0.abs_diff(other.0)
     }
 }
 

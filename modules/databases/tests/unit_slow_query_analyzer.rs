@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 
-use databases::slow_query_analyzer::{analyze_slow_query, parse_slow_query_logs, SlowQueryLogEntry};
+use databases::slow_query_analyzer::{
+    analyze_slow_query, parse_slow_query_logs, SlowQueryLogEntry,
+};
 
 #[test]
 fn test_parse_slow_query_logs() {
@@ -24,7 +26,10 @@ SELECT 1;";
     assert_eq!(entries[0].lock_time, 0.0001);
     assert_eq!(entries[0].rows_sent, 5);
     assert_eq!(entries[0].rows_examined, 5000);
-    assert_eq!(entries[0].query, "SELECT * FROM users WHERE status = 'active';");
+    assert_eq!(
+        entries[0].query,
+        "SELECT * FROM users WHERE status = 'active';"
+    );
 
     assert_eq!(entries[1].query_time, 0.1);
     assert_eq!(entries[1].lock_time, 0.0);
