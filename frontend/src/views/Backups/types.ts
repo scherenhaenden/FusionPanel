@@ -1,11 +1,11 @@
-export type BackupScope = 'files' | 'databases' | 'full';
-
-export type ChecksumStatus = 'valid' | 'invalid' | 'pending';
-
-export interface BackupArchive {
-  id: string;
-  timestamp: string; // ISO format or localized string
-  size: number; // Size in bytes
-  checksumStatus: ChecksumStatus;
-  scope: BackupScope;
-}
+export type {
+  BackupDestination,
+  BackupDestinationKind,
+  BackupOperationResponse,
+  BackupRecord,
+  BackupState,
+  BackupTargetKind,
+  BackupTargetRequest,
+  CreateBackupRequest,
+  RestoreBackupRequest,
+} from '../../api';
