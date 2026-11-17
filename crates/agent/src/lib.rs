@@ -2,6 +2,7 @@
 
 pub mod acme;
 pub mod daemon;
+pub mod database_driver;
 pub mod executor;
 pub mod files;
 pub mod heartbeat;

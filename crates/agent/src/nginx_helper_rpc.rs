@@ -460,7 +460,11 @@ fn handle_request(bytes: &[u8], operations: &dyn ManagedSiteOperations) -> Respo
             };
             operations.delete_site_tls(payload.site_id, &payload.domain, &spec)
         }
-        Operation::SystemInfo(_) | Operation::SiteValidate(_) => {
+        Operation::SystemInfo(_)
+        | Operation::SiteValidate(_)
+        | Operation::DatabaseApply(_)
+        | Operation::DatabaseDelete(_)
+        | Operation::DatabaseUserCreate(_) => {
             return error_response(
                 request_id,
                 "unsupported_operation",
