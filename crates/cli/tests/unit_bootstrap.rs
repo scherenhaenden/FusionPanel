@@ -32,7 +32,7 @@ fn test_bootstrap_operator() {
     let user = store.get_user_by_username("testadmin").unwrap().unwrap();
     assert_eq!(user.username(), "testadmin");
 
-    let bindings = store.get_user_role_bindings(user.id().clone()).unwrap();
+    let bindings = store.get_user_role_bindings(user.id()).unwrap();
     assert_eq!(bindings.len(), 1);
     assert_eq!(bindings[0].role.role_type, identity::RoleType::SuperAdmin);
 }

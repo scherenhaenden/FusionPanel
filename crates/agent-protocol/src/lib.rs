@@ -45,6 +45,12 @@ pub enum Operation {
     DnsZoneDelete(DnsZoneDeletePayload),
     #[serde(rename = "dns.probe")]
     DnsProbe(DnsProbePayload),
+    #[serde(rename = "cron.apply")]
+    CronApply(CronApplyPayload),
+    #[serde(rename = "cron.delete")]
+    CronDelete(CronDeletePayload),
+    #[serde(rename = "cron.run_now")]
+    CronRunNow(CronRunNowPayload),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -265,6 +271,40 @@ pub struct DnsProbePayload {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+pub struct CronJobSpec {
+    pub cron_id: Uuid,
+    pub name: String,
+    pub schedule: String,
+    pub command: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CronApplyPayload {
+    pub tenant_id: Uuid,
+    pub cron_id: Uuid,
+    pub jobs: Vec<CronJobSpec>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CronDeletePayload {
+    pub tenant_id: Uuid,
+    pub cron_id: Uuid,
+    pub jobs: Vec<CronJobSpec>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CronRunNowPayload {
+    pub tenant_id: Uuid,
+    pub cron_id: Uuid,
+    pub command: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct Response {
     pub version: u32,
     pub request_id: Uuid,
@@ -307,6 +347,9 @@ pub enum ValidationError {
     InvalidDnsRecord,
     InvalidDnsSerial,
     InvalidDnsTtl,
+    InvalidCronJobId,
+    InvalidCronSchedule,
+    InvalidCronCommand,
 }
 
 impl Request {
@@ -329,6 +372,9 @@ impl Request {
             Operation::DnsZoneApply(payload) => payload.validate(),
             Operation::DnsZoneDelete(payload) => payload.validate(),
             Operation::DnsProbe(payload) => payload.validate(),
+            Operation::CronApply(payload) => payload.validate(),
+            Operation::CronDelete(payload) => payload.validate(),
+            Operation::CronRunNow(payload) => payload.validate(),
         }
     }
 }
@@ -768,6 +814,89 @@ impl DnsProbePayload {
             {
                 return Err(ValidationError::InvalidDnsRecord);
             }
+        }
+        Ok(())
+    }
+}
+
+fn valid_cron_schedule(schedule: &str) -> bool {
+    let fields: Vec<&str> = schedule.split_whitespace().collect();
+    if fields.len() != 5 {
+        return false;
+    }
+    fields.iter().all(|field| {
+        !field.is_empty()
+            && field.len() <= 32
+            && field
+                .bytes()
+                .all(|b| b.is_ascii_digit() || matches!(b, b'*' | b'/' | b'-' | b','))
+    })
+}
+
+fn valid_cron_command(command: &str) -> bool {
+    let trimmed = command.trim();
+    !trimmed.is_empty()
+        && trimmed.len() <= 512
+        && !trimmed
+            .bytes()
+            .any(|b| b < 0x20 || b == 0x7f || b == b'\r' || b == b'\n')
+}
+
+impl CronJobSpec {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.cron_id.is_nil() {
+            return Err(ValidationError::InvalidCronJobId);
+        }
+        if self.name.trim().is_empty()
+            || self.name.len() > 64
+            || !self
+                .name
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b' '))
+        {
+            return Err(ValidationError::InvalidCronCommand);
+        }
+        if !valid_cron_schedule(&self.schedule) {
+            return Err(ValidationError::InvalidCronSchedule);
+        }
+        if !valid_cron_command(&self.command) {
+            return Err(ValidationError::InvalidCronCommand);
+        }
+        Ok(())
+    }
+}
+
+impl CronApplyPayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.tenant_id.is_nil() || self.cron_id.is_nil() {
+            return Err(ValidationError::InvalidCronJobId);
+        }
+        for job in &self.jobs {
+            job.validate()?;
+        }
+        Ok(())
+    }
+}
+
+impl CronDeletePayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.tenant_id.is_nil() || self.cron_id.is_nil() {
+            return Err(ValidationError::InvalidCronJobId);
+        }
+        for job in &self.jobs {
+            job.validate()?;
+        }
+        Ok(())
+    }
+}
+
+impl CronRunNowPayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.tenant_id.is_nil() || self.cron_id.is_nil() {
+            return Err(ValidationError::InvalidCronJobId);
+        }
+        if !valid_cron_command(&self.command) {
+            return Err(ValidationError::InvalidCronCommand);
         }
         Ok(())
     }
@@ -1697,5 +1826,47 @@ mod tests {
             }),
         };
         assert!(valid_probe.validate().is_ok());
+    }
+
+    #[test]
+    fn test_cron_payload_validation() {
+        let tenant_id = Uuid::new_v4();
+        let cron_id = Uuid::new_v4();
+        let valid = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::CronApply(CronApplyPayload {
+                tenant_id,
+                cron_id,
+                jobs: vec![CronJobSpec {
+                    cron_id,
+                    name: "heartbeat".to_string(),
+                    schedule: "*/5 * * * *".to_string(),
+                    command: "echo ok".to_string(),
+                    enabled: true,
+                }],
+            }),
+        };
+        assert!(valid.validate().is_ok());
+
+        let bad_sched = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::CronApply(CronApplyPayload {
+                tenant_id,
+                cron_id,
+                jobs: vec![CronJobSpec {
+                    cron_id,
+                    name: "bad".to_string(),
+                    schedule: "* * *".to_string(),
+                    command: "echo ok".to_string(),
+                    enabled: true,
+                }],
+            }),
+        };
+        assert_eq!(
+            bad_sched.validate(),
+            Err(ValidationError::InvalidCronSchedule)
+        );
     }
 }

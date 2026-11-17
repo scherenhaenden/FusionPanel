@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
 mod backups;
+mod cron;
 mod databases;
 mod dns;
+mod files;
 mod node_jobs;
 mod websites;
 
@@ -267,6 +269,8 @@ fn app(state: AppState) -> Router {
         .merge(databases::routes())
         .merge(backups::routes())
         .merge(dns::routes())
+        .merge(files::routes())
+        .merge(cron::routes())
         .fallback(fallback_handler)
         .with_state(state)
         .merge(auth_router)

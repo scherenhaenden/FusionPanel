@@ -28,6 +28,59 @@ export interface WebsiteOperationResponse {
   job: JobRecord;
 }
 
+export type FileEntryKind = 'file' | 'dir';
+
+export interface FileEntry {
+  name: string;
+  path: string;
+  kind: FileEntryKind;
+  size: number;
+}
+
+export interface FileReadResponse {
+  path: string;
+  content: string;
+}
+
+export interface FileWriteResponse {
+  path: string;
+  size: number;
+}
+
+export interface FileRenameResponse {
+  from: string;
+  to: string;
+}
+
+export type CronJobState = 'provisioning' | 'ready' | 'failed' | 'deleting';
+
+export interface CronJobRecord {
+  id: string;
+  tenant_id: string;
+  name: string;
+  schedule: string;
+  command: string;
+  enabled: boolean;
+  state: CronJobState;
+  last_run_at: string | null;
+  last_run_status: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCronJobRequest {
+  name: string;
+  schedule: string;
+  command: string;
+  enabled?: boolean;
+}
+
+export interface CronOperationResponse {
+  cron_job: CronJobRecord;
+  job: JobRecord;
+}
+
 export type WebsiteTlsMode = 'custom_pem' | 'acme_http01';
 export type WebsiteTlsState = 'disabled' | 'provisioning' | 'active' | 'failed' | 'deleting';
 
@@ -494,6 +547,94 @@ export const api = {
     const response = await apiClient.post<DnsOperationResponse>(
       `/v1/dns/zones/${encodeURIComponent(zoneId)}/probe`,
       data,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  // Files
+  listFiles: async (siteId: string, path = ''): Promise<FileEntry[]> => {
+    const response = await apiClient.get<{ entries: FileEntry[] }>(
+      `/v1/files/${encodeURIComponent(siteId)}/list`,
+      { params: { path } },
+    );
+    return response.data.entries;
+  },
+
+  readFile: async (siteId: string, path: string): Promise<FileReadResponse> => {
+    const response = await apiClient.get<FileReadResponse>(
+      `/v1/files/${encodeURIComponent(siteId)}/read`,
+      { params: { path } },
+    );
+    return response.data;
+  },
+
+  writeFile: async (
+    siteId: string,
+    path: string,
+    content: string,
+  ): Promise<FileWriteResponse> => {
+    const response = await apiClient.put<FileWriteResponse>(
+      `/v1/files/${encodeURIComponent(siteId)}/write`,
+      { path, content },
+    );
+    return response.data;
+  },
+
+  renameFile: async (
+    siteId: string,
+    from: string,
+    to: string,
+  ): Promise<FileRenameResponse> => {
+    const response = await apiClient.post<FileRenameResponse>(
+      `/v1/files/${encodeURIComponent(siteId)}/rename`,
+      { from, to },
+    );
+    return response.data;
+  },
+
+  deleteFile: async (siteId: string, path: string): Promise<void> => {
+    await apiClient.delete(`/v1/files/${encodeURIComponent(siteId)}/delete`, {
+      params: { path },
+    });
+  },
+
+  // Cron Jobs
+  getCronJobs: async (): Promise<CronJobRecord[]> => {
+    const response = await apiClient.get<{ cron_jobs: CronJobRecord[] } | CronJobRecord[]>(
+      '/v1/cron',
+    );
+    return Array.isArray(response.data) ? response.data : response.data.cron_jobs;
+  },
+
+  createCronJob: async (
+    data: CreateCronJobRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<CronOperationResponse> => {
+    const response = await apiClient.post<CronOperationResponse>('/v1/cron', data, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
+    return response.data;
+  },
+
+  deleteCronJob: async (
+    cronId: string,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<CronOperationResponse> => {
+    const response = await apiClient.delete<CronOperationResponse>(
+      `/v1/cron/${encodeURIComponent(cronId)}`,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  runCronJobNow: async (
+    cronId: string,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<CronOperationResponse> => {
+    const response = await apiClient.post<CronOperationResponse>(
+      `/v1/cron/${encodeURIComponent(cronId)}/run`,
+      {},
       { headers: { 'Idempotency-Key': idempotencyKey } },
     );
     return response.data;
