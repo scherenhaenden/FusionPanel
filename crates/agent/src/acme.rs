@@ -46,6 +46,7 @@ struct Challenge {
     #[serde(rename = "type")]
     kind: String,
     url: String,
+    #[serde(default)]
     token: String,
 }
 
@@ -176,10 +177,12 @@ pub async fn issue_http01_with_root(
         )
         .await?;
         nonce = next_nonce;
-        let authz: AuthorizationResponse = authz_resp
-            .json()
+        let authz_body = authz_resp
+            .text()
             .await
-            .map_err(|e| format!("invalid ACME authorization JSON: {e}"))?;
+            .map_err(|e| format!("failed to read ACME authorization response: {e}"))?;
+        let authz: AuthorizationResponse = serde_json::from_str(&authz_body)
+            .map_err(|e| format!("invalid ACME authorization JSON ({e}): {authz_body}"))?;
         let http01 = authz
             .challenges
             .iter()
@@ -346,55 +349,67 @@ async fn post_jws(
     nonce: &str,
     payload: Option<&Value>,
 ) -> Result<(reqwest::Response, String), String> {
-    let mut protected = json!({
-        "alg": "ES256",
-        "nonce": nonce,
-        "url": url,
-    });
-    if let Some(kid) = kid {
-        protected["kid"] = Value::String(kid.to_string());
-    } else if let Some(jwk) = jwk {
-        protected["jwk"] = jwk.clone();
+    let mut current_nonce = nonce.to_string();
+    for attempt in 0..3 {
+        let mut protected = json!({
+            "alg": "ES256",
+            "nonce": current_nonce,
+            "url": url,
+        });
+        if let Some(kid) = kid {
+            protected["kid"] = Value::String(kid.to_string());
+        } else if let Some(jwk) = jwk {
+            protected["jwk"] = jwk.clone();
+        }
+
+        let protected_b64 = URL_SAFE_NO_PAD.encode(protected.to_string().as_bytes());
+        let payload_b64 = match payload {
+            Some(value) => URL_SAFE_NO_PAD.encode(value.to_string().as_bytes()),
+            None => String::new(),
+        };
+        let signing_input = format!("{protected_b64}.{payload_b64}");
+        let rng = SystemRandom::new();
+        let sig = key
+            .sign(&rng, signing_input.as_bytes())
+            .map_err(|_| "failed to sign ACME JWS payload".to_string())?;
+        let body = json!({
+            "protected": protected_b64,
+            "payload": payload_b64,
+            "signature": URL_SAFE_NO_PAD.encode(sig.as_ref()),
+        });
+
+        let resp = client
+            .post(url)
+            .header("Content-Type", "application/jose+json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("ACME POST {url} failed: {e}"))?;
+
+        let next_nonce = resp
+            .headers()
+            .get("replay-nonce")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string)
+            .unwrap_or_default();
+
+        if resp.status() == StatusCode::BAD_REQUEST || !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            if status == StatusCode::BAD_REQUEST
+                && text.contains("badNonce")
+                && !next_nonce.is_empty()
+                && attempt < 2
+            {
+                current_nonce = next_nonce;
+                continue;
+            }
+            return Err(format!("ACME {url} returned {status}: {text}"));
+        }
+
+        return Ok((resp, next_nonce));
     }
-
-    let protected_b64 = URL_SAFE_NO_PAD.encode(protected.to_string().as_bytes());
-    let payload_b64 = match payload {
-        Some(value) => URL_SAFE_NO_PAD.encode(value.to_string().as_bytes()),
-        None => String::new(),
-    };
-    let signing_input = format!("{protected_b64}.{payload_b64}");
-    let rng = SystemRandom::new();
-    let sig = key
-        .sign(&rng, signing_input.as_bytes())
-        .map_err(|_| "failed to sign ACME JWS payload".to_string())?;
-    let body = json!({
-        "protected": protected_b64,
-        "payload": payload_b64,
-        "signature": URL_SAFE_NO_PAD.encode(sig.as_ref()),
-    });
-
-    let resp = client
-        .post(url)
-        .header("Content-Type", "application/jose+json")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("ACME POST {url} failed: {e}"))?;
-
-    let next_nonce = resp
-        .headers()
-        .get("replay-nonce")
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string)
-        .unwrap_or_default();
-
-    if resp.status() == StatusCode::BAD_REQUEST || !resp.status().is_success() {
-        let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(format!("ACME {url} returned {status}: {text}"));
-    }
-
-    Ok((resp, next_nonce))
+    Err(format!("ACME POST {url} exhausted badNonce retries"))
 }
 
 fn ec_jwk(key: &EcdsaKeyPair) -> Result<Value, String> {
