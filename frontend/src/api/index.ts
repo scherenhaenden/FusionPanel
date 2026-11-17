@@ -139,6 +139,71 @@ export interface BackupOperationResponse {
   job: JobRecord;
 }
 
+export type DnsZoneState = 'provisioning' | 'ready' | 'failed' | 'deleting';
+export type DnsRecordType = 'A' | 'AAAA' | 'CNAME' | 'MX' | 'TXT';
+
+export interface DnsZoneRecord {
+  id: string;
+  tenant_id?: string;
+  domain: string;
+  serial: number;
+  default_ttl: number;
+  state: DnsZoneState;
+  last_error: string | null;
+  last_probe_result: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DnsRecordEntry {
+  id: string;
+  zone_id: string;
+  tenant_id?: string;
+  name: string;
+  record_type: DnsRecordType;
+  value: string;
+  ttl: number;
+  priority: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DnsZoneWithRecordsResponse {
+  zone: DnsZoneRecord;
+  records: DnsRecordEntry[];
+}
+
+export interface DnsOperationResponse {
+  zone: DnsZoneRecord;
+  records?: DnsRecordEntry[];
+  job: JobRecord;
+}
+
+export interface CreateDnsZoneRequest {
+  domain: string;
+  default_ttl?: number;
+}
+
+export interface UpsertDnsRecordRequest {
+  name: string;
+  record_type: DnsRecordType;
+  value: string;
+  ttl?: number;
+  priority?: number | null;
+}
+
+export interface UpsertDkimRequest {
+  selector: string;
+  value: string;
+  ttl?: number;
+}
+
+export interface ProbeDnsRequest {
+  record_name: string;
+  record_type: DnsRecordType;
+  expected_substring?: string;
+}
+
 export const createIdempotencyKey = (): string => {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
@@ -327,6 +392,107 @@ export const api = {
   ): Promise<BackupOperationResponse> => {
     const response = await apiClient.post<BackupOperationResponse>(
       `/v1/backups/${encodeURIComponent(backupId)}/restore`,
+      data,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  // DNS
+  getDnsZones: async (): Promise<DnsZoneRecord[]> => {
+    const response = await apiClient.get<{ zones: DnsZoneRecord[] } | DnsZoneRecord[]>(
+      '/v1/dns/zones',
+    );
+    return Array.isArray(response.data) ? response.data : response.data.zones;
+  },
+
+  getDnsZone: async (zoneId: string): Promise<DnsZoneWithRecordsResponse> => {
+    const response = await apiClient.get<DnsZoneWithRecordsResponse>(
+      `/v1/dns/zones/${encodeURIComponent(zoneId)}`,
+    );
+    return response.data;
+  },
+
+  createDnsZone: async (
+    data: CreateDnsZoneRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<DnsOperationResponse> => {
+    const response = await apiClient.post<DnsOperationResponse>('/v1/dns/zones', data, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
+    return response.data;
+  },
+
+  deleteDnsZone: async (
+    zoneId: string,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<DnsOperationResponse> => {
+    const response = await apiClient.delete<DnsOperationResponse>(
+      `/v1/dns/zones/${encodeURIComponent(zoneId)}`,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  createDnsRecord: async (
+    zoneId: string,
+    data: UpsertDnsRecordRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<DnsOperationResponse> => {
+    const response = await apiClient.post<DnsOperationResponse>(
+      `/v1/dns/zones/${encodeURIComponent(zoneId)}/records`,
+      data,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  updateDnsRecord: async (
+    zoneId: string,
+    recordId: string,
+    data: UpsertDnsRecordRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<DnsOperationResponse> => {
+    const response = await apiClient.put<DnsOperationResponse>(
+      `/v1/dns/zones/${encodeURIComponent(zoneId)}/records/${encodeURIComponent(recordId)}`,
+      data,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  deleteDnsRecord: async (
+    zoneId: string,
+    recordId: string,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<DnsOperationResponse> => {
+    const response = await apiClient.delete<DnsOperationResponse>(
+      `/v1/dns/zones/${encodeURIComponent(zoneId)}/records/${encodeURIComponent(recordId)}`,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  upsertDkimRecord: async (
+    zoneId: string,
+    data: UpsertDkimRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<DnsOperationResponse> => {
+    const response = await apiClient.post<DnsOperationResponse>(
+      `/v1/dns/zones/${encodeURIComponent(zoneId)}/dkim`,
+      data,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  probeDnsZone: async (
+    zoneId: string,
+    data: ProbeDnsRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<DnsOperationResponse> => {
+    const response = await apiClient.post<DnsOperationResponse>(
+      `/v1/dns/zones/${encodeURIComponent(zoneId)}/probe`,
       data,
       { headers: { 'Idempotency-Key': idempotencyKey } },
     );
