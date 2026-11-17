@@ -93,7 +93,7 @@ impl SlowQueryLogParser {
                         continue;
                     }
                     if chars[i] == quote {
-                        if i + 1 < chars.len() && chars[i+1] == quote {
+                        if i + 1 < chars.len() && chars[i + 1] == quote {
                             // SQL double quote escape
                             i += 2;
                             continue;
@@ -104,7 +104,9 @@ impl SlowQueryLogParser {
                     }
                     i += 1;
                 }
-            } else if c.is_ascii_digit() || (c == '-' && i + 1 < chars.len() && chars[i+1].is_ascii_digit()) {
+            } else if c.is_ascii_digit()
+                || (c == '-' && i + 1 < chars.len() && chars[i + 1].is_ascii_digit())
+            {
                 let mut is_num = false;
                 if i == 0 || !chars[i - 1].is_ascii_alphanumeric() && chars[i - 1] != '_' {
                     is_num = true;
@@ -143,7 +145,7 @@ impl SlowQueryLogParser {
         let mut current_timestamp: Option<String> = None;
 
         for line in lines {
-            if line.starts_with("# Time: ") {
+            if let Some(rest) = line.strip_prefix("# Time: ") {
                 if let Some(mut entry) = current_entry.take() {
                     entry.query = current_query.trim().to_string();
                     if !entry.query.is_empty() {
@@ -152,8 +154,8 @@ impl SlowQueryLogParser {
                 }
                 current_query.clear();
 
-                current_timestamp = Some(line["# Time: ".len()..].trim().to_string());
-            } else if line.starts_with("# User@Host: ") {
+                current_timestamp = Some(rest.trim().to_string());
+            } else if let Some(rest) = line.strip_prefix("# User@Host: ") {
                 if let Some(mut entry) = current_entry.take() {
                     entry.query = current_query.trim().to_string();
                     if !entry.query.is_empty() {
@@ -162,7 +164,7 @@ impl SlowQueryLogParser {
                 }
                 current_query.clear();
 
-                let user_host = line["# User@Host: ".len()..].trim().to_string();
+                let user_host = rest.trim().to_string();
                 current_entry = Some(SlowQueryEntry {
                     timestamp: current_timestamp.clone(),
                     user_host,
@@ -179,23 +181,21 @@ impl SlowQueryLogParser {
                         match parts[j] {
                             "Query_time:" => {
                                 if j + 1 < parts.len() {
-                                    entry.query_time = parts[j+1].parse().unwrap_or(0.0);
+                                    entry.query_time = parts[j + 1].parse().unwrap_or(0.0);
                                 }
                             }
                             "Lock_time:" => {
                                 if j + 1 < parts.len() {
-                                    entry.lock_time = parts[j+1].parse().unwrap_or(0.0);
+                                    entry.lock_time = parts[j + 1].parse().unwrap_or(0.0);
                                 }
                             }
                             "Rows_sent:" => {
                                 if j + 1 < parts.len() {
-                                    entry.rows_sent = parts[j+1].parse().unwrap_or(0);
+                                    entry.rows_sent = parts[j + 1].parse().unwrap_or(0);
                                 }
                             }
-                            "Rows_examined:" => {
-                                if j + 1 < parts.len() {
-                                    entry.rows_examined = parts[j+1].parse().unwrap_or(0);
-                                }
+                            "Rows_examined:" if j + 1 < parts.len() => {
+                                entry.rows_examined = parts[j + 1].parse().unwrap_or(0);
                             }
                             _ => {}
                         }
@@ -233,12 +233,18 @@ impl SlowQueryLogParser {
 
         for entry in entries {
             let fingerprint = Self::fingerprint(&entry.query);
-            let stats = stats_map.entry(fingerprint.clone()).or_insert_with(|| QueryStats::new(fingerprint));
+            let stats = stats_map
+                .entry(fingerprint.clone())
+                .or_insert_with(|| QueryStats::new(fingerprint));
             stats.add_call(entry.query_time);
         }
 
         let mut stats_vec: Vec<QueryStats> = stats_map.into_values().collect();
-        stats_vec.sort_by(|a, b| b.total_time.partial_cmp(&a.total_time).unwrap_or(std::cmp::Ordering::Equal));
+        stats_vec.sort_by(|a, b| {
+            b.total_time
+                .partial_cmp(&a.total_time)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         stats_vec
     }
 }

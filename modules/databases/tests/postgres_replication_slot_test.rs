@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use databases::postgres_replication_slot::{
-    ReplicationSlotMonitor, ReplicationSlot, LagSeverity, RecommendedAction, MonitorError
+    LagSeverity, MonitorError, RecommendedAction, ReplicationSlot, ReplicationSlotMonitor,
 };
 
 #[test]
@@ -17,8 +17,14 @@ fn test_parse_lsn_valid() {
 
 #[test]
 fn test_parse_lsn_invalid() {
-    assert_eq!(ReplicationSlotMonitor::parse_lsn("invalid").unwrap_err(), MonitorError::InvalidLsnFormat);
-    assert_eq!(ReplicationSlotMonitor::parse_lsn("0/16B3748/Extra").unwrap_err(), MonitorError::InvalidLsnFormat);
+    assert_eq!(
+        ReplicationSlotMonitor::parse_lsn("invalid").unwrap_err(),
+        MonitorError::InvalidLsnFormat
+    );
+    assert_eq!(
+        ReplicationSlotMonitor::parse_lsn("0/16B3748/Extra").unwrap_err(),
+        MonitorError::InvalidLsnFormat
+    );
 
     match ReplicationSlotMonitor::parse_lsn("ZZZ/16B3748").unwrap_err() {
         MonitorError::LsnParseError(_) => (),

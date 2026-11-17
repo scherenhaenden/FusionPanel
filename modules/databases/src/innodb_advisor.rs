@@ -55,7 +55,11 @@ pub fn calculate_hit_ratio(metrics: &InnodbMetrics) -> f64 {
     100.0 - (reads * 100.0 / requests)
 }
 
-pub fn advise_buffer_pool_size(hit_ratio: f64, available_host_memory_bytes: u64, current_pool_size_bytes: u64) -> SizingAdvice {
+pub fn advise_buffer_pool_size(
+    hit_ratio: f64,
+    available_host_memory_bytes: u64,
+    current_pool_size_bytes: u64,
+) -> SizingAdvice {
     // Basic heuristic for advice based on miss trends and available memory
     if hit_ratio < 95.0 {
         // If hit ratio is low and we have memory, suggest increasing
@@ -67,20 +71,25 @@ pub fn advise_buffer_pool_size(hit_ratio: f64, available_host_memory_bytes: u64,
         // If hit ratio is extremely high, we might be able to decrease it to free up memory
         // But only suggest if it's taking a significant chunk of memory
         if current_pool_size_bytes > available_host_memory_bytes / 2 {
-             return SizingAdvice::DecreaseBufferPool;
+            return SizingAdvice::DecreaseBufferPool;
         }
     }
 
     SizingAdvice::Optimal
 }
 
-pub fn evaluate_innodb_performance(status_output: &str, available_host_memory_bytes: u64, current_pool_size_bytes: u64) -> Option<AdvisorResult> {
+pub fn evaluate_innodb_performance(
+    status_output: &str,
+    available_host_memory_bytes: u64,
+    current_pool_size_bytes: u64,
+) -> Option<AdvisorResult> {
     let metrics = parse_innodb_metrics(status_output)?;
     let hit_ratio = calculate_hit_ratio(&metrics);
-    let advice = advise_buffer_pool_size(hit_ratio, available_host_memory_bytes, current_pool_size_bytes);
-
-    Some(AdvisorResult {
+    let advice = advise_buffer_pool_size(
         hit_ratio,
-        advice,
-    })
+        available_host_memory_bytes,
+        current_pool_size_bytes,
+    );
+
+    Some(AdvisorResult { hit_ratio, advice })
 }

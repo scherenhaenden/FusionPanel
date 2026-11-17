@@ -1,6 +1,5 @@
 #![forbid(unsafe_code)]
 
-
 pub const WRAPAROUND_THRESHOLD_MAX: u32 = 2_147_483_648; // 2^31
 pub const DEFAULT_AUTOVACUUM_FREEZE_MAX_AGE: u32 = 200_000_000;
 pub const DEFAULT_WRAPAROUND_THRESHOLD: u32 = 2_000_000_000;

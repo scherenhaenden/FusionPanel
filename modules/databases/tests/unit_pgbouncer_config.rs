@@ -19,7 +19,7 @@ fn test_pgbouncer_ini_generation() {
                 port: 5433,
                 dbname: "real_prod_db".to_string(),
                 auth_user: Some("admin_user".to_string()),
-            }
+            },
         ],
         users: vec![],
         listen_addr: "*".to_string(),
@@ -33,7 +33,9 @@ fn test_pgbouncer_ini_generation() {
 
     assert!(ini.contains("[databases]"));
     assert!(ini.contains("test_db = host=127.0.0.1 port=5432 dbname=real_test_db"));
-    assert!(ini.contains("prod_db = host=10.0.0.1 port=5433 dbname=real_prod_db auth_user=admin_user"));
+    assert!(
+        ini.contains("prod_db = host=10.0.0.1 port=5433 dbname=real_prod_db auth_user=admin_user")
+    );
 
     assert!(ini.contains("[pgbouncer]"));
     assert!(ini.contains("listen_addr = *"));
@@ -58,7 +60,7 @@ fn test_pgbouncer_userlist_generation() {
             PgBouncerUser {
                 username: "user2".to_string(),
                 password_hash: "md5_hash2".to_string(),
-            }
+            },
         ],
         listen_addr: "127.0.0.1".to_string(),
         listen_port: 6432,

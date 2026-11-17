@@ -193,7 +193,7 @@ fn find_outside_quotes(s: &str, needle: &str) -> Option<usize> {
                 if chars.len() - i >= needle_chars.len() {
                     let mut is_match = true;
                     for j in 0..needle_chars.len() {
-                        if chars[i + j].to_ascii_uppercase() != needle_chars[j].to_ascii_uppercase() {
+                        if !chars[i + j].eq_ignore_ascii_case(&needle_chars[j]) {
                             is_match = false;
                             break;
                         }
@@ -214,8 +214,11 @@ fn unquote(s: &str) -> String {
     if s.len() >= 2 {
         let first = s.chars().next().unwrap();
         let last = s.chars().last().unwrap();
-        if (first == '\'' && last == '\'') || (first == '"' && last == '"') || (first == '`' && last == '`') {
-            return s[1..s.len()-1].to_string();
+        if (first == '\'' && last == '\'')
+            || (first == '"' && last == '"')
+            || (first == '`' && last == '`')
+        {
+            return s[1..s.len() - 1].to_string();
         }
     }
     s.to_string()

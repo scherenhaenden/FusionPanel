@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use std::collections::{BTreeMap,  };
+use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
@@ -15,7 +15,11 @@ pub struct Gtid {
 
 impl fmt::Display for Gtid {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}-{}-{}", self.domain_id, self.server_id, self.sequence_no)
+        write!(
+            f,
+            "{}-{}-{}",
+            self.domain_id, self.server_id, self.sequence_no
+        )
     }
 }
 
@@ -28,9 +32,12 @@ impl FromStr for Gtid {
             return Err(format!("Invalid GTID format: {}", s));
         }
 
-        let domain_id = u32::from_str(parts[0]).map_err(|_| format!("Invalid domain_id: {}", parts[0]))?;
-        let server_id = u32::from_str(parts[1]).map_err(|_| format!("Invalid server_id: {}", parts[1]))?;
-        let sequence_no = u64::from_str(parts[2]).map_err(|_| format!("Invalid sequence_no: {}", parts[2]))?;
+        let domain_id =
+            u32::from_str(parts[0]).map_err(|_| format!("Invalid domain_id: {}", parts[0]))?;
+        let server_id =
+            u32::from_str(parts[1]).map_err(|_| format!("Invalid server_id: {}", parts[1]))?;
+        let sequence_no =
+            u64::from_str(parts[2]).map_err(|_| format!("Invalid sequence_no: {}", parts[2]))?;
 
         Ok(Gtid {
             domain_id,
@@ -184,17 +191,19 @@ impl MasterFailureDetector {
                 if self.state != DetectorState::Quarantined {
                     self.state = DetectorState::Unreachable;
                 }
-            } else if elapsed >= self.degraded_timeout {
-                if self.state == DetectorState::Healthy {
-                    self.state = DetectorState::Degraded;
-                }
+            } else if elapsed >= self.degraded_timeout && self.state == DetectorState::Healthy {
+                self.state = DetectorState::Degraded;
             }
         }
         self.state
     }
 
     // Evaluate if a replica is desynchronized based on lag thresholds
-    pub fn check_desynchronization(master_set: &GtidSet, replica_set: &GtidSet, max_lag: u64) -> bool {
+    pub fn check_desynchronization(
+        master_set: &GtidSet,
+        replica_set: &GtidSet,
+        max_lag: u64,
+    ) -> bool {
         let lag = master_set.calculate_total_lag(replica_set);
         lag > max_lag
     }
