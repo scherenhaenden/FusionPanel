@@ -170,7 +170,7 @@ async fn test_agent_child_process_handshake() {
 
     use futures_util::SinkExt;
     ws.send(tokio_tungstenite::tungstenite::Message::Text(
-        serde_json::to_string(&req).unwrap(),
+        serde_json::to_string(&req).unwrap().into(),
     ))
     .await
     .unwrap();
@@ -194,7 +194,7 @@ async fn test_agent_child_process_handshake() {
     };
 
     ws.send(tokio_tungstenite::tungstenite::Message::Text(
-        serde_json::to_string(&req_blocked).unwrap(),
+        serde_json::to_string(&req_blocked).unwrap().into(),
     ))
     .await
     .unwrap();
