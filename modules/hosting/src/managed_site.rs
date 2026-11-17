@@ -987,7 +987,7 @@ fn render_reverse_proxy_site(site_id: Uuid, domain: &str, upstream_url: &str) ->
 
 fn test_main_config(includes: &[PathBuf]) -> Result<String, ManagedSiteError> {
     let mut config = String::from(
-        "worker_processes 1;\npid /tmp/fusionpanel-nginx-test.pid;\nlock_file /tmp/fusionpanel-nginx-test.lock;\nerror_log stderr emerg;\nevents { worker_connections 64; }\nhttp {\n    access_log off;\n    client_body_temp_path /tmp/fusionpanel-nginx-test-body;\n    proxy_temp_path /tmp/fusionpanel-nginx-test-proxy;\n    fastcgi_temp_path /tmp/fusionpanel-nginx-test-fastcgi;\n    uwsgi_temp_path /tmp/fusionpanel-nginx-test-uwsgi;\n    scgi_temp_path /tmp/fusionpanel-nginx-test-scgi;\n",
+        "user root;\nworker_processes 1;\npid /tmp/fusionpanel-nginx-test.pid;\nlock_file /tmp/fusionpanel-nginx-test.lock;\nerror_log stderr emerg;\nevents { worker_connections 64; }\nhttp {\n    access_log off;\n    client_body_temp_path /tmp/fusionpanel-nginx-test-body;\n    proxy_temp_path /tmp/fusionpanel-nginx-test-proxy;\n    fastcgi_temp_path /tmp/fusionpanel-nginx-test-fastcgi;\n    uwsgi_temp_path /tmp/fusionpanel-nginx-test-uwsgi;\n    scgi_temp_path /tmp/fusionpanel-nginx-test-scgi;\n",
     );
     for include in includes {
         validate_clean_absolute_path(include)?;
