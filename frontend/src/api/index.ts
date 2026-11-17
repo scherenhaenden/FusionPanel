@@ -52,6 +52,44 @@ export interface WebsiteTlsOperationResponse {
   job: JobRecord;
 }
 
+export type DatabaseEngine = 'postgresql' | 'mariadb';
+export type DatabaseState = 'creating' | 'ready' | 'failed' | 'deleting';
+
+export interface DatabaseRecord {
+  id: string;
+  tenant_id?: string;
+  name: string;
+  engine: DatabaseEngine;
+  state: DatabaseState;
+  last_error?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DatabaseCredentials {
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password: string;
+}
+
+export interface DatabaseOperationResponse {
+  database: DatabaseRecord;
+  job: JobRecord;
+}
+
+export interface DatabaseUserOperationResponse {
+  user?: {
+    id: string;
+    database_id: string;
+    username: string;
+    state: string;
+  };
+  credentials: DatabaseCredentials;
+  job?: JobRecord;
+}
+
 export const createIdempotencyKey = (): string => {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
@@ -166,23 +204,47 @@ export const api = {
   },
 
   // Databases
-  getDatabases: async (): Promise<any[]> => {
-    const response = await apiClient.get<any[]>('/v1/databases');
+  getDatabases: async (): Promise<DatabaseRecord[]> => {
+    const response = await apiClient.get<{ databases?: DatabaseRecord[] } | DatabaseRecord[]>('/v1/databases');
+    return Array.isArray(response.data) ? response.data : (response.data.databases || []);
+  },
+
+  getDatabase: async (id: string): Promise<DatabaseRecord> => {
+    const response = await apiClient.get<{ database: DatabaseRecord }>(`/v1/databases/${encodeURIComponent(id)}`);
+    return response.data.database;
+  },
+
+  createDatabase: async (
+    data: { name: string; engine: DatabaseEngine },
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<DatabaseOperationResponse> => {
+    const response = await apiClient.post<DatabaseOperationResponse>('/v1/databases', data, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
     return response.data;
   },
 
-  createDatabase: async (data: any): Promise<any> => {
-    const response = await apiClient.post<any>('/v1/databases', data);
-    return response.data;
+  createDatabaseUser: async (
+    databaseId: string,
+    data?: { username?: string },
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<DatabaseCredentials> => {
+    const response = await apiClient.post<DatabaseUserOperationResponse | DatabaseCredentials>(
+      `/v1/databases/${encodeURIComponent(databaseId)}/users`,
+      data || {},
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return 'credentials' in response.data ? response.data.credentials : response.data;
   },
 
-  createDatabaseUser: async (dbName: string, data?: { username?: string }): Promise<any> => {
-    const response = await apiClient.post<any>(`/v1/databases/${dbName}/users`, data || {});
-    return response.data;
-  },
-
-  deleteDatabase: async (dbName: string): Promise<any> => {
-    const response = await apiClient.delete<any>(`/v1/databases/${dbName}`);
+  deleteDatabase: async (
+    databaseId: string,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<DatabaseOperationResponse> => {
+    const response = await apiClient.delete<DatabaseOperationResponse>(
+      `/v1/databases/${encodeURIComponent(databaseId)}`,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
     return response.data;
   },
 

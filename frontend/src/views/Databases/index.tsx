@@ -1,45 +1,31 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { api } from '../../api';
-
-interface Database {
-  id?: string;
-  name: string;
-  engine?: string;
-  charset?: string;
-  state?: 'creating' | 'ready' | 'failed';
-  created_at?: string;
-}
+import { api, DatabaseCredentials, DatabaseEngine, DatabaseRecord } from '../../api';
 
 interface FormErrors {
   nameError: string;
 }
 
-interface Credentials {
-  host: string;
-  port: number;
-  database: string;
-  username: string;
-  password?: string;
-}
+const POLL_INTERVAL_MS = 2000;
 
 const DatabasesView: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [databases, setDatabases] = useState<Database[]>([]);
+  const [databases, setDatabases] = useState<DatabaseRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [capabilities, setCapabilities] = useState<string[]>([]);
   const [unavailableCaps, setUnavailableCaps] = useState<string[]>([]);
 
-  const [newDb, setNewDb] = useState<Database>({ name: '', engine: 'mariadb' });
+  const [newDb, setNewDb] = useState<{ name: string; engine: DatabaseEngine }>({ name: '', engine: 'mariadb' });
   const [errors, setErrors] = useState<FormErrors>({ nameError: '' });
 
   const [showCredsModal, setShowCredsModal] = useState(false);
-  const [credentials, setCredentials] = useState<Credentials | null>(null);
+  const [credentials, setCredentials] = useState<DatabaseCredentials | null>(null);
   const [creatingUserFor, setCreatingUserFor] = useState<string | null>(null);
+  const [deletingDbId, setDeletingDbId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadData = async (showSpinner = true) => {
+    if (showSpinner) setIsLoading(true);
     setError(null);
     try {
       const [dbData, capsData] = await Promise.all([
@@ -47,18 +33,36 @@ const DatabasesView: React.FC = () => {
         api.getCapabilities().catch(() => ({ capabilities: [], unavailable: [] }))
       ]);
       setDatabases(dbData || []);
-      setCapabilities(capsData.capabilities || []);
       setUnavailableCaps(capsData.unavailable || []);
     } catch (e: any) {
       setError(e?.response?.data?.error?.message || e.message || 'Failed to load databases');
     } finally {
-      setIsLoading(false);
+      if (showSpinner) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    void loadData(true);
   }, []);
+
+  const hasPendingDatabases = databases.some((db) => db.state === 'creating' || db.state === 'deleting');
+
+  useEffect(() => {
+    if (!hasPendingDatabases) return undefined;
+    let active = true;
+    const timer = setTimeout(async () => {
+      try {
+        const refreshed = await api.getDatabases();
+        if (active) setDatabases(refreshed || []);
+      } catch {
+        // Keep current list until next poll or manual retry
+      }
+    }, POLL_INTERVAL_MS);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [hasPendingDatabases, databases]);
 
   const validateIdentifier = (id: string, errorKey: keyof FormErrors) => {
     let errorMsg = '';
@@ -91,7 +95,7 @@ const DatabasesView: React.FC = () => {
       setError(null);
       try {
         await api.createDatabase(newDb);
-        await loadData();
+        await loadData(false);
         setShowCreateModal(false);
         setNewDb({ name: '', engine: 'mariadb' });
       } catch (e: any) {
@@ -100,11 +104,12 @@ const DatabasesView: React.FC = () => {
     }
   };
 
-  const createUser = async (dbName: string) => {
-    setCreatingUserFor(dbName);
+  const createUser = async (db: DatabaseRecord) => {
+    const dbKey = db.id || db.name;
+    setCreatingUserFor(dbKey);
     setError(null);
     try {
-      const creds = await api.createDatabaseUser(dbName);
+      const creds = await api.createDatabaseUser(dbKey);
       setCredentials(creds);
       setShowCredsModal(true);
     } catch (e: any) {
@@ -114,17 +119,28 @@ const DatabasesView: React.FC = () => {
     }
   };
 
+  const handleDeleteDatabase = async (db: DatabaseRecord) => {
+    const dbKey = db.id || db.name;
+    setDeletingDbId(dbKey);
+    setError(null);
+    try {
+      await api.deleteDatabase(dbKey);
+      setConfirmDeleteId(null);
+      await loadData(false);
+    } catch (e: any) {
+      setError(e?.response?.data?.error?.message || e.message || 'Failed to delete database');
+    } finally {
+      setDeletingDbId(null);
+    }
+  };
+
   const closeCredsModal = () => {
     setShowCredsModal(false);
     setCredentials(null);
   };
 
-  const isCapAvailable = (cap: string) => {
-    return capabilities.includes(cap) && !unavailableCaps.includes(cap);
-  };
-
   const isCapUnavailable = (cap: string) => {
-    return unavailableCaps.includes(cap) || (!capabilities.includes(cap));
+    return unavailableCaps.includes(cap);
   };
 
   return (
@@ -139,28 +155,32 @@ const DatabasesView: React.FC = () => {
         </button>
       </header>
 
-      {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error} <button onClick={loadData} className="underline ml-2">Retry</button></div>}
+      {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error} <button onClick={() => void loadData(true)} className="underline ml-2">Retry</button></div>}
 
       {isLoading ? (
         <div>Loading...</div>
       ) : (
         <section>
           <ul className="space-y-4">
-            {databases.map(db => (
-              <li key={db.id || db.name} className="border p-4 rounded bg-white shadow-sm flex flex-col md:flex-row justify-between md:items-center">
+            {databases.map(db => {
+              const dbKey = db.id || db.name;
+              const isBusy = db.state === 'creating' || db.state === 'deleting';
+              return (
+              <li key={dbKey} className="border p-4 rounded bg-white shadow-sm flex flex-col md:flex-row justify-between md:items-center">
                 <div>
                   <h3 className="text-lg font-semibold">{db.name}</h3>
                   <div className="text-sm text-gray-600">
                     Engine: {db.engine || 'unknown'} | State: <span className={`font-semibold ${db.state === 'ready' ? 'text-green-600' : db.state === 'failed' ? 'text-red-600' : 'text-yellow-600'}`}>{db.state || 'ready'}</span>
                   </div>
+                  {db.last_error && <p className="text-xs text-red-600 mt-1">{db.last_error}</p>}
                 </div>
                 <div className="flex flex-wrap gap-2 mt-2 md:mt-0">
                   <button
-                    onClick={() => createUser(db.name)}
-                    disabled={creatingUserFor === db.name}
+                    onClick={() => void createUser(db)}
+                    disabled={creatingUserFor === dbKey || db.state !== 'ready'}
                     className="bg-green-600 hover:bg-green-700 text-white py-1 px-3 rounded text-sm disabled:opacity-50"
                   >
-                    {creatingUserFor === db.name ? 'Creating...' : 'Create SQL Account'}
+                    {creatingUserFor === dbKey ? 'Creating...' : 'Create SQL Account'}
                   </button>
 
                   <button
@@ -179,16 +199,36 @@ const DatabasesView: React.FC = () => {
                     Restore {isCapUnavailable('database.restore') && '(Not available yet)'}
                   </button>
 
-                  <button
-                    disabled={isCapUnavailable('database.delete')}
-                    title={isCapUnavailable('database.delete') ? 'Not available yet' : ''}
-                    className="bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Delete {isCapUnavailable('database.delete') && '(Not available yet)'}
-                  </button>
+                  {confirmDeleteId === dbKey ? (
+                    <>
+                      <button
+                        onClick={() => void handleDeleteDatabase(db)}
+                        disabled={deletingDbId === dbKey || isBusy}
+                        className="bg-red-700 hover:bg-red-800 text-white py-1 px-3 rounded text-sm disabled:opacity-50"
+                      >
+                        {deletingDbId === dbKey ? 'Deleting...' : 'Confirm delete'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="border border-gray-300 text-gray-700 py-1 px-3 rounded text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteId(dbKey)}
+                      disabled={isBusy}
+                      aria-label={`Delete ${db.name}`}
+                      className="bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded text-sm disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               </li>
-            ))}
+            );})}
             {databases.length === 0 && <li className="text-gray-500">No databases found.</li>}
           </ul>
         </section>
@@ -200,6 +240,18 @@ const DatabasesView: React.FC = () => {
           <div className="bg-white p-6 rounded shadow-lg min-w-[300px]">
             <h2 className="text-xl font-bold mb-4">Create New Database</h2>
             <form onSubmit={createDatabase} className="flex flex-col gap-4">
+              <div>
+                <label htmlFor="dbEngineSelect" className="block text-sm font-medium mb-1">Engine:</label>
+                <select
+                  id="dbEngineSelect"
+                  value={newDb.engine}
+                  onChange={(e) => setNewDb(prev => ({ ...prev, engine: e.target.value as DatabaseEngine }))}
+                  className="w-full border rounded p-2"
+                >
+                  <option value="mariadb">MariaDB</option>
+                  <option value="postgresql">PostgreSQL</option>
+                </select>
+              </div>
               <div>
                 <label htmlFor="dbNameInput" className="block text-sm font-medium mb-1">Database Name:</label>
                 <input
