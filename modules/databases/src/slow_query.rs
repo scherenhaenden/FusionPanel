@@ -68,10 +68,10 @@ impl<R: BufRead> SlowQueryLogParser<R> {
 
             has_data = true;
 
-            if line.starts_with("# Time:") {
-                entry.timestamp = Some(line["# Time:".len()..].trim().to_string());
-            } else if line.starts_with("# User@Host:") {
-                entry.user_host = Some(line["# User@Host:".len()..].trim().to_string());
+            if let Some(rest) = line.strip_prefix("# Time:") {
+                entry.timestamp = Some(rest.trim().to_string());
+            } else if let Some(rest) = line.strip_prefix("# User@Host:") {
+                entry.user_host = Some(rest.trim().to_string());
             } else if line.starts_with("# Query_time:") {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 for i in 0..parts.len() {
@@ -90,9 +90,9 @@ impl<R: BufRead> SlowQueryLogParser<R> {
             } else {
                 let trimmed = line.trim();
                 // Filter out specific meta statements if they appear on their own line
-                if trimmed.starts_with("SET timestamp=") && trimmed.ends_with(';') {
-                    // skip
-                } else if trimmed.starts_with("use ") && trimmed.ends_with(';') {
+                if (trimmed.starts_with("SET timestamp=") || trimmed.starts_with("use "))
+                    && trimmed.ends_with(';')
+                {
                     // skip
                 } else if !trimmed.is_empty() {
                     sql_lines.push(line);
@@ -123,7 +123,7 @@ pub fn normalize_query(query: &str) -> String {
             }
             let quote = c;
             let mut escaped = false;
-            while let Some(inner) = chars.next() {
+            for inner in chars.by_ref() {
                 if escaped {
                     escaped = false;
                 } else if inner == '\\' {

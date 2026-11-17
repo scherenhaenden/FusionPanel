@@ -65,3 +65,9 @@ impl ReplicationSlotMonitor {
         Ok(format!("SELECT pg_drop_replication_slot('{}');", slot_name))
     }
 }
+
+impl Default for ReplicationSlotMonitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -39,7 +39,11 @@ fn test_invalid_specs() {
     };
 
     assert!(matches!(
-        PostgresCheckpointerTuner::tune(PgVersion::V16, &specs_zero_throughput, WorkloadProfile::Mixed),
+        PostgresCheckpointerTuner::tune(
+            PgVersion::V16,
+            &specs_zero_throughput,
+            WorkloadProfile::Mixed
+        ),
         Err(PostgresCheckpointerError::InvalidSpecs(_))
     ));
 }
@@ -53,7 +57,8 @@ fn test_tune_ssd_mixed_16gb() {
         disk_throughput_mb_s: 200,
     };
 
-    let config = PostgresCheckpointerTuner::tune(PgVersion::V16, &specs, WorkloadProfile::Mixed).unwrap();
+    let config =
+        PostgresCheckpointerTuner::tune(PgVersion::V16, &specs, WorkloadProfile::Mixed).unwrap();
 
     assert_eq!(config.checkpoint_timeout, 900);
     assert_eq!(config.checkpoint_completion_target, 0.9);
@@ -86,7 +91,9 @@ fn test_tune_nvme_write_heavy_128gb() {
         disk_throughput_mb_s: 3000,
     };
 
-    let config = PostgresCheckpointerTuner::tune(PgVersion::V16, &specs, WorkloadProfile::WriteHeavy).unwrap();
+    let config =
+        PostgresCheckpointerTuner::tune(PgVersion::V16, &specs, WorkloadProfile::WriteHeavy)
+            .unwrap();
 
     assert_eq!(config.checkpoint_timeout, 1800);
 
@@ -117,7 +124,9 @@ fn test_tune_hdd_read_heavy_4gb() {
         disk_throughput_mb_s: 80,
     };
 
-    let config = PostgresCheckpointerTuner::tune(PgVersion::V16, &specs, WorkloadProfile::ReadHeavy).unwrap();
+    let config =
+        PostgresCheckpointerTuner::tune(PgVersion::V16, &specs, WorkloadProfile::ReadHeavy)
+            .unwrap();
 
     // max_wal_size: 4096 * 0.10 = 409. Clamped min is 1024.
     assert_eq!(config.max_wal_size, 1024);

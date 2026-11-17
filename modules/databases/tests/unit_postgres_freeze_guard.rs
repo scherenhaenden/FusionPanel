@@ -3,7 +3,6 @@
 use databases::{
     calculate_xid_age, evaluate_freeze_status, parse_frozen_xid, FreezeGuardConfig,
     FreezeGuardLevel,
-
 };
 
 #[test]
@@ -42,8 +41,14 @@ fn test_evaluate_freeze_status_normal() {
 
     assert_eq!(status.level, FreezeGuardLevel::Normal);
     assert_eq!(status.age, 1000);
-    assert_eq!(status.remaining_to_autovacuum, config.autovacuum_freeze_max_age - 1000);
-    assert_eq!(status.remaining_to_wraparound, config.wraparound_threshold - 1000);
+    assert_eq!(
+        status.remaining_to_autovacuum,
+        config.autovacuum_freeze_max_age - 1000
+    );
+    assert_eq!(
+        status.remaining_to_wraparound,
+        config.wraparound_threshold - 1000
+    );
 }
 
 #[test]

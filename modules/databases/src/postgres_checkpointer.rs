@@ -56,8 +56,8 @@ pub struct SystemSpecs {
 pub struct PostgresCheckpointerConfig {
     pub checkpoint_timeout: u64, // seconds
     pub checkpoint_completion_target: f64,
-    pub max_wal_size: u64, // MB
-    pub min_wal_size: u64, // MB
+    pub max_wal_size: u64,   // MB
+    pub min_wal_size: u64,   // MB
     pub bgwriter_delay: u64, // ms
     pub bgwriter_lru_maxpages: u64,
     pub bgwriter_lru_multiplier: f64,
@@ -67,7 +67,10 @@ impl PostgresCheckpointerConfig {
     pub fn to_config_lines(&self) -> Vec<String> {
         vec![
             format!("checkpoint_timeout = {}s", self.checkpoint_timeout),
-            format!("checkpoint_completion_target = {}", self.checkpoint_completion_target),
+            format!(
+                "checkpoint_completion_target = {}",
+                self.checkpoint_completion_target
+            ),
             format!("max_wal_size = {}MB", self.max_wal_size),
             format!("min_wal_size = {}MB", self.min_wal_size),
             format!("bgwriter_delay = {}ms", self.bgwriter_delay),

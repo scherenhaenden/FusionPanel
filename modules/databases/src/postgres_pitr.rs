@@ -12,7 +12,8 @@ impl WalFile {
         if s.len() != 24 {
             return Err("Invalid WAL filename length, expected 24 characters");
         }
-        let timeline = u32::from_str_radix(&s[0..8], 16).map_err(|_| "Invalid timeline hex string")?;
+        let timeline =
+            u32::from_str_radix(&s[0..8], 16).map_err(|_| "Invalid timeline hex string")?;
         let log = u32::from_str_radix(&s[8..16], 16).map_err(|_| "Invalid log hex string")?;
         let seg = u32::from_str_radix(&s[16..24], 16).map_err(|_| "Invalid seg hex string")?;
         Ok(Self { timeline, log, seg })

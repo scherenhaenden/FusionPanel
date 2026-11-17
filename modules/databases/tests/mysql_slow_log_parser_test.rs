@@ -30,22 +30,52 @@ WHERE id = 5;
 #[test]
 fn test_query_fingerprinting() {
     // Numeric literals
-    assert_eq!(SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE id = 123"), "SELECT * FROM users WHERE id = ?");
-    assert_eq!(SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE id = -123"), "SELECT * FROM users WHERE id = ?");
-    assert_eq!(SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE id = 123.45"), "SELECT * FROM users WHERE id = ?");
+    assert_eq!(
+        SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE id = 123"),
+        "SELECT * FROM users WHERE id = ?"
+    );
+    assert_eq!(
+        SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE id = -123"),
+        "SELECT * FROM users WHERE id = ?"
+    );
+    assert_eq!(
+        SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE id = 123.45"),
+        "SELECT * FROM users WHERE id = ?"
+    );
 
     // String literals
-    assert_eq!(SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE name = 'John'"), "SELECT * FROM users WHERE name = ?");
-    assert_eq!(SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE name = \"John\""), "SELECT * FROM users WHERE name = ?");
-    assert_eq!(SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE name = 'John\\'s'"), "SELECT * FROM users WHERE name = ?");
+    assert_eq!(
+        SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE name = 'John'"),
+        "SELECT * FROM users WHERE name = ?"
+    );
+    assert_eq!(
+        SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE name = \"John\""),
+        "SELECT * FROM users WHERE name = ?"
+    );
+    assert_eq!(
+        SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE name = 'John\\'s'"),
+        "SELECT * FROM users WHERE name = ?"
+    );
 
     // IN clauses
-    assert_eq!(SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE id IN (1, 2, 3)"), "SELECT * FROM users WHERE id IN (?)");
-    assert_eq!(SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE id in (1, 2, 3)"), "SELECT * FROM users WHERE id IN (?)");
-    assert_eq!(SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE id IN( 'a', 'b', 'c' )"), "SELECT * FROM users WHERE id IN (?)");
+    assert_eq!(
+        SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE id IN (1, 2, 3)"),
+        "SELECT * FROM users WHERE id IN (?)"
+    );
+    assert_eq!(
+        SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE id in (1, 2, 3)"),
+        "SELECT * FROM users WHERE id IN (?)"
+    );
+    assert_eq!(
+        SlowQueryLogParser::fingerprint("SELECT * FROM users WHERE id IN( 'a', 'b', 'c' )"),
+        "SELECT * FROM users WHERE id IN (?)"
+    );
 
     // Normalization of whitespace
-    assert_eq!(SlowQueryLogParser::fingerprint("SELECT    *   FROM   users\nWHERE id = 1"), "SELECT * FROM users WHERE id = ?");
+    assert_eq!(
+        SlowQueryLogParser::fingerprint("SELECT    *   FROM   users\nWHERE id = 1"),
+        "SELECT * FROM users WHERE id = ?"
+    );
 }
 
 #[test]
@@ -76,7 +106,10 @@ SELECT * FROM posts WHERE user_id = 1;
     assert_eq!(stats[0].total_calls, 2);
     assert_eq!(stats[0].total_time, 5.0);
 
-    assert_eq!(stats[1].fingerprint, "SELECT * FROM posts WHERE user_id = ?;");
+    assert_eq!(
+        stats[1].fingerprint,
+        "SELECT * FROM posts WHERE user_id = ?;"
+    );
     assert_eq!(stats[1].total_calls, 1);
     assert_eq!(stats[1].total_time, 0.5);
 
@@ -110,23 +143,39 @@ UPDATE smaller_table SET updated_at = '2023-01-01 00:05:00' WHERE id IN (1, 2, 3
     assert_eq!(e1.user_host, "db_user[db_user] @  [10.0.0.1]  Id: 100");
     assert_eq!(e1.query_time, 5.123456);
     assert_eq!(e1.rows_examined, 100000);
-    assert_eq!(e1.query, "SELECT COUNT(*) FROM very_large_table WHERE status = 'active';");
+    assert_eq!(
+        e1.query,
+        "SELECT COUNT(*) FROM very_large_table WHERE status = 'active';"
+    );
 
     let e2 = &entries[1];
     assert_eq!(e2.timestamp.as_deref(), Some("2023-01-01T00:05:00.000000Z")); // No SET timestamp, fallback to # Time
-    assert_eq!(e2.user_host, "another_user[another_user] @ localhost []  Id: 101");
+    assert_eq!(
+        e2.user_host,
+        "another_user[another_user] @ localhost []  Id: 101"
+    );
     assert_eq!(e2.query_time, 0.5);
-    assert_eq!(e2.query, "UPDATE smaller_table SET updated_at = '2023-01-01 00:05:00' WHERE id IN (1, 2, 3);");
+    assert_eq!(
+        e2.query,
+        "UPDATE smaller_table SET updated_at = '2023-01-01 00:05:00' WHERE id IN (1, 2, 3);"
+    );
 
     let stats = parser.aggregate(&entries);
     assert_eq!(stats.len(), 2);
-    assert_eq!(stats[0].fingerprint, "SELECT COUNT(*) FROM very_large_table WHERE status = ?;");
-    assert_eq!(stats[1].fingerprint, "UPDATE smaller_table SET updated_at = ? WHERE id IN (?);");
+    assert_eq!(
+        stats[0].fingerprint,
+        "SELECT COUNT(*) FROM very_large_table WHERE status = ?;"
+    );
+    assert_eq!(
+        stats[1].fingerprint,
+        "UPDATE smaller_table SET updated_at = ? WHERE id IN (?);"
+    );
 }
 
 #[test]
 fn test_query_stats_p95_latency() {
-    let mut stats = databases::mysql_slow_log_parser::QueryStats::new("SELECT * FROM tbl".to_string());
+    let mut stats =
+        databases::mysql_slow_log_parser::QueryStats::new("SELECT * FROM tbl".to_string());
     // Add 100 latencies from 1.0 to 100.0
     for i in 1..=100 {
         stats.add_call(i as f64);

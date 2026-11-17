@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 
+use databases::gtid_monitor::{DetectorState, Gtid, GtidSet, MasterFailureDetector};
 use std::str::FromStr;
 use std::time::Duration;
-use databases::gtid_monitor::{Gtid, GtidSet, DetectorState, MasterFailureDetector};
 
 #[test]
 fn test_gtid_parse_valid() {
@@ -23,7 +23,11 @@ fn test_gtid_parse_invalid() {
 
 #[test]
 fn test_gtid_display() {
-    let gtid = Gtid { domain_id: 1, server_id: 2, sequence_no: 3 };
+    let gtid = Gtid {
+        domain_id: 1,
+        server_id: 2,
+        sequence_no: 3,
+    };
     assert_eq!(gtid.to_string(), "1-2-3");
 }
 
@@ -123,6 +127,10 @@ fn test_master_desynchronization() {
     let replica = GtidSet::from_str("0-1-90").unwrap();
 
     // Gap is 10.
-    assert!(MasterFailureDetector::check_desynchronization(&master, &replica, 5));
-    assert!(!MasterFailureDetector::check_desynchronization(&master, &replica, 15));
+    assert!(MasterFailureDetector::check_desynchronization(
+        &master, &replica, 5
+    ));
+    assert!(!MasterFailureDetector::check_desynchronization(
+        &master, &replica, 15
+    ));
 }
