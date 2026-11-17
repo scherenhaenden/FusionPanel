@@ -251,6 +251,11 @@ impl NginxControl for SystemNginxControl {
         if status.status.success() {
             Ok(())
         } else {
+            eprintln!(
+                "nginx validate_candidate failed (status={}): {}",
+                status.status,
+                String::from_utf8_lossy(&status.stderr).trim()
+            );
             Err(ManagedSiteError::CandidateRejected)
         }
     }
