@@ -192,6 +192,18 @@ impl DatabaseAdapter for PostgresAdapter {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             return Err(DatabaseError::OperationFailed(stderr));
         }
+
+        // Revoke default PUBLIC CONNECT access so cross-tenant roles cannot connect.
+        let revoke_sql = format!("REVOKE ALL ON DATABASE \"{}\" FROM PUBLIC;", plan.db_name.0);
+        let mut revoke_cmd = self.build_cmd("psql");
+        revoke_cmd.args(["-d", "postgres", "-c", &revoke_sql]);
+        let revoke_output = revoke_cmd.output().await.map_err(|e| {
+            DatabaseError::OperationFailed(format!("Failed to execute psql: {}", e))
+        })?;
+        if !revoke_output.status.success() {
+            let stderr = String::from_utf8_lossy(&revoke_output.stderr).to_string();
+            return Err(DatabaseError::OperationFailed(stderr));
+        }
         Ok(())
     }
 

@@ -1,8 +1,11 @@
 #![forbid(unsafe_code)]
 
+use crate::database_driver::{DatabaseDriver, RealDatabaseDriver};
 use crate::metrics::{MetricsCollector, SystemMetrics};
 use crate::nginx_helper_rpc::NginxHelperClient;
-use fusionpanel_agent_protocol::{Operation as ProtocolOperation, Request as ProtocolRequest};
+use fusionpanel_agent_protocol::{
+    DatabaseEngineKind, Operation as ProtocolOperation, Request as ProtocolRequest,
+};
 use hosting::{ManagedSiteError, ManagedSiteOperations, ManagedSiteSpec};
 use reqwest::{Client, Method, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
@@ -366,6 +369,20 @@ enum TypedOperation {
         domain: String,
         spec: ManagedSiteSpec,
     },
+    DatabaseApply {
+        name: String,
+        engine: DatabaseEngineKind,
+    },
+    DatabaseDelete {
+        name: String,
+        engine: DatabaseEngineKind,
+    },
+    DatabaseUserCreate {
+        database_name: String,
+        engine: DatabaseEngineKind,
+        username: String,
+        password: String,
+    },
 }
 
 #[derive(Debug)]
@@ -554,6 +571,51 @@ impl AgentWorker {
                     }
                 }
             }
+            Ok(TypedOperation::DatabaseApply { name, engine }) => {
+                match RealDatabaseDriver.apply_database(engine, &name).await {
+                    Ok(()) => {
+                        OperationOutcome::success(format!("database.apply completed for {name}"))
+                    }
+                    Err(err) => {
+                        eprintln!("database.apply failed for {name}: {err}");
+                        OperationOutcome::failure("database.apply failed")
+                    }
+                }
+            }
+            Ok(TypedOperation::DatabaseDelete { name, engine }) => {
+                match RealDatabaseDriver.delete_database(engine, &name).await {
+                    Ok(()) => {
+                        OperationOutcome::success(format!("database.delete completed for {name}"))
+                    }
+                    Err(err) => {
+                        eprintln!("database.delete failed for {name}: {err}");
+                        OperationOutcome::failure("database.delete failed")
+                    }
+                }
+            }
+            Ok(TypedOperation::DatabaseUserCreate {
+                database_name,
+                engine,
+                username,
+                password,
+            }) => {
+                extra_secret = Some(password.clone());
+                match RealDatabaseDriver
+                    .create_user(engine, &database_name, &username, &password)
+                    .await
+                {
+                    Ok(()) => OperationOutcome::success(format!(
+                        "database.user.create completed for {username}@{database_name}"
+                    )),
+                    Err(err) => {
+                        let safe_err = sanitize_bounded(&err, &[&password]);
+                        eprintln!(
+                            "database.user.create failed for {username}@{database_name}: {safe_err}"
+                        );
+                        OperationOutcome::failure("database.user.create failed")
+                    }
+                }
+            }
             Ok(operation) => {
                 if let TypedOperation::TlsApply {
                     source:
@@ -709,6 +771,20 @@ fn parse_operation(payload: &Value) -> Result<TypedOperation, OperationOutcome> 
                 spec,
             })
         }
+        ProtocolOperation::DatabaseApply(payload) => Ok(TypedOperation::DatabaseApply {
+            name: payload.name,
+            engine: payload.engine,
+        }),
+        ProtocolOperation::DatabaseDelete(payload) => Ok(TypedOperation::DatabaseDelete {
+            name: payload.name,
+            engine: payload.engine,
+        }),
+        ProtocolOperation::DatabaseUserCreate(payload) => Ok(TypedOperation::DatabaseUserCreate {
+            database_name: payload.database_name,
+            engine: payload.engine,
+            username: payload.username,
+            password: payload.password,
+        }),
     }
 }
 
@@ -781,6 +857,11 @@ fn execute_operation(
             Ok(()) => OperationOutcome::success(format!("tls.delete completed for {domain}")),
             Err(error) => OperationOutcome::failure(site_delete_failure_message(&error)),
         },
+        TypedOperation::DatabaseApply { .. }
+        | TypedOperation::DatabaseDelete { .. }
+        | TypedOperation::DatabaseUserCreate { .. } => {
+            OperationOutcome::failure("database operations require async worker execution")
+        }
     }
 }
 

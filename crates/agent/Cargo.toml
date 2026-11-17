@@ -8,6 +8,7 @@ license = "AGPL-3.0-only"
 
 [dependencies]
 fusionpanel-agent-protocol = { path = "../agent-protocol" }
+databases = { path = "../../modules/databases" }
 hosting = { path = "../../modules/hosting" }
 uuid = { version = "1.10.0", features = ["v4", "serde"] }
 tokio = { version = "1", features = ["full"] }
