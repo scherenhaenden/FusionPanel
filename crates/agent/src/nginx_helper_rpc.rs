@@ -368,11 +368,11 @@ fn handle_request(bytes: &[u8], operations: &dyn ManagedSiteOperations) -> Respo
             request_id,
             result: ResponseResult::Result(json!({ "status": "applied" })),
         },
-        Err(error) => error_response(
-            request_id,
-            managed_error_code(&error),
-            managed_error_message(&error),
-        ),
+        Err(error) => {
+            let code = managed_error_code(&error);
+            eprintln!("fusionpanel-nginx-helper operation failed: {code}");
+            error_response(request_id, code, managed_error_message(&error))
+        }
     }
 }
 
