@@ -2,6 +2,7 @@
 
 mod backups;
 mod databases;
+mod dns;
 mod node_jobs;
 mod websites;
 
@@ -265,6 +266,7 @@ fn app(state: AppState) -> Router {
         .merge(websites::routes())
         .merge(databases::routes())
         .merge(backups::routes())
+        .merge(dns::routes())
         .fallback(fallback_handler)
         .with_state(state)
         .merge(auth_router)

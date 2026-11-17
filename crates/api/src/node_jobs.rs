@@ -204,6 +204,17 @@ async fn enqueue_job(
             },
         });
     }
+    if matches!(
+        body.operation.as_str(),
+        "dns.zone.apply" | "dns.zone.delete" | "dns.probe"
+    ) {
+        return Err(ErrorResponse {
+            error: ErrorDetail {
+                code: "bad_request",
+                message: "Use the DNS API for DNS operations",
+            },
+        });
+    }
     let key = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
@@ -409,6 +420,7 @@ async fn complete_job(
     super::websites::record_completion(&state, &completed).await?;
     super::databases::record_completion(&state, &completed).await?;
     super::backups::record_completion(&state, &completed).await?;
+    super::dns::record_completion(&state, &completed).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

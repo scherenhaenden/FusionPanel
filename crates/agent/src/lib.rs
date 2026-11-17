@@ -4,6 +4,7 @@ pub mod acme;
 pub mod backup_driver;
 pub mod daemon;
 pub mod database_driver;
+pub mod dns_driver;
 pub mod executor;
 pub mod files;
 pub mod heartbeat;

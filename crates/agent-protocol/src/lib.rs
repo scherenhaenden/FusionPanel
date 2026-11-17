@@ -39,6 +39,12 @@ pub enum Operation {
     BackupCreate(BackupCreatePayload),
     #[serde(rename = "backup.restore")]
     BackupRestore(BackupRestorePayload),
+    #[serde(rename = "dns.zone.apply")]
+    DnsZoneApply(DnsZoneApplyPayload),
+    #[serde(rename = "dns.zone.delete")]
+    DnsZoneDelete(DnsZoneDeletePayload),
+    #[serde(rename = "dns.probe")]
+    DnsProbe(DnsProbePayload),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -204,6 +210,59 @@ pub struct BackupRestorePayload {
     pub expected_sha256: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum DnsRecordType {
+    A,
+    #[serde(rename = "AAAA")]
+    Aaaa,
+    #[serde(rename = "CNAME")]
+    Cname,
+    #[serde(rename = "MX")]
+    Mx,
+    #[serde(rename = "TXT")]
+    Txt,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DnsRecordSpec {
+    pub name: String,
+    pub record_type: DnsRecordType,
+    pub value: String,
+    pub ttl: u32,
+    #[serde(default)]
+    pub priority: Option<u16>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DnsZoneApplyPayload {
+    pub zone_id: Uuid,
+    pub domain: String,
+    pub serial: u32,
+    pub default_ttl: u32,
+    pub records: Vec<DnsRecordSpec>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DnsZoneDeletePayload {
+    pub zone_id: Uuid,
+    pub domain: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DnsProbePayload {
+    pub zone_id: Uuid,
+    pub domain: String,
+    pub record_name: String,
+    pub record_type: DnsRecordType,
+    #[serde(default)]
+    pub expected_substring: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Response {
@@ -244,6 +303,10 @@ pub enum ValidationError {
     InvalidBackupId,
     InvalidBackupArchiveKey,
     InvalidBackupDestination,
+    InvalidDnsZoneId,
+    InvalidDnsRecord,
+    InvalidDnsSerial,
+    InvalidDnsTtl,
 }
 
 impl Request {
@@ -263,6 +326,9 @@ impl Request {
             Operation::DatabaseUserCreate(payload) => payload.validate(),
             Operation::BackupCreate(payload) => payload.validate(),
             Operation::BackupRestore(payload) => payload.validate(),
+            Operation::DnsZoneApply(payload) => payload.validate(),
+            Operation::DnsZoneDelete(payload) => payload.validate(),
+            Operation::DnsProbe(payload) => payload.validate(),
         }
     }
 }
@@ -564,6 +630,146 @@ impl BackupCreatePayload {
         }
         self.target.validate()?;
         self.destination.validate()
+    }
+}
+
+fn valid_dns_owner_name(name: &str) -> bool {
+    if name == "@" {
+        return true;
+    }
+    if name.is_empty()
+        || name.len() > 253
+        || name.starts_with('.')
+        || name.ends_with('.')
+        || name.contains("..")
+    {
+        return false;
+    }
+    let labels: Vec<&str> = name.split('.').collect();
+    for (idx, label) in labels.iter().enumerate() {
+        if label.is_empty() || label.len() > 63 {
+            return false;
+        }
+        if *label == "*" {
+            if idx != 0 {
+                return false;
+            }
+            continue;
+        }
+        if label.starts_with('-') || label.ends_with('-') {
+            return false;
+        }
+        if !label
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+        {
+            return false;
+        }
+    }
+    true
+}
+
+impl DnsRecordSpec {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if !valid_dns_owner_name(&self.name) {
+            return Err(ValidationError::InvalidDnsRecord);
+        }
+        if self.ttl < 30 || self.ttl > 604_800 {
+            return Err(ValidationError::InvalidDnsTtl);
+        }
+        match self.record_type {
+            DnsRecordType::A => {
+                if self.priority.is_some() || self.value.parse::<std::net::Ipv4Addr>().is_err() {
+                    return Err(ValidationError::InvalidDnsRecord);
+                }
+            }
+            DnsRecordType::Aaaa => {
+                if self.priority.is_some() || self.value.parse::<std::net::Ipv6Addr>().is_err() {
+                    return Err(ValidationError::InvalidDnsRecord);
+                }
+            }
+            DnsRecordType::Cname => {
+                let target = self.value.strip_suffix('.').unwrap_or(&self.value);
+                if self.priority.is_some() || !valid_domain(target) {
+                    return Err(ValidationError::InvalidDnsRecord);
+                }
+            }
+            DnsRecordType::Mx => {
+                let target = self.value.strip_suffix('.').unwrap_or(&self.value);
+                if self.priority.is_none() || !valid_domain(target) {
+                    return Err(ValidationError::InvalidDnsRecord);
+                }
+            }
+            DnsRecordType::Txt => {
+                if self.priority.is_some()
+                    || self.value.is_empty()
+                    || self.value.len() > 2048
+                    || self
+                        .value
+                        .bytes()
+                        .any(|b| b < 0x20 || b == 0x7f || b == b'\r' || b == b'\n')
+                {
+                    return Err(ValidationError::InvalidDnsRecord);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl DnsZoneApplyPayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.zone_id.is_nil() {
+            return Err(ValidationError::InvalidDnsZoneId);
+        }
+        if !valid_domain(&self.domain) || self.domain != self.domain.to_ascii_lowercase() {
+            return Err(ValidationError::InvalidDomain);
+        }
+        if self.serial == 0 {
+            return Err(ValidationError::InvalidDnsSerial);
+        }
+        if self.default_ttl < 30 || self.default_ttl > 604_800 {
+            return Err(ValidationError::InvalidDnsTtl);
+        }
+        for record in &self.records {
+            record.validate()?;
+        }
+        Ok(())
+    }
+}
+
+impl DnsZoneDeletePayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.zone_id.is_nil() {
+            return Err(ValidationError::InvalidDnsZoneId);
+        }
+        if !valid_domain(&self.domain) || self.domain != self.domain.to_ascii_lowercase() {
+            return Err(ValidationError::InvalidDomain);
+        }
+        Ok(())
+    }
+}
+
+impl DnsProbePayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.zone_id.is_nil() {
+            return Err(ValidationError::InvalidDnsZoneId);
+        }
+        if !valid_domain(&self.domain) || self.domain != self.domain.to_ascii_lowercase() {
+            return Err(ValidationError::InvalidDomain);
+        }
+        if !valid_dns_owner_name(&self.record_name) {
+            return Err(ValidationError::InvalidDnsRecord);
+        }
+        if let Some(substr) = &self.expected_substring {
+            if substr.is_empty()
+                || substr.len() > 512
+                || substr.bytes().any(|b| b < 0x20 || b == 0x7f)
+            {
+                return Err(ValidationError::InvalidDnsRecord);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -1420,5 +1626,76 @@ mod tests {
             bad_key.validate(),
             Err(ValidationError::InvalidBackupArchiveKey)
         );
+    }
+
+    #[test]
+    fn test_dns_zone_and_probe_validation() {
+        let zone_id = Uuid::new_v4();
+        let valid_apply = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::DnsZoneApply(DnsZoneApplyPayload {
+                zone_id,
+                domain: "example.com".to_string(),
+                serial: 2026111701,
+                default_ttl: 300,
+                records: vec![
+                    DnsRecordSpec {
+                        name: "@".to_string(),
+                        record_type: DnsRecordType::A,
+                        value: "203.0.113.10".to_string(),
+                        ttl: 300,
+                        priority: None,
+                    },
+                    DnsRecordSpec {
+                        name: "default._domainkey".to_string(),
+                        record_type: DnsRecordType::Txt,
+                        value: "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG".to_string(),
+                        ttl: 300,
+                        priority: None,
+                    },
+                    DnsRecordSpec {
+                        name: "@".to_string(),
+                        record_type: DnsRecordType::Mx,
+                        value: "mail.example.com".to_string(),
+                        ttl: 300,
+                        priority: Some(10),
+                    },
+                ],
+            }),
+        };
+        assert!(valid_apply.validate().is_ok());
+
+        let bad_mx = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::DnsZoneApply(DnsZoneApplyPayload {
+                zone_id,
+                domain: "example.com".to_string(),
+                serial: 1,
+                default_ttl: 300,
+                records: vec![DnsRecordSpec {
+                    name: "@".to_string(),
+                    record_type: DnsRecordType::Mx,
+                    value: "mail.example.com".to_string(),
+                    ttl: 300,
+                    priority: None,
+                }],
+            }),
+        };
+        assert_eq!(bad_mx.validate(), Err(ValidationError::InvalidDnsRecord));
+
+        let valid_probe = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::DnsProbe(DnsProbePayload {
+                zone_id,
+                domain: "example.com".to_string(),
+                record_name: "default._domainkey".to_string(),
+                record_type: DnsRecordType::Txt,
+                expected_substring: Some("v=DKIM1;".to_string()),
+            }),
+        };
+        assert!(valid_probe.validate().is_ok());
     }
 }

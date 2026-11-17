@@ -4,6 +4,7 @@ import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { Dashboard } from './views/Dashboard';
 import WebsitesView from './views/Websites';
 import DatabasesView from './views/Databases';
+import DnsView from './views/Dns';
 import BackupsView from './views/Backups';
 import SecurityRulesUI from './views/Security';
 import AdministrationView from './views/Administration';
@@ -21,6 +22,7 @@ function App() {
           <Route path="/" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
           <Route path="/websites" element={<DashboardLayout><WebsitesView /></DashboardLayout>} />
           <Route path="/databases" element={<DashboardLayout><DatabasesView /></DashboardLayout>} />
+          <Route path="/dns" element={<DashboardLayout><DnsView /></DashboardLayout>} />
           <Route path="/backups" element={<DashboardLayout><BackupsView /></DashboardLayout>} />
           <Route path="/security" element={<DashboardLayout><SecurityRulesUI /></DashboardLayout>} />
           <Route path="/administration" element={<DashboardLayout><AdministrationView /></DashboardLayout>} />
