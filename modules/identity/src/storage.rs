@@ -4,7 +4,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use crate::error::IdentityError;
-use crate::rbac::RoleBinding;
+use crate::rbac::{RoleBinding, Scope};
 use crate::session::Session;
 use crate::types::{SessionId, TenantId, User, UserId, UserStatus};
 
@@ -593,18 +593,16 @@ impl SqliteIdentityStore {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT DISTINCT u.id, u.username, u.email, u.status, u.password_hash, u.created_at, u.updated_at
-                 FROM users u
-                 INNER JOIN role_bindings rb ON rb.user_id = u.id
-                 WHERE rb.tenant_id = ?1
-                 ORDER BY u.created_at ASC, u.username ASC",
+                "SELECT id, username, email, status, password_hash, created_at, updated_at
+                 FROM users
+                 ORDER BY created_at ASC, username ASC",
             )
             .map_err(|e| IdentityError::Storage {
                 message: format!("Failed to prepare tenant users query: {}", e),
             })?;
 
         let rows = stmt
-            .query_map(params![tenant_id.to_string()], |row| {
+            .query_map([], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
@@ -626,6 +624,15 @@ impl SqliteIdentityStore {
                     message: format!("Failed to read user row: {}", e),
                 })?;
             let uid = UserId::from_str(&id_str)?;
+            let bindings = self.get_user_role_bindings(uid)?;
+            let belongs = bindings.iter().any(|b| match b.scope {
+                Scope::Global => true,
+                Scope::Tenant { tenant_id: t } => t == tenant_id,
+                Scope::Site { tenant_id: t, .. } => t == tenant_id,
+            });
+            if !belongs {
+                continue;
+            }
             let status = UserStatus::from_str(&status_str)?;
             let created_at = DateTime::parse_from_rfc3339(&created_str)
                 .map_err(|e| IdentityError::Storage {
@@ -655,17 +662,28 @@ impl SqliteIdentityStore {
         tenant_id: TenantId,
         user_id: UserId,
     ) -> Result<bool, IdentityError> {
-        let deleted_bindings = self
-            .conn
-            .execute(
-                "DELETE FROM role_bindings WHERE user_id = ?1 AND tenant_id = ?2",
-                params![user_id.to_string(), tenant_id.to_string()],
-            )
-            .map_err(|e| IdentityError::Storage {
-                message: format!("Failed to delete user role bindings: {}", e),
-            })?;
-        if deleted_bindings == 0 {
+        let bindings = self.get_user_role_bindings(user_id)?;
+        let matching_scopes: Vec<String> = bindings
+            .iter()
+            .filter(|b| match b.scope {
+                Scope::Tenant { tenant_id: t } => t == tenant_id,
+                Scope::Site { tenant_id: t, .. } => t == tenant_id,
+                Scope::Global => false,
+            })
+            .filter_map(|b| serde_json::to_string(&b.scope).ok())
+            .collect();
+        if matching_scopes.is_empty() {
             return Ok(false);
+        }
+        for scope_json in matching_scopes {
+            self.conn
+                .execute(
+                    "DELETE FROM role_bindings WHERE user_id = ?1 AND scope_json = ?2",
+                    params![user_id.to_string(), scope_json],
+                )
+                .map_err(|e| IdentityError::Storage {
+                    message: format!("Failed to delete user role bindings: {}", e),
+                })?;
         }
         let remaining_bindings: i64 = self
             .conn
