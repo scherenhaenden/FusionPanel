@@ -588,4 +588,113 @@ impl SqliteIdentityStore {
 
         Ok(exists)
     }
+
+    pub fn list_users_for_tenant(&self, tenant_id: TenantId) -> Result<Vec<User>, IdentityError> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT DISTINCT u.id, u.username, u.email, u.status, u.password_hash, u.created_at, u.updated_at
+                 FROM users u
+                 INNER JOIN role_bindings rb ON rb.user_id = u.id
+                 WHERE rb.tenant_id = ?1
+                 ORDER BY u.created_at ASC, u.username ASC",
+            )
+            .map_err(|e| IdentityError::Storage {
+                message: format!("Failed to prepare tenant users query: {}", e),
+            })?;
+
+        let rows = stmt
+            .query_map(params![tenant_id.to_string()], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
+                ))
+            })
+            .map_err(|e| IdentityError::Storage {
+                message: format!("Failed to list tenant users: {}", e),
+            })?;
+
+        let mut users = Vec::new();
+        for row in rows {
+            let (id_str, username, email, status_str, password_hash, created_str, updated_str) =
+                row.map_err(|e| IdentityError::Storage {
+                    message: format!("Failed to read user row: {}", e),
+                })?;
+            let uid = UserId::from_str(&id_str)?;
+            let status = UserStatus::from_str(&status_str)?;
+            let created_at = DateTime::parse_from_rfc3339(&created_str)
+                .map_err(|e| IdentityError::Storage {
+                    message: format!("Invalid created_at timestamp in store: {}", e),
+                })?
+                .with_timezone(&Utc);
+            let updated_at = DateTime::parse_from_rfc3339(&updated_str)
+                .map_err(|e| IdentityError::Storage {
+                    message: format!("Invalid updated_at timestamp in store: {}", e),
+                })?
+                .with_timezone(&Utc);
+            users.push(User::from_persisted(
+                uid,
+                username,
+                email,
+                status,
+                password_hash,
+                created_at,
+                updated_at,
+            )?);
+        }
+        Ok(users)
+    }
+
+    pub fn delete_user_for_tenant(
+        &self,
+        tenant_id: TenantId,
+        user_id: UserId,
+    ) -> Result<bool, IdentityError> {
+        let deleted_bindings = self
+            .conn
+            .execute(
+                "DELETE FROM role_bindings WHERE user_id = ?1 AND tenant_id = ?2",
+                params![user_id.to_string(), tenant_id.to_string()],
+            )
+            .map_err(|e| IdentityError::Storage {
+                message: format!("Failed to delete user role bindings: {}", e),
+            })?;
+        if deleted_bindings == 0 {
+            return Ok(false);
+        }
+        let remaining_bindings: i64 = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM role_bindings WHERE user_id = ?1",
+                params![user_id.to_string()],
+                |row| row.get(0),
+            )
+            .map_err(|e| IdentityError::Storage {
+                message: format!("Failed to check remaining role bindings: {}", e),
+            })?;
+        if remaining_bindings == 0 {
+            self.conn
+                .execute(
+                    "DELETE FROM sessions WHERE user_id = ?1",
+                    params![user_id.to_string()],
+                )
+                .map_err(|e| IdentityError::Storage {
+                    message: format!("Failed to delete user sessions: {}", e),
+                })?;
+            self.conn
+                .execute(
+                    "DELETE FROM users WHERE id = ?1",
+                    params![user_id.to_string()],
+                )
+                .map_err(|e| IdentityError::Storage {
+                    message: format!("Failed to delete user: {}", e),
+                })?;
+        }
+        Ok(true)
+    }
 }

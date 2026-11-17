@@ -774,6 +774,20 @@ pub(super) struct WebsiteAuthorizationContext {
     pub(super) is_admin_token: bool,
     pub(super) user_id: Option<identity::UserId>,
     pub(super) role_bindings: Vec<identity::RoleBinding>,
+    pub(super) token_scopes: Option<Vec<String>>,
+}
+
+fn scope_allows(scopes: &[String], permission: Permission) -> bool {
+    let exact = permission.to_string();
+    let is_read = matches!(
+        permission,
+        Permission::SiteRead | Permission::TenantRead | Permission::SystemAuditRead
+    );
+    scopes.iter().any(|s| {
+        s == "*"
+            || s == &exact
+            || (is_read && (s == "read" || s == "sites:read" || s == "site:read"))
+    })
 }
 
 pub(super) fn require_website_permission(
@@ -781,6 +795,16 @@ pub(super) fn require_website_permission(
     permission: Permission,
     site_id: Option<Uuid>,
 ) -> Result<(), ErrorResponse> {
+    if let Some(scopes) = &context.token_scopes {
+        if !scope_allows(scopes, permission) {
+            return Err(ErrorResponse {
+                error: ErrorDetail {
+                    code: "forbidden",
+                    message: "API token scope does not allow this operation",
+                },
+            });
+        }
+    }
     if context.is_admin_token {
         return Ok(());
     }
@@ -833,15 +857,45 @@ pub(super) async fn website_authorization_context(
             is_admin_token: true,
             user_id: None,
             role_bindings: Vec::new(),
+            token_scopes: None,
         });
     }
 
-    let session_id = headers
+    let raw_bearer = headers
         .get(AUTHORIZATION)
         .and_then(|header| header.to_str().ok())
         .and_then(|header| header.strip_prefix("Bearer "))
         .filter(|token| !token.is_empty())
-        .map(str::to_owned)
+        .map(str::to_owned);
+
+    if let Some(ref bearer) = raw_bearer {
+        if bearer.starts_with("fp_tok_") {
+            let token_hash = node_jobs::hash_token(bearer);
+            let token_rec = state
+                .control_store
+                .lock()
+                .await
+                .lookup_active_api_token_by_hash(&token_hash)
+                .map_err(|_| node_jobs::internal_error())?
+                .ok_or_else(node_jobs::unauthorized)?;
+            let user_id = identity::UserId::from(token_rec.user_id);
+            let bindings = state
+                .identity_store
+                .lock()
+                .await
+                .get_user_role_bindings(user_id)
+                .map_err(|_| node_jobs::internal_error())?;
+            return Ok(WebsiteAuthorizationContext {
+                tenant_id: identity::TenantId::from(token_rec.tenant_id),
+                is_admin_token: bindings.is_empty() && token_rec.user_id == token_rec.tenant_id,
+                user_id: Some(user_id),
+                role_bindings: bindings,
+                token_scopes: Some(token_rec.scopes),
+            });
+        }
+    }
+
+    let session_id = raw_bearer
         .or_else(|| super::extract_session_from_cookies(headers))
         .ok_or_else(node_jobs::unauthorized)?;
     let session_id = session_id
@@ -871,6 +925,7 @@ pub(super) async fn website_authorization_context(
         is_admin_token: false,
         user_id: Some(session.user_id()),
         role_bindings: bindings,
+        token_scopes: None,
     })
 }
 
