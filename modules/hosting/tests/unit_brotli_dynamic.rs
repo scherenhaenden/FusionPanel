@@ -62,7 +62,9 @@ fn test_precompressed_type_image_jpeg() {
 
     assert_eq!(
         result,
-        Err(BrotliError::PrecompressedTypeRequested("image/jpeg".to_string()))
+        Err(BrotliError::PrecompressedTypeRequested(
+            "image/jpeg".to_string()
+        ))
     );
 }
 
@@ -73,7 +75,9 @@ fn test_precompressed_type_application_zip() {
 
     assert_eq!(
         result,
-        Err(BrotliError::PrecompressedTypeRequested("application/zip".to_string()))
+        Err(BrotliError::PrecompressedTypeRequested(
+            "application/zip".to_string()
+        ))
     );
 }
 
@@ -84,7 +88,9 @@ fn test_precompressed_type_video_mp4() {
 
     assert_eq!(
         result,
-        Err(BrotliError::PrecompressedTypeRequested("video/mp4".to_string()))
+        Err(BrotliError::PrecompressedTypeRequested(
+            "video/mp4".to_string()
+        ))
     );
 }
 

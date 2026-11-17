@@ -130,7 +130,11 @@ impl ModSecurityExclusionsBuilder {
             if !output.is_empty() {
                 output.push('\n');
             }
-            let ids: Vec<String> = self.global_removals.iter().map(|id| id.to_string()).collect();
+            let ids: Vec<String> = self
+                .global_removals
+                .iter()
+                .map(|id| id.to_string())
+                .collect();
             writeln!(&mut output, "SecRuleRemoveById {}", ids.join(" ")).unwrap();
         }
 

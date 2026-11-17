@@ -689,10 +689,7 @@ impl ManagedSiteOperations for NginxSiteAdapter {
         let nonce = Uuid::new_v4();
         let tombstone = layout.staging.join(format!("deleted-{nonce}"));
         let candidate_test = self.write_candidate_test_config(&layout, None, Some(domain), nonce);
-        let test_path = match candidate_test {
-            Ok(path) => path,
-            Err(error) => return Err(error),
-        };
+        let test_path = candidate_test?;
         if self.nginx.validate_candidate(&test_path).is_err() {
             self.remove_if_file(&test_path);
             return Err(ManagedSiteError::CandidateRejected);

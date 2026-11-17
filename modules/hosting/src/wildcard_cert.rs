@@ -31,12 +31,16 @@ impl San {
         let fqdn = if is_wildcard { &san[2..] } else { san };
 
         if fqdn.is_empty() || fqdn.len() > 253 {
-            return Err(WildcardCertError::InvalidSyntax("invalid length".to_string()));
+            return Err(WildcardCertError::InvalidSyntax(
+                "invalid length".to_string(),
+            ));
         }
 
         let labels: Vec<&str> = fqdn.split('.').collect();
         if labels.is_empty() || labels.iter().any(|l| l.is_empty() || l.len() > 63) {
-            return Err(WildcardCertError::InvalidSyntax("invalid label".to_string()));
+            return Err(WildcardCertError::InvalidSyntax(
+                "invalid label".to_string(),
+            ));
         }
 
         for label in labels {
@@ -59,6 +63,7 @@ impl San {
         }
     }
 
+    #[allow(clippy::inherent_to_string)]
     pub fn to_string(&self) -> String {
         match self {
             San::Wildcard(base) => format!("*.{}", base),

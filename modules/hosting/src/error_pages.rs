@@ -23,12 +23,15 @@ impl ErrorPageGenerator {
         config.push_str("error_page 504 /_errors/504.html;\n");
 
         // Define internal location block
-        config.push_str("\n");
+        config.push('\n');
         config.push_str("location ^~ /_errors/ {\n");
         config.push_str("    internal;\n");
 
         // We need to safely escape the path for nginx
-        let safe_root = error_docs_root.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$");
+        let safe_root = error_docs_root
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("$", "\\$");
 
         // Ensure trailing slash for alias directive when used with location ending in slash
         let final_root = if safe_root.ends_with('/') {

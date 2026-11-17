@@ -31,10 +31,7 @@ fn test_global_removals() {
     let builder = ModSecurityExclusionsBuilder::new()
         .remove_rule_by_id(920350)
         .remove_rule_by_id(920360);
-    assert_eq!(
-        builder.build(),
-        "SecRuleRemoveById 920350 920360\n"
-    );
+    assert_eq!(builder.build(), "SecRuleRemoveById 920350 920360\n");
 }
 
 #[test]

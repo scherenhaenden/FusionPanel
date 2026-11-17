@@ -4,24 +4,66 @@ use hosting::wildcard_cert::{validate_and_group_sans, San, WildcardCertError};
 
 #[test]
 fn test_san_parsing_valid() {
-    assert_eq!(San::parse("example.com").unwrap(), San::Exact("example.com".to_string()));
-    assert_eq!(San::parse("*.example.com").unwrap(), San::Wildcard("example.com".to_string()));
-    assert_eq!(San::parse("sub.example.com").unwrap(), San::Exact("sub.example.com".to_string()));
-    assert_eq!(San::parse("*.sub.example.com").unwrap(), San::Wildcard("sub.example.com".to_string()));
+    assert_eq!(
+        San::parse("example.com").unwrap(),
+        San::Exact("example.com".to_string())
+    );
+    assert_eq!(
+        San::parse("*.example.com").unwrap(),
+        San::Wildcard("example.com".to_string())
+    );
+    assert_eq!(
+        San::parse("sub.example.com").unwrap(),
+        San::Exact("sub.example.com".to_string())
+    );
+    assert_eq!(
+        San::parse("*.sub.example.com").unwrap(),
+        San::Wildcard("sub.example.com".to_string())
+    );
 }
 
 #[test]
 fn test_san_parsing_invalid() {
-    assert!(matches!(San::parse(""), Err(WildcardCertError::InvalidSyntax(_))));
-    assert!(matches!(San::parse("*."), Err(WildcardCertError::InvalidSyntax(_))));
-    assert!(matches!(San::parse(".example.com"), Err(WildcardCertError::InvalidSyntax(_))));
-    assert!(matches!(San::parse("example..com"), Err(WildcardCertError::InvalidSyntax(_))));
-    assert!(matches!(San::parse("-example.com"), Err(WildcardCertError::InvalidSyntax(_))));
-    assert!(matches!(San::parse("example-.com"), Err(WildcardCertError::InvalidSyntax(_))));
-    assert!(matches!(San::parse("ex ample.com"), Err(WildcardCertError::InvalidSyntax(_))));
-    assert!(matches!(San::parse("ex@mple.com"), Err(WildcardCertError::InvalidSyntax(_))));
-    assert!(matches!(San::parse(&"a".repeat(254)), Err(WildcardCertError::InvalidSyntax(_))));
-    assert!(matches!(San::parse(&format!("{}.com", "a".repeat(64))), Err(WildcardCertError::InvalidSyntax(_))));
+    assert!(matches!(
+        San::parse(""),
+        Err(WildcardCertError::InvalidSyntax(_))
+    ));
+    assert!(matches!(
+        San::parse("*."),
+        Err(WildcardCertError::InvalidSyntax(_))
+    ));
+    assert!(matches!(
+        San::parse(".example.com"),
+        Err(WildcardCertError::InvalidSyntax(_))
+    ));
+    assert!(matches!(
+        San::parse("example..com"),
+        Err(WildcardCertError::InvalidSyntax(_))
+    ));
+    assert!(matches!(
+        San::parse("-example.com"),
+        Err(WildcardCertError::InvalidSyntax(_))
+    ));
+    assert!(matches!(
+        San::parse("example-.com"),
+        Err(WildcardCertError::InvalidSyntax(_))
+    ));
+    assert!(matches!(
+        San::parse("ex ample.com"),
+        Err(WildcardCertError::InvalidSyntax(_))
+    ));
+    assert!(matches!(
+        San::parse("ex@mple.com"),
+        Err(WildcardCertError::InvalidSyntax(_))
+    ));
+    assert!(matches!(
+        San::parse(&"a".repeat(254)),
+        Err(WildcardCertError::InvalidSyntax(_))
+    ));
+    assert!(matches!(
+        San::parse(&format!("{}.com", "a".repeat(64))),
+        Err(WildcardCertError::InvalidSyntax(_))
+    ));
 }
 
 #[test]

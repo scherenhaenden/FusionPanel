@@ -44,7 +44,10 @@ impl LinkHeaderGenerator {
             cursor += start + 1;
             let tag_start = cursor;
             let mut tag_end = tag_start;
-            while tag_end < bytes.len() && !bytes[tag_end].is_ascii_whitespace() && bytes[tag_end] != b'>' {
+            while tag_end < bytes.len()
+                && !bytes[tag_end].is_ascii_whitespace()
+                && bytes[tag_end] != b'>'
+            {
                 tag_end += 1;
             }
 
@@ -53,7 +56,7 @@ impl LinkHeaderGenerator {
 
             if tag_name == "link" || tag_name == "script" || tag_name == "style" {
                 if let Some(end_tag) = html[cursor..].find('>') {
-                    let attrs_str = &html[cursor..cursor+end_tag];
+                    let attrs_str = &html[cursor..cursor + end_tag];
                     cursor += end_tag + 1;
 
                     if let Some(link_element) = Self::parse_attributes(tag_name, attrs_str) {
@@ -69,7 +72,9 @@ impl LinkHeaderGenerator {
         let mut attrs = Vec::new();
         while !s.is_empty() {
             s = s.trim_start();
-            if s.is_empty() { break; }
+            if s.is_empty() {
+                break;
+            }
 
             let mut eq_idx = None;
             let mut space_idx = None;
@@ -85,11 +90,11 @@ impl LinkHeaderGenerator {
 
             let key = if let Some(eq) = eq_idx {
                 let k = &s[..eq];
-                s = &s[eq+1..];
+                s = &s[eq + 1..];
                 k.trim_end().to_ascii_lowercase()
             } else if let Some(sp) = space_idx {
                 let k = &s[..sp];
-                s = &s[sp+1..];
+                s = &s[sp + 1..];
                 attrs.push((k.to_ascii_lowercase(), "".to_string()));
                 continue;
             } else {
@@ -100,22 +105,24 @@ impl LinkHeaderGenerator {
             s = s.trim_start();
             if s.starts_with('"') {
                 if let Some(end) = s[1..].find('"') {
-                    let val = &s[1..1+end];
-                    s = &s[1+end+1..];
+                    let val = &s[1..1 + end];
+                    s = &s[1 + end + 1..];
                     attrs.push((key, val.to_string()));
                 } else {
                     break;
                 }
             } else if s.starts_with('\'') {
                 if let Some(end) = s[1..].find('\'') {
-                    let val = &s[1..1+end];
-                    s = &s[1+end+1..];
+                    let val = &s[1..1 + end];
+                    s = &s[1 + end + 1..];
                     attrs.push((key, val.to_string()));
                 } else {
                     break;
                 }
             } else if !s.is_empty() {
-                let end = s.find(|c: char| c.is_whitespace() || c == '>').unwrap_or(s.len());
+                let end = s
+                    .find(|c: char| c.is_whitespace() || c == '>')
+                    .unwrap_or(s.len());
                 let val = &s[..end];
                 s = &s[end..];
                 attrs.push((key, val.to_string()));
@@ -126,7 +133,12 @@ impl LinkHeaderGenerator {
 
     fn parse_attributes(tag_name: &str, attrs_str: &str) -> Option<LinkElement> {
         let attrs = Self::extract_attrs(attrs_str);
-        let get_attr = |name: &str| attrs.iter().find(|(k, _)| k == name).map(|(_, v)| v.clone());
+        let get_attr = |name: &str| {
+            attrs
+                .iter()
+                .find(|(k, _)| k == name)
+                .map(|(_, v)| v.clone())
+        };
 
         let href = get_attr("href");
         let src = get_attr("src");
@@ -138,11 +150,19 @@ impl LinkHeaderGenerator {
         let nopush = get_attr("nopush").is_some();
 
         if tag_name == "script" {
-            if rel.is_none() { rel = Some("preload".to_string()); }
-            if as_attr.is_none() { as_attr = Some("script".to_string()); }
+            if rel.is_none() {
+                rel = Some("preload".to_string());
+            }
+            if as_attr.is_none() {
+                as_attr = Some("script".to_string());
+            }
         } else if tag_name == "style" {
-            if rel.is_none() { rel = Some("preload".to_string()); }
-            if as_attr.is_none() { as_attr = Some("style".to_string()); }
+            if rel.is_none() {
+                rel = Some("preload".to_string());
+            }
+            if as_attr.is_none() {
+                as_attr = Some("style".to_string());
+            }
         } else if tag_name == "link" {
             if let Some(r) = &rel {
                 if r == "stylesheet" {

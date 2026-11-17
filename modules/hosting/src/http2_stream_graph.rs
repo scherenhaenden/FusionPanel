@@ -20,17 +20,27 @@ impl Http2StreamGraph {
     pub fn new() -> Self {
         let mut nodes = HashMap::new();
         // Root node (stream 0)
-        nodes.insert(0, StreamNode {
-            stream_id: 0,
-            parent_stream_id: 0,
-            weight: 16,
-            children: Vec::new(),
-            uri: None,
-        });
+        nodes.insert(
+            0,
+            StreamNode {
+                stream_id: 0,
+                parent_stream_id: 0,
+                weight: 16,
+                children: Vec::new(),
+                uri: None,
+            },
+        );
         Self { nodes }
     }
 
-    pub fn add_stream(&mut self, stream_id: u32, parent_stream_id: u32, weight: u8, exclusive: bool, uri: Option<String>) {
+    pub fn add_stream(
+        &mut self,
+        stream_id: u32,
+        parent_stream_id: u32,
+        weight: u8,
+        exclusive: bool,
+        uri: Option<String>,
+    ) {
         if stream_id == 0 || self.nodes.contains_key(&stream_id) {
             return;
         }
@@ -41,22 +51,36 @@ impl Http2StreamGraph {
             0
         };
 
-        self.nodes.insert(stream_id, StreamNode {
+        self.nodes.insert(
             stream_id,
-            parent_stream_id: actual_parent,
-            weight,
-            children: Vec::new(),
-            uri,
-        });
+            StreamNode {
+                stream_id,
+                parent_stream_id: actual_parent,
+                weight,
+                children: Vec::new(),
+                uri,
+            },
+        );
 
         if exclusive {
-            let previous_children = std::mem::replace(&mut self.nodes.get_mut(&actual_parent).unwrap().children, vec![stream_id]);
-            self.nodes.get_mut(&stream_id).unwrap().children.extend(previous_children.iter().copied());
+            let previous_children = std::mem::replace(
+                &mut self.nodes.get_mut(&actual_parent).unwrap().children,
+                vec![stream_id],
+            );
+            self.nodes
+                .get_mut(&stream_id)
+                .unwrap()
+                .children
+                .extend(previous_children.iter().copied());
             for child_id in previous_children {
                 self.nodes.get_mut(&child_id).unwrap().parent_stream_id = stream_id;
             }
         } else {
-            self.nodes.get_mut(&actual_parent).unwrap().children.push(stream_id);
+            self.nodes
+                .get_mut(&actual_parent)
+                .unwrap()
+                .children
+                .push(stream_id);
         }
     }
 
@@ -64,13 +88,24 @@ impl Http2StreamGraph {
         let old_parent_id = self.nodes.get(&stream_id).unwrap().parent_stream_id;
 
         // Remove from old parent
-        self.nodes.get_mut(&old_parent_id).unwrap().children.retain(|&id| id != stream_id);
+        self.nodes
+            .get_mut(&old_parent_id)
+            .unwrap()
+            .children
+            .retain(|&id| id != stream_id);
 
         let mut previous_children = Vec::new();
         if exclusive {
-            previous_children = std::mem::replace(&mut self.nodes.get_mut(&new_parent_id).unwrap().children, vec![stream_id]);
+            previous_children = std::mem::replace(
+                &mut self.nodes.get_mut(&new_parent_id).unwrap().children,
+                vec![stream_id],
+            );
         } else {
-            self.nodes.get_mut(&new_parent_id).unwrap().children.push(stream_id);
+            self.nodes
+                .get_mut(&new_parent_id)
+                .unwrap()
+                .children
+                .push(stream_id);
         }
 
         let stream = self.nodes.get_mut(&stream_id).unwrap();
@@ -113,9 +148,8 @@ impl Http2StreamGraph {
     }
 
     pub fn generate_nginx_push_directives(&self, max_pushes: usize) -> Vec<String> {
-        let mut candidates: Vec<&StreamNode> = self.nodes.values()
-            .filter(|n| n.uri.is_some())
-            .collect();
+        let mut candidates: Vec<&StreamNode> =
+            self.nodes.values().filter(|n| n.uri.is_some()).collect();
 
         candidates.sort_by(|a, b| {
             let depth_a = self.get_depth(a.stream_id);

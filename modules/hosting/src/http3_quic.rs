@@ -52,11 +52,19 @@ impl Http3QuicConfig {
     pub fn generate_directives(&self, guard: &mut UdpListenerGuard) -> String {
         let mut out = String::new();
 
-        let ipv4_reuse = if guard.reserve_reuseport(false, self.port) { " reuseport" } else { "" };
+        let ipv4_reuse = if guard.reserve_reuseport(false, self.port) {
+            " reuseport"
+        } else {
+            ""
+        };
         out.push_str(&format!("listen {} quic{};\n", self.port, ipv4_reuse));
 
         if self.ipv6 {
-            let ipv6_reuse = if guard.reserve_reuseport(true, self.port) { " reuseport" } else { "" };
+            let ipv6_reuse = if guard.reserve_reuseport(true, self.port) {
+                " reuseport"
+            } else {
+                ""
+            };
             out.push_str(&format!("listen [::]:{} quic{};\n", self.port, ipv6_reuse));
         }
 
