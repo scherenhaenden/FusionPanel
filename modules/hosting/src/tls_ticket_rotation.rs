@@ -77,13 +77,13 @@ impl StekManager {
     pub fn maybe_rotate(&mut self) -> Result<bool, StekError> {
         let now = Utc::now();
         if let Some(last_rotation) = self.last_rotation_at {
-             if (now - last_rotation).num_seconds() >= self.rotation_interval_seconds {
-                 self.rotate_keys()?;
-                 return Ok(true);
-             }
+            if (now - last_rotation).num_seconds() >= self.rotation_interval_seconds {
+                self.rotate_keys()?;
+                return Ok(true);
+            }
         } else {
-             self.rotate_keys()?;
-             return Ok(true);
+            self.rotate_keys()?;
+            return Ok(true);
         }
 
         Ok(false)
@@ -116,16 +116,23 @@ impl StekManager {
     }
 
     pub fn get_primary(&self) -> Option<&TicketKey> {
-        self.keys.iter().find(|k| k.state == KeyState::Primary && k.expires_at > Utc::now())
+        self.keys
+            .iter()
+            .find(|k| k.state == KeyState::Primary && k.expires_at > Utc::now())
     }
 
     pub fn get_valid_keys(&self) -> Vec<&TicketKey> {
         let now = Utc::now();
-        self.keys.iter().filter(|k| k.state != KeyState::Expired && k.expires_at > now).collect()
+        self.keys
+            .iter()
+            .filter(|k| k.state != KeyState::Expired && k.expires_at > now)
+            .collect()
     }
 
     pub fn lookup_key(&self, name: &[u8]) -> Option<&TicketKey> {
-        self.get_valid_keys().into_iter().find(|k| k.get_name() == name)
+        self.get_valid_keys()
+            .into_iter()
+            .find(|k| k.get_name() == name)
     }
 
     pub fn save_keys_to_disk(&self, dir: &Path) -> Result<(), StekError> {
@@ -143,7 +150,11 @@ impl StekManager {
         let mut config = String::new();
         // Nginx reads keys in order. We should give them in the order we want to use them.
         for key in self.get_valid_keys() {
-             config.push_str(&format!("ssl_session_ticket_key {}/{:x}.key;\n", ticket_file_path, key.created_at.timestamp_micros()));
+            config.push_str(&format!(
+                "ssl_session_ticket_key {}/{:x}.key;\n",
+                ticket_file_path,
+                key.created_at.timestamp_micros()
+            ));
         }
         config
     }
@@ -151,7 +162,11 @@ impl StekManager {
     pub fn generate_apache_config(&self, ticket_file_path: &str) -> String {
         let mut config = String::new();
         for key in self.get_valid_keys() {
-            config.push_str(&format!("SSLSessionTicketKeyFile {}/{:x}.key\n", ticket_file_path, key.created_at.timestamp_micros()));
+            config.push_str(&format!(
+                "SSLSessionTicketKeyFile {}/{:x}.key\n",
+                ticket_file_path,
+                key.created_at.timestamp_micros()
+            ));
         }
         config
     }

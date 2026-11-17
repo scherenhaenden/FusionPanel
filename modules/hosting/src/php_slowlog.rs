@@ -58,11 +58,11 @@ impl PhpSlowlogParser {
     }
 
     pub fn parse_reader<R: BufRead>(&mut self, reader: R) -> Result<(), SlowlogError> {
-        let mut lines = reader.lines();
+        let lines = reader.lines();
 
         let mut current_entry: Option<SlowlogEntry> = None;
 
-        while let Some(line_result) = lines.next() {
+        for line_result in lines {
             let line = line_result?;
             let trimmed = line.trim();
             if trimmed.is_empty() {
@@ -115,11 +115,19 @@ impl PhpSlowlogParser {
 
     fn add_entry(&mut self, entry: SlowlogEntry) {
         if !entry.script_filename.is_empty() {
-            *self.metrics.script_counts.entry(entry.script_filename.clone()).or_insert(0) += 1;
+            *self
+                .metrics
+                .script_counts
+                .entry(entry.script_filename.clone())
+                .or_insert(0) += 1;
         }
 
         for frame in &entry.stack_frames {
-            *self.metrics.function_counts.entry(frame.function.clone()).or_insert(0) += 1;
+            *self
+                .metrics
+                .function_counts
+                .entry(frame.function.clone())
+                .or_insert(0) += 1;
         }
 
         self.entries.push(entry);
@@ -177,7 +185,7 @@ impl PhpSlowlogParser {
                 line: line_num,
             });
         }
-        
+
         None
     }
 
@@ -187,5 +195,11 @@ impl PhpSlowlogParser {
 
     pub fn entries(&self) -> &[SlowlogEntry] {
         &self.entries
+    }
+}
+
+impl Default for PhpSlowlogParser {
+    fn default() -> Self {
+        Self::new()
     }
 }

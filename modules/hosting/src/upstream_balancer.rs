@@ -45,7 +45,9 @@ impl UpstreamLoadBalancer {
     }
 
     pub fn dispatch(&mut self, client_ip: Option<&str>) -> Option<String> {
-        let healthy_indices: Vec<usize> = self.backends.iter()
+        let healthy_indices: Vec<usize> = self
+            .backends
+            .iter()
             .enumerate()
             .filter(|(_, b)| b.is_healthy)
             .map(|(i, _)| i)

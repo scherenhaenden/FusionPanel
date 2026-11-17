@@ -48,5 +48,8 @@ fn test_blocklist_generation_with_custom_action() {
 fn test_action_display() {
     assert_eq!(Action::Allow.to_string(), "yes");
     assert_eq!(Action::Block403.to_string(), "no");
-    assert_eq!(Action::Redirect("http://url".to_string()).to_string(), "redirect:http://url");
+    assert_eq!(
+        Action::Redirect("http://url".to_string()).to_string(),
+        "redirect:http://url"
+    );
 }

@@ -271,6 +271,7 @@ impl ControlStore {
     /// The idempotency record and desired site state are written in one SQLite
     /// transaction so a worker cannot claim an operation before the site row
     /// exists. A failed site with the same spec can be retried with a new key.
+    #[allow(clippy::too_many_arguments)]
     pub fn reserve_website_create(
         &mut self,
         idempotency_key: &str,

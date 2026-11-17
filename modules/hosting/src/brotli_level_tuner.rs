@@ -54,9 +54,10 @@ pub enum ContentTypeCategory {
 
 impl BrotliCompressionTuner {
     pub fn new(min_length: usize) -> Self {
-        let mut tuner = Self::default();
-        tuner.min_length = min_length;
-        tuner
+        Self {
+            min_length,
+            ..Self::default()
+        }
     }
 
     fn categorize_mime(&self, mime_type: &str) -> ContentTypeCategory {
@@ -68,13 +69,22 @@ impl BrotliCompressionTuner {
         }
 
         match base_mime {
-            "text/html" | "application/json" | "application/xml" | "text/xml" | "text/event-stream" => ContentTypeCategory::Dynamic,
-            "text/css" | "application/javascript" | "text/javascript" | "image/svg+xml" | "text/plain" => ContentTypeCategory::Static,
+            "text/html" | "application/json" | "application/xml" | "text/xml"
+            | "text/event-stream" => ContentTypeCategory::Dynamic,
+            "text/css"
+            | "application/javascript"
+            | "text/javascript"
+            | "image/svg+xml"
+            | "text/plain" => ContentTypeCategory::Static,
             _ => ContentTypeCategory::Dynamic, // Default to dynamic for unknown compressible
         }
     }
 
-    pub fn recommend_level(&self, mime_type: &str, content_length: usize) -> Result<u8, TunerError> {
+    pub fn recommend_level(
+        &self,
+        mime_type: &str,
+        content_length: usize,
+    ) -> Result<u8, TunerError> {
         if content_length < self.min_length {
             return Err(TunerError::ContentTooShort {
                 length: content_length,
@@ -93,12 +103,14 @@ impl BrotliCompressionTuner {
         match category {
             ContentTypeCategory::Dynamic => Ok(self.level_dynamic),
             ContentTypeCategory::Static => Ok(self.level_static),
-            ContentTypeCategory::Precompressed => Err(TunerError::ExcludedMimeType(base_mime.to_string())),
+            ContentTypeCategory::Precompressed => {
+                Err(TunerError::ExcludedMimeType(base_mime.to_string()))
+            }
         }
     }
 
     pub fn generate_nginx_config(&self, comp_level: u8) -> Result<String, TunerError> {
-        if comp_level < 1 || comp_level > 11 {
+        if !(1..=11).contains(&comp_level) {
             return Err(TunerError::InvalidCompressionLevel(comp_level));
         }
 
@@ -128,7 +140,7 @@ impl BrotliCompressionTuner {
     }
 
     pub fn generate_apache_config(&self, comp_level: u8) -> Result<String, TunerError> {
-        if comp_level < 1 || comp_level > 11 {
+        if !(1..=11).contains(&comp_level) {
             return Err(TunerError::InvalidCompressionLevel(comp_level));
         }
 

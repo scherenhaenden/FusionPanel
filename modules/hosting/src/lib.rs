@@ -50,22 +50,22 @@ mod tests {
     }
 }
 pub mod acme;
-pub mod compression;
-pub mod brotli_static;
 pub mod brotli_level_tuner;
+pub mod brotli_static;
+pub mod compression;
 pub mod config;
 pub mod error_pages;
 pub mod http2_push;
 pub mod http2_stream_graph;
 pub use http2_stream_graph::*;
 pub mod acme_cleanup;
+pub mod fastcgi_keepalive;
+pub mod http3_quic;
+pub mod php_slowlog;
 pub mod php_tuning;
 pub mod upstream;
 pub mod upstream_balancer;
 pub mod vhost;
-pub mod php_slowlog;
-pub mod fastcgi_keepalive;
-pub mod http3_quic;
 
 pub use http3_quic::*;
 pub mod fpm_profiler;
@@ -107,9 +107,9 @@ mod user_tests {
         assert_eq!(name.normalized(), "tenant_123");
     }
 }
-pub mod nginx;
 pub mod fastcgi_cache;
 pub mod geoip_filter;
+pub mod nginx;
 pub use geoip_filter::*;
 
 pub mod managed_site;

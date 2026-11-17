@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use hosting::opcache_advisor::{OpcacheMetrics};
+use hosting::opcache_advisor::OpcacheMetrics;
 
 #[test]
 fn test_cache_hit_rate_normal() {
