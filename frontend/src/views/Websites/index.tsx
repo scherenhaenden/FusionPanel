@@ -1,5 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, createIdempotencyKey, CreateWebsiteRequest, WebsiteRecord } from '../../api';
+import {
+  api,
+  ApplyWebsiteTlsRequest,
+  createIdempotencyKey,
+  CreateWebsiteRequest,
+  WebsiteRecord,
+  WebsiteTlsRecord,
+} from '../../api';
 import { JobRecord } from '../../types';
 import { CreateSiteModal } from './CreateSiteModal';
 import { SiteDetail } from './SiteDetail';
@@ -51,12 +58,18 @@ export const WebsitesView: React.FC = () => {
   const [operationError, setOperationError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [selectedSiteTls, setSelectedSiteTls] = useState<WebsiteTlsRecord | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [isTlsLoading, setIsTlsLoading] = useState(false);
+  const [isTlsSubmitting, setIsTlsSubmitting] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [tlsError, setTlsError] = useState<string | null>(null);
   const [pendingOperations, setPendingOperations] = useState<PendingOperation[]>([]);
   const [deletingSiteIds, setDeletingSiteIds] = useState<string[]>([]);
   const pendingCreateRequestRef = useRef<PendingCreateRequest | null>(null);
   const pendingDeleteKeysRef = useRef<Map<string, string>>(new Map());
+  const pendingTlsApplyKeysRef = useRef<Map<string, { signature: string; key: string }>>(new Map());
+  const pendingTlsDeleteKeysRef = useRef<Map<string, string>>(new Map());
 
   const selectedSite = selectedSiteId ? sites.find((site) => site.id === selectedSiteId) || null : null;
 
@@ -217,14 +230,24 @@ export const WebsitesView: React.FC = () => {
   const handleSelectSite = async (site: WebsiteRecord) => {
     setSelectedSiteId(site.id);
     setDetailError(null);
+    setTlsError(null);
     setIsDetailLoading(true);
+    setIsTlsLoading(true);
     try {
-      const detail = await api.getSite(site.id);
+      const [detail, tlsRecord] = await Promise.all([
+        api.getSite(site.id),
+        api.getSiteTls(site.id).catch((error) => {
+          setTlsError(messageFromError(error, `Could not load TLS status for ${site.domain}.`));
+          return null;
+        }),
+      ]);
       setSites((currentSites) => upsertSite(currentSites, detail));
+      setSelectedSiteTls(tlsRecord);
     } catch (error) {
       setDetailError(messageFromError(error, `Could not load details for ${site.domain}.`));
     } finally {
       setIsDetailLoading(false);
+      setIsTlsLoading(false);
     }
   };
 
@@ -257,10 +280,116 @@ export const WebsitesView: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (!selectedSiteId || (selectedSiteTls?.state !== 'provisioning' && selectedSiteTls?.state !== 'deleting')) {
+      return undefined;
+    }
+
+    let current = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const pollTls = async () => {
+      try {
+        const refreshed = await api.getSiteTls(selectedSiteId);
+        if (!current) return;
+        setSelectedSiteTls(refreshed);
+        if (refreshed?.state === 'active') {
+          setTlsError(null);
+          setNotice(`TLS is active for ${selectedSite?.domain || selectedSiteId}.`);
+        } else if (refreshed?.state === 'failed') {
+          setNotice(null);
+          setTlsError(refreshed.last_error || 'TLS provisioning failed.');
+        } else if (!refreshed || refreshed.state === 'disabled') {
+          setTlsError(null);
+          setNotice(`TLS removed for ${selectedSite?.domain || selectedSiteId}.`);
+        }
+      } catch (error) {
+        if (current) {
+          setTlsError(messageFromError(error, 'Could not refresh TLS status.'));
+        }
+      }
+
+      if (current) timer = setTimeout(() => void pollTls(), POLL_INTERVAL_MS);
+    };
+
+    timer = setTimeout(() => void pollTls(), POLL_INTERVAL_MS);
+    return () => {
+      current = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [selectedSiteId, selectedSite?.domain, selectedSiteTls?.state]);
+
+  const handleApplyTls = async (site: WebsiteRecord, request: ApplyWebsiteTlsRequest): Promise<boolean> => {
+    const signature = request.mode === 'acme_http01'
+      ? `acme:${request.acme_directory_url}:${request.contact_email || ''}`
+      : `custom:${request.certificate_pem.length}`;
+    const existing = pendingTlsApplyKeysRef.current.get(site.id);
+    const idempotencyKey = existing?.signature === signature ? existing.key : createIdempotencyKey();
+    pendingTlsApplyKeysRef.current.set(site.id, { signature, key: idempotencyKey });
+
+    setTlsError(null);
+    setNotice(null);
+    setIsTlsSubmitting(true);
+    try {
+      const response = await api.applySiteTls(site.id, request, idempotencyKey);
+      if (pendingTlsApplyKeysRef.current.get(site.id)?.key === idempotencyKey) {
+        pendingTlsApplyKeysRef.current.delete(site.id);
+      }
+      setSelectedSiteTls(response.tls);
+      if (response.tls.state === 'active') {
+        setNotice(`TLS is active for ${site.domain}.`);
+      } else if (response.tls.state === 'failed') {
+        setTlsError(response.tls.last_error || `TLS failed for ${site.domain}.`);
+      } else {
+        setNotice(`TLS provisioning queued for ${site.domain}.`);
+      }
+      return true;
+    } catch (error) {
+      if (!isUncertainMutationError(error) && pendingTlsApplyKeysRef.current.get(site.id)?.key === idempotencyKey) {
+        pendingTlsApplyKeysRef.current.delete(site.id);
+      }
+      setTlsError(messageFromError(error, `Could not apply TLS for ${site.domain}.`));
+      return false;
+    } finally {
+      setIsTlsSubmitting(false);
+    }
+  };
+
+  const handleDeleteTls = async (site: WebsiteRecord): Promise<void> => {
+    const idempotencyKey = pendingTlsDeleteKeysRef.current.get(site.id) || createIdempotencyKey();
+    pendingTlsDeleteKeysRef.current.set(site.id, idempotencyKey);
+
+    setTlsError(null);
+    setNotice(null);
+    setIsTlsSubmitting(true);
+    try {
+      const response = await api.deleteSiteTls(site.id, idempotencyKey);
+      if (pendingTlsDeleteKeysRef.current.get(site.id) === idempotencyKey) {
+        pendingTlsDeleteKeysRef.current.delete(site.id);
+      }
+      setSelectedSiteTls(response.tls);
+      if (response.tls.state === 'disabled') {
+        setNotice(`TLS removed for ${site.domain}.`);
+      } else {
+        setNotice(`TLS removal queued for ${site.domain}.`);
+      }
+    } catch (error) {
+      if (!isUncertainMutationError(error) && pendingTlsDeleteKeysRef.current.get(site.id) === idempotencyKey) {
+        pendingTlsDeleteKeysRef.current.delete(site.id);
+      }
+      setTlsError(messageFromError(error, `Could not remove TLS for ${site.domain}.`));
+    } finally {
+      setIsTlsSubmitting(false);
+    }
+  };
+
   const handleCloseDetails = () => {
     setSelectedSiteId(null);
+    setSelectedSiteTls(null);
     setDetailError(null);
+    setTlsError(null);
     setIsDetailLoading(false);
+    setIsTlsLoading(false);
   };
 
   return (
@@ -320,7 +449,18 @@ export const WebsitesView: React.FC = () => {
               {selectedSite && <button type="button" onClick={() => void handleSelectSite(selectedSite)} className="mt-2 underline">Retry</button>}
             </div>
           )}
-          {selectedSite && <SiteDetail site={selectedSite} onClose={handleCloseDetails} />}
+          {selectedSite && (
+            <SiteDetail
+              site={selectedSite}
+              tls={selectedSiteTls}
+              isTlsLoading={isTlsLoading}
+              isTlsSubmitting={isTlsSubmitting}
+              tlsError={tlsError}
+              onApplyTls={handleApplyTls}
+              onDeleteTls={handleDeleteTls}
+              onClose={handleCloseDetails}
+            />
+          )}
           {!selectedSite && !isDetailLoading && <p role="status">Website not found.</p>}
         </section>
       ) : (

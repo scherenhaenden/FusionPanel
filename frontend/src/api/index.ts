@@ -28,6 +28,30 @@ export interface WebsiteOperationResponse {
   job: JobRecord;
 }
 
+export type WebsiteTlsMode = 'custom_pem' | 'acme_http01';
+export type WebsiteTlsState = 'disabled' | 'provisioning' | 'active' | 'failed' | 'deleting';
+
+export interface WebsiteTlsRecord {
+  site_id: string;
+  tenant_id: string;
+  mode: WebsiteTlsMode;
+  state: WebsiteTlsState;
+  acme_directory_url: string | null;
+  contact_email: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ApplyWebsiteTlsRequest =
+  | { mode: 'custom_pem'; certificate_pem: string; private_key_pem: string }
+  | { mode: 'acme_http01'; acme_directory_url: string; contact_email?: string | null };
+
+export interface WebsiteTlsOperationResponse {
+  tls: WebsiteTlsRecord;
+  job: JobRecord;
+}
+
 export const createIdempotencyKey = (): string => {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
@@ -113,6 +137,29 @@ export const api = {
 
   deleteSite: async (id: string, idempotencyKey = createIdempotencyKey()): Promise<WebsiteOperationResponse> => {
     const response = await apiClient.delete<WebsiteOperationResponse>(`/v1/websites/${encodeURIComponent(id)}`, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
+    return response.data;
+  },
+
+  getSiteTls: async (id: string): Promise<WebsiteTlsRecord | null> => {
+    const response = await apiClient.get<{ tls: WebsiteTlsRecord | null }>(`/v1/websites/${encodeURIComponent(id)}/tls`);
+    return response.data.tls;
+  },
+
+  applySiteTls: async (
+    id: string,
+    data: ApplyWebsiteTlsRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<WebsiteTlsOperationResponse> => {
+    const response = await apiClient.post<WebsiteTlsOperationResponse>(`/v1/websites/${encodeURIComponent(id)}/tls`, data, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
+    return response.data;
+  },
+
+  deleteSiteTls: async (id: string, idempotencyKey = createIdempotencyKey()): Promise<WebsiteTlsOperationResponse> => {
+    const response = await apiClient.delete<WebsiteTlsOperationResponse>(`/v1/websites/${encodeURIComponent(id)}/tls`, {
       headers: { 'Idempotency-Key': idempotencyKey },
     });
     return response.data;

@@ -355,6 +355,17 @@ enum TypedOperation {
         site_id: Uuid,
         domain: String,
     },
+    TlsApply {
+        site_id: Uuid,
+        domain: String,
+        spec: ManagedSiteSpec,
+        source: fusionpanel_agent_protocol::TlsCertificateSource,
+    },
+    TlsDelete {
+        site_id: Uuid,
+        domain: String,
+        spec: ManagedSiteSpec,
+    },
 }
 
 #[derive(Debug)]
@@ -504,8 +515,57 @@ impl AgentWorker {
             .node
             .as_ref()
             .ok_or(WorkerError::InvalidConfiguration)?;
+        let mut extra_secret: Option<String> = None;
         let outcome = match parse_operation(&job.payload) {
+            Ok(TypedOperation::TlsApply {
+                site_id,
+                domain,
+                spec,
+                source:
+                    fusionpanel_agent_protocol::TlsCertificateSource::AcmeHttp01 {
+                        acme_directory_url,
+                        contact_email,
+                    },
+            }) => {
+                match crate::acme::issue_http01_certificate(
+                    &acme_directory_url,
+                    &domain,
+                    contact_email.as_deref(),
+                )
+                .await
+                {
+                    Ok((cert_pem, key_pem)) => {
+                        extra_secret = Some(key_pem.clone());
+                        match self
+                            .site_operations
+                            .apply_site_tls(site_id, &domain, &spec, &cert_pem, &key_pem)
+                        {
+                            Ok(()) => OperationOutcome::success(format!(
+                                "tls.apply completed for {domain}"
+                            )),
+                            Err(error) => {
+                                OperationOutcome::failure(site_apply_failure_message(&error))
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("ACME HTTP-01 issuance failed for {domain}: {err}");
+                        OperationOutcome::failure("tls.apply failed during ACME HTTP-01 issuance")
+                    }
+                }
+            }
             Ok(operation) => {
+                if let TypedOperation::TlsApply {
+                    source:
+                        fusionpanel_agent_protocol::TlsCertificateSource::CustomPem {
+                            ref private_key_pem,
+                            ..
+                        },
+                    ..
+                } = operation
+                {
+                    extra_secret = Some(private_key_pem.clone());
+                }
                 execute_operation(operation, &mut self.metrics, self.site_operations.as_ref())
             }
             Err(outcome) => outcome,
@@ -513,6 +573,9 @@ impl AgentWorker {
         let mut secrets = vec![node.token.as_str()];
         if let Some(admin_token) = self.admin_token.as_deref() {
             secrets.push(admin_token);
+        }
+        if let Some(ref key_secret) = extra_secret {
+            secrets.push(key_secret.as_str());
         }
         let log_text = sanitize_bounded(&outcome.log_text, &secrets);
         if !log_text.is_empty() {
@@ -615,6 +678,37 @@ fn parse_operation(payload: &Value) -> Result<TypedOperation, OperationOutcome> 
             site_id: payload.site_id,
             domain: payload.domain,
         }),
+        ProtocolOperation::TlsApply(payload) => {
+            let spec = match payload.spec {
+                fusionpanel_agent_protocol::SiteSpec::Static { document_root } => {
+                    ManagedSiteSpec::Static { document_root }
+                }
+                fusionpanel_agent_protocol::SiteSpec::ReverseProxy { upstream_url } => {
+                    ManagedSiteSpec::ReverseProxy { upstream_url }
+                }
+            };
+            Ok(TypedOperation::TlsApply {
+                site_id: payload.site_id,
+                domain: payload.domain,
+                spec,
+                source: payload.source,
+            })
+        }
+        ProtocolOperation::TlsDelete(payload) => {
+            let spec = match payload.spec {
+                fusionpanel_agent_protocol::SiteSpec::Static { document_root } => {
+                    ManagedSiteSpec::Static { document_root }
+                }
+                fusionpanel_agent_protocol::SiteSpec::ReverseProxy { upstream_url } => {
+                    ManagedSiteSpec::ReverseProxy { upstream_url }
+                }
+            };
+            Ok(TypedOperation::TlsDelete {
+                site_id: payload.site_id,
+                domain: payload.domain,
+                spec,
+            })
+        }
     }
 }
 
@@ -656,6 +750,37 @@ fn execute_operation(
                 Err(error) => OperationOutcome::failure(site_delete_failure_message(&error)),
             }
         }
+        TypedOperation::TlsApply {
+            site_id,
+            domain,
+            spec,
+            source,
+        } => match source {
+            fusionpanel_agent_protocol::TlsCertificateSource::CustomPem {
+                certificate_pem,
+                private_key_pem,
+            } => match site_operations.apply_site_tls(
+                site_id,
+                &domain,
+                &spec,
+                &certificate_pem,
+                &private_key_pem,
+            ) {
+                Ok(()) => OperationOutcome::success(format!("tls.apply completed for {domain}")),
+                Err(error) => OperationOutcome::failure(site_apply_failure_message(&error)),
+            },
+            fusionpanel_agent_protocol::TlsCertificateSource::AcmeHttp01 { .. } => {
+                OperationOutcome::failure("tls.apply ACME HTTP-01 requires async worker execution")
+            }
+        },
+        TypedOperation::TlsDelete {
+            site_id,
+            domain,
+            spec,
+        } => match site_operations.delete_site_tls(site_id, &domain, &spec) {
+            Ok(()) => OperationOutcome::success(format!("tls.delete completed for {domain}")),
+            Err(error) => OperationOutcome::failure(site_delete_failure_message(&error)),
+        },
     }
 }
 

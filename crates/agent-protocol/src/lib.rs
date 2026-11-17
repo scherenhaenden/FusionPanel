@@ -25,6 +25,10 @@ pub enum Operation {
     SiteApply(SiteApplyPayload),
     #[serde(rename = "site.delete")]
     SiteDelete(SiteDeletePayload),
+    #[serde(rename = "tls.apply")]
+    TlsApply(TlsApplyPayload),
+    #[serde(rename = "tls.delete")]
+    TlsDelete(TlsDeletePayload),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -63,6 +67,39 @@ pub struct SiteDeletePayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "mode", deny_unknown_fields)]
+pub enum TlsCertificateSource {
+    #[serde(rename = "custom_pem")]
+    CustomPem {
+        certificate_pem: String,
+        private_key_pem: String,
+    },
+    #[serde(rename = "acme_http01")]
+    AcmeHttp01 {
+        acme_directory_url: String,
+        #[serde(default)]
+        contact_email: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct TlsApplyPayload {
+    pub site_id: Uuid,
+    pub domain: String,
+    pub spec: SiteSpec,
+    pub source: TlsCertificateSource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct TlsDeletePayload {
+    pub site_id: Uuid,
+    pub domain: String,
+    pub spec: SiteSpec,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Response {
     pub version: u32,
@@ -92,6 +129,10 @@ pub enum ValidationError {
     InvalidDocumentRoot,
     InvalidUpstreamUrl,
     InvalidSiteId,
+    InvalidCertificatePem,
+    InvalidPrivateKeyPem,
+    InvalidAcmeUrl,
+    InvalidContactEmail,
 }
 
 impl Request {
@@ -104,6 +145,8 @@ impl Request {
             Operation::SiteValidate(payload) => payload.validate(),
             Operation::SiteApply(payload) => payload.validate(),
             Operation::SiteDelete(payload) => payload.validate(),
+            Operation::TlsApply(payload) => payload.validate(),
+            Operation::TlsDelete(payload) => payload.validate(),
         }
     }
 }
@@ -164,6 +207,81 @@ impl SiteDeletePayload {
         }
         Ok(())
     }
+}
+
+impl TlsApplyPayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        SiteApplyPayload {
+            site_id: self.site_id,
+            domain: self.domain.clone(),
+            spec: self.spec.clone(),
+        }
+        .validate()?;
+
+        match &self.source {
+            TlsCertificateSource::CustomPem {
+                certificate_pem,
+                private_key_pem,
+            } => {
+                if !valid_certificate_pem(certificate_pem) {
+                    return Err(ValidationError::InvalidCertificatePem);
+                }
+                if !valid_private_key_pem(private_key_pem) {
+                    return Err(ValidationError::InvalidPrivateKeyPem);
+                }
+            }
+            TlsCertificateSource::AcmeHttp01 {
+                acme_directory_url,
+                contact_email,
+            } => {
+                if !valid_http_upstream_url(acme_directory_url) {
+                    return Err(ValidationError::InvalidAcmeUrl);
+                }
+                if let Some(email) = contact_email {
+                    if !valid_contact_email(email) {
+                        return Err(ValidationError::InvalidContactEmail);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl TlsDeletePayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        SiteApplyPayload {
+            site_id: self.site_id,
+            domain: self.domain.clone(),
+            spec: self.spec.clone(),
+        }
+        .validate()
+    }
+}
+
+fn valid_certificate_pem(pem: &str) -> bool {
+    let trimmed = pem.trim();
+    !trimmed.is_empty()
+        && trimmed.len() <= 64 * 1024
+        && trimmed.contains("-----BEGIN CERTIFICATE-----")
+        && trimmed.contains("-----END CERTIFICATE-----")
+}
+
+fn valid_private_key_pem(pem: &str) -> bool {
+    let trimmed = pem.trim();
+    !trimmed.is_empty()
+        && trimmed.len() <= 32 * 1024
+        && trimmed.contains("-----BEGIN ")
+        && trimmed.contains("PRIVATE KEY-----")
+        && trimmed.contains("-----END ")
+}
+
+fn valid_contact_email(email: &str) -> bool {
+    let trimmed = email.trim();
+    !trimmed.is_empty()
+        && trimmed.len() <= 254
+        && !trimmed.chars().any(|c| c.is_whitespace() || c.is_control())
+        && matches!(trimmed.split_once('@'), Some((local, domain)) if !local.is_empty() && domain.contains('.'))
 }
 
 fn valid_document_root_for_domain(domain: &str, document_root: &str) -> bool {
@@ -797,5 +915,60 @@ mod tests {
         });
 
         assert!(serde_json::from_value::<Response>(res_json).is_err());
+    }
+
+    #[test]
+    fn test_tls_apply_and_delete_validation() {
+        let valid_custom = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::TlsApply(TlsApplyPayload {
+                site_id: Uuid::new_v4(),
+                domain: "example.com".to_string(),
+                spec: SiteSpec::Static {
+                    document_root: "/srv/fusionpanel/sites/example.com".to_string(),
+                },
+                source: TlsCertificateSource::CustomPem {
+                    certificate_pem: "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"
+                        .to_string(),
+                    private_key_pem: "-----BEGIN PRIVATE KEY-----\nMIIE\n-----END PRIVATE KEY-----"
+                        .to_string(),
+                },
+            }),
+        };
+        assert!(valid_custom.validate().is_ok());
+
+        let invalid_acme = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::TlsApply(TlsApplyPayload {
+                site_id: Uuid::new_v4(),
+                domain: "example.com".to_string(),
+                spec: SiteSpec::ReverseProxy {
+                    upstream_url: "http://127.0.0.1:8080/".to_string(),
+                },
+                source: TlsCertificateSource::AcmeHttp01 {
+                    acme_directory_url: "ftp://bad.example/dir".to_string(),
+                    contact_email: Some("ops@example.com".to_string()),
+                },
+            }),
+        };
+        assert_eq!(
+            invalid_acme.validate(),
+            Err(ValidationError::InvalidAcmeUrl)
+        );
+
+        let valid_delete = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::TlsDelete(TlsDeletePayload {
+                site_id: Uuid::new_v4(),
+                domain: "example.com".to_string(),
+                spec: SiteSpec::Static {
+                    document_root: "/srv/fusionpanel/sites/example.com".to_string(),
+                },
+            }),
+        };
+        assert!(valid_delete.validate().is_ok());
     }
 }

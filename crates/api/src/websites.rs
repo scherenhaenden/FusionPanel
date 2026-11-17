@@ -7,7 +7,10 @@ use axum::{
     Json, Router,
 };
 use chrono::Utc;
-use fusionpanel_control_store::{WebsiteOperation, WebsiteOperationReservation, WebsiteSpec};
+use fusionpanel_control_store::{
+    WebsiteOperation, WebsiteOperationReservation, WebsiteSpec, WebsiteTlsMode,
+    WebsiteTlsOperation, WebsiteTlsOperationReservation,
+};
 use fusionpanel_domain::DomainName;
 use identity::{AccessControl, Permission, Scope, SessionId};
 use serde::Deserialize;
@@ -36,10 +39,30 @@ enum CreateWebsiteRequest {
     },
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
+enum ApplyWebsiteTlsRequest {
+    CustomPem {
+        certificate_pem: String,
+        private_key_pem: String,
+    },
+    AcmeHttp01 {
+        acme_directory_url: String,
+        #[serde(default)]
+        contact_email: Option<String>,
+    },
+}
+
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
         .route("/v1/websites", get(list_websites).post(create_website))
         .route("/v1/websites/{id}", get(get_website).delete(delete_website))
+        .route(
+            "/v1/websites/{id}/tls",
+            get(get_website_tls)
+                .post(apply_website_tls)
+                .delete(delete_website_tls),
+        )
 }
 
 async fn list_websites(
@@ -246,6 +269,256 @@ async fn enqueue_and_respond(
     ))
 }
 
+async fn get_website_tls(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ErrorResponse> {
+    let context = website_authorization_context(&state, &headers).await?;
+    let site_id = Uuid::parse_str(&id).map_err(|_| node_jobs::bad_request())?;
+    require_website_permission(&context, Permission::SiteRead, Some(site_id))?;
+    let tls = state
+        .control_store
+        .lock()
+        .await
+        .get_website_tls_for_tenant(site_id, context.tenant_id.to_uuid())
+        .map_err(map_store_error)?;
+    Ok(Json(json!({ "tls": tls })))
+}
+
+async fn apply_website_tls(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<ApplyWebsiteTlsRequest>,
+) -> Result<(StatusCode, Json<Value>), ErrorResponse> {
+    let context = website_authorization_context(&state, &headers).await?;
+    let site_id = Uuid::parse_str(&id).map_err(|_| node_jobs::bad_request())?;
+    require_website_permission(&context, Permission::SiteUpdate, Some(site_id))?;
+    let idempotency_key = idempotency_key(&headers)?;
+
+    let site = state
+        .control_store
+        .lock()
+        .await
+        .get_website_for_tenant(site_id, context.tenant_id.to_uuid())
+        .map_err(map_store_error)?;
+
+    let (mode, acme_url, contact_email, source, fingerprint) = match request {
+        ApplyWebsiteTlsRequest::CustomPem {
+            certificate_pem,
+            private_key_pem,
+        } => {
+            let source = fusionpanel_agent_protocol::TlsCertificateSource::CustomPem {
+                certificate_pem,
+                private_key_pem,
+            };
+            let fp = json!({
+                "operation": "tls.apply",
+                "tenant_id": context.tenant_id,
+                "site_id": site_id,
+                "mode": "custom_pem",
+            });
+            (WebsiteTlsMode::CustomPem, None, None, source, fp)
+        }
+        ApplyWebsiteTlsRequest::AcmeHttp01 {
+            acme_directory_url,
+            contact_email,
+        } => {
+            let acme_directory_url = validate_upstream_url(&acme_directory_url)?;
+            let source = fusionpanel_agent_protocol::TlsCertificateSource::AcmeHttp01 {
+                acme_directory_url: acme_directory_url.clone(),
+                contact_email: contact_email.clone(),
+            };
+            let fp = json!({
+                "operation": "tls.apply",
+                "tenant_id": context.tenant_id,
+                "site_id": site_id,
+                "mode": "acme_http01",
+                "acme_directory_url": acme_directory_url,
+                "contact_email": contact_email,
+            });
+            (
+                WebsiteTlsMode::AcmeHttp01,
+                Some(acme_directory_url),
+                contact_email,
+                source,
+                fp,
+            )
+        }
+    };
+
+    let spec = match site.spec {
+        WebsiteSpec::Static { document_root } => {
+            fusionpanel_agent_protocol::SiteSpec::Static { document_root }
+        }
+        WebsiteSpec::ReverseProxy { upstream_url } => {
+            fusionpanel_agent_protocol::SiteSpec::ReverseProxy { upstream_url }
+        }
+    };
+
+    let protocol_req = fusionpanel_agent_protocol::Request {
+        version: 1,
+        request_id: Uuid::new_v4(),
+        operation: fusionpanel_agent_protocol::Operation::TlsApply(
+            fusionpanel_agent_protocol::TlsApplyPayload {
+                site_id,
+                domain: site.domain.clone(),
+                spec,
+                source,
+            },
+        ),
+    };
+    protocol_req
+        .validate()
+        .map_err(|_| node_jobs::bad_request())?;
+
+    let reservation = state
+        .control_store
+        .lock()
+        .await
+        .reserve_website_tls_apply(
+            &idempotency_key,
+            &fingerprint,
+            context.tenant_id.to_uuid(),
+            site_id,
+            protocol_req.request_id,
+            mode,
+            acme_url.as_deref(),
+            contact_email.as_deref(),
+            &Utc::now().to_rfc3339(),
+        )
+        .map_err(map_store_error)?;
+
+    enqueue_tls_and_respond(&state, &idempotency_key, reservation, Some(protocol_req)).await
+}
+
+async fn delete_website_tls(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<(StatusCode, Json<Value>), ErrorResponse> {
+    let context = website_authorization_context(&state, &headers).await?;
+    let site_id = Uuid::parse_str(&id).map_err(|_| node_jobs::bad_request())?;
+    require_website_permission(&context, Permission::SiteUpdate, Some(site_id))?;
+    let idempotency_key = idempotency_key(&headers)?;
+
+    let site = state
+        .control_store
+        .lock()
+        .await
+        .get_website_for_tenant(site_id, context.tenant_id.to_uuid())
+        .map_err(map_store_error)?;
+
+    let spec = match site.spec {
+        WebsiteSpec::Static { document_root } => {
+            fusionpanel_agent_protocol::SiteSpec::Static { document_root }
+        }
+        WebsiteSpec::ReverseProxy { upstream_url } => {
+            fusionpanel_agent_protocol::SiteSpec::ReverseProxy { upstream_url }
+        }
+    };
+
+    let fingerprint = json!({
+        "operation": "tls.delete",
+        "tenant_id": context.tenant_id,
+        "site_id": site_id,
+    });
+    let protocol_req = fusionpanel_agent_protocol::Request {
+        version: 1,
+        request_id: Uuid::new_v4(),
+        operation: fusionpanel_agent_protocol::Operation::TlsDelete(
+            fusionpanel_agent_protocol::TlsDeletePayload {
+                site_id,
+                domain: site.domain.clone(),
+                spec,
+            },
+        ),
+    };
+    protocol_req
+        .validate()
+        .map_err(|_| node_jobs::bad_request())?;
+
+    let reservation = state
+        .control_store
+        .lock()
+        .await
+        .reserve_website_tls_delete(
+            &idempotency_key,
+            &fingerprint,
+            context.tenant_id.to_uuid(),
+            site_id,
+            protocol_req.request_id,
+            &Utc::now().to_rfc3339(),
+        )
+        .map_err(map_store_error)?;
+
+    enqueue_tls_and_respond(&state, &idempotency_key, reservation, Some(protocol_req)).await
+}
+
+async fn enqueue_tls_and_respond(
+    state: &AppState,
+    idempotency_key: &str,
+    reservation: WebsiteTlsOperationReservation,
+    protocol_req: Option<fusionpanel_agent_protocol::Request>,
+) -> Result<(StatusCode, Json<Value>), ErrorResponse> {
+    let job_id = if let Some(job_id) = reservation.job_id {
+        job_id
+    } else {
+        let req = protocol_req.ok_or_else(node_jobs::internal_error)?;
+        let payload = serde_json::to_value(&req).map_err(|_| node_jobs::internal_error())?;
+        let fingerprint = json!({
+            "operation": reservation.operation.as_str(),
+            "site_id": reservation.tls.site_id,
+            "request_id": reservation.request_id,
+        });
+        match state.jobs_store.lock().await.create_idempotent(
+            "agent_operation",
+            &payload,
+            idempotency_key,
+            &fingerprint,
+        ) {
+            Ok((job_id, _)) => job_id,
+            Err(error) => {
+                if reservation.created {
+                    let _ = state
+                        .control_store
+                        .lock()
+                        .await
+                        .cancel_website_tls_operation_reservation(
+                            idempotency_key,
+                            reservation.tls.site_id,
+                            reservation.request_id,
+                        );
+                }
+                return Err(node_jobs::map_job_error(error));
+            }
+        }
+    };
+
+    state
+        .control_store
+        .lock()
+        .await
+        .attach_website_tls_job_id(idempotency_key, &job_id)
+        .map_err(|_| node_jobs::internal_error())?;
+
+    let job = state
+        .jobs_store
+        .lock()
+        .await
+        .get(&job_id)
+        .map_err(node_jobs::map_job_error)?;
+
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(json!({
+            "tls": reservation.tls,
+            "job": node_jobs::sanitize_job_for_operator(job),
+        })),
+    ))
+}
+
 /// Updates the persisted website only after its agent job reaches a terminal state.
 pub(super) async fn record_completion(
     state: &AppState,
@@ -257,6 +530,49 @@ pub(super) async fn record_completion(
     let Some(operation) = job.payload.get("operation").and_then(Value::as_str) else {
         return Ok(());
     };
+    if matches!(operation, "tls.apply" | "tls.delete") {
+        let tls_operation = if operation == "tls.apply" {
+            WebsiteTlsOperation::Apply
+        } else {
+            WebsiteTlsOperation::Delete
+        };
+        let request_id = job
+            .payload
+            .get("request_id")
+            .and_then(Value::as_str)
+            .and_then(|value| Uuid::parse_str(value).ok())
+            .ok_or_else(node_jobs::internal_error)?;
+        let site_id = job
+            .payload
+            .get("payload")
+            .and_then(|payload| payload.get("site_id"))
+            .and_then(Value::as_str)
+            .and_then(|value| Uuid::parse_str(value).ok())
+            .ok_or_else(node_jobs::internal_error)?;
+        let succeeded = job.state == fusionpanel_jobs::JobState::Succeeded;
+        let safe_error = if succeeded {
+            None
+        } else {
+            Some(match tls_operation {
+                WebsiteTlsOperation::Apply => "TLS certificate could not be applied",
+                WebsiteTlsOperation::Delete => "TLS certificate could not be removed",
+            })
+        };
+        state
+            .control_store
+            .lock()
+            .await
+            .complete_website_tls_operation(
+                site_id,
+                request_id,
+                tls_operation,
+                succeeded,
+                safe_error,
+                &Utc::now().to_rfc3339(),
+            )
+            .map_err(map_store_error)?;
+        return Ok(());
+    }
     let website_operation = match operation {
         "site.apply" => WebsiteOperation::Apply,
         "site.delete" => WebsiteOperation::Delete,
@@ -1256,5 +1572,118 @@ mod tests {
         assert!(validate_upstream_url(&at_limit).is_ok());
         assert_eq!(over_limit.len(), MAX_UPSTREAM_URL_BYTES + 1);
         assert!(validate_upstream_url(&over_limit).is_err());
+    }
+
+    #[tokio::test]
+    async fn tls_lifecycle_endpoints_and_private_key_redaction() {
+        let (app, _dir, _identity_store) = test_app();
+
+        let created = send(
+            &app,
+            "POST",
+            "/v1/websites",
+            Some(ADMIN_TOKEN),
+            Some("site-tls-test-1"),
+            Some(json!({
+                "kind": "static",
+                "domain": "tls-api.test",
+                "document_root": "/srv/fusionpanel/sites/tls-api.test"
+            })),
+        )
+        .await;
+        assert_eq!(created.status(), StatusCode::ACCEPTED);
+        let site_body = response_json(created).await;
+        let site_id = site_body["site"]["id"].as_str().unwrap().to_string();
+        let site_job_id = site_body["job"]["id"].as_str().unwrap().to_string();
+
+        let reg_resp = send(
+            &app,
+            "POST",
+            "/v1/nodes/register",
+            Some(ADMIN_TOKEN),
+            None,
+            Some(json!({ "name": "tls-node" })),
+        )
+        .await;
+        assert_eq!(reg_resp.status(), StatusCode::CREATED);
+        let reg_json = response_json(reg_resp).await;
+        let node_id = reg_json["node_id"].as_str().unwrap().to_string();
+        let node_token = reg_json["token"].as_str().unwrap().to_string();
+
+        let claimed_site = claim_job(&app, &node_id, &node_token).await;
+        assert_eq!(claimed_site["id"], site_job_id);
+        complete_claimed_job(&app, &site_job_id, &node_id, &node_token, "succeeded", None).await;
+
+        let tls_apply_resp = send(
+            &app,
+            "POST",
+            &format!("/v1/websites/{site_id}/tls"),
+            Some(ADMIN_TOKEN),
+            Some("tls-apply-1"),
+            Some(json!({
+                "mode": "custom_pem",
+                "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----",
+                "private_key_pem": "-----BEGIN PRIVATE KEY-----\nSECRET_KEY_MATERIAL\n-----END PRIVATE KEY-----"
+            })),
+        )
+        .await;
+        assert_eq!(tls_apply_resp.status(), StatusCode::ACCEPTED);
+        let tls_body = response_json(tls_apply_resp).await;
+        let tls_text = tls_body.to_string();
+        assert!(!tls_text.contains("SECRET_KEY_MATERIAL"));
+        assert!(tls_text.contains("[REDACTED]"));
+        assert_eq!(tls_body["tls"]["state"], "provisioning");
+        let tls_job_id = tls_body["job"]["id"].as_str().unwrap().to_string();
+
+        // Agent claim MUST still receive full private_key_pem
+        let claimed_tls = claim_job(&app, &node_id, &node_token).await;
+        assert_eq!(claimed_tls["id"], tls_job_id);
+        assert!(claimed_tls.to_string().contains("SECRET_KEY_MATERIAL"));
+        complete_claimed_job(&app, &tls_job_id, &node_id, &node_token, "succeeded", None).await;
+
+        // GET /v1/websites/{id}/tls reports active without exposing key material
+        let get_tls_resp = send(
+            &app,
+            "GET",
+            &format!("/v1/websites/{site_id}/tls"),
+            Some(ADMIN_TOKEN),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(get_tls_resp.status(), StatusCode::OK);
+        let get_tls_json = response_json(get_tls_resp).await;
+        assert_eq!(get_tls_json["tls"]["state"], "active");
+        assert_eq!(get_tls_json["tls"]["mode"], "custom_pem");
+
+        // DELETE /v1/websites/{id}/tls transitions through deleting -> disabled
+        let del_resp = send(
+            &app,
+            "DELETE",
+            &format!("/v1/websites/{site_id}/tls"),
+            Some(ADMIN_TOKEN),
+            Some("tls-del-1"),
+            None,
+        )
+        .await;
+        assert_eq!(del_resp.status(), StatusCode::ACCEPTED);
+        let del_json = response_json(del_resp).await;
+        let del_job_id = del_json["job"]["id"].as_str().unwrap().to_string();
+        let claimed_del = claim_job(&app, &node_id, &node_token).await;
+        assert_eq!(claimed_del["id"], del_job_id);
+        complete_claimed_job(&app, &del_job_id, &node_id, &node_token, "succeeded", None).await;
+
+        let get_tls_after = send(
+            &app,
+            "GET",
+            &format!("/v1/websites/{site_id}/tls"),
+            Some(ADMIN_TOKEN),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(get_tls_after.status(), StatusCode::OK);
+        let get_tls_after_json = response_json(get_tls_after).await;
+        assert_eq!(get_tls_after_json["tls"]["state"], "disabled");
     }
 }

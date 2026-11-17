@@ -2,7 +2,7 @@
 
 use fusionpanel_agent_protocol::{
     Operation, Request, Response, ResponseError, ResponseResult, SiteApplyPayload,
-    SiteDeletePayload, SiteSpec,
+    SiteDeletePayload, SiteSpec, TlsApplyPayload, TlsCertificateSource, TlsDeletePayload,
 };
 use hosting::{ManagedSiteError, ManagedSiteOperations, ManagedSiteSpec, NginxSiteAdapter};
 use serde_json::json;
@@ -15,7 +15,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 pub const HELPER_SOCKET_PATH: &str = "/run/fusionpanel-nginx/nginx-helper.sock";
-const MAX_RPC_REQUEST_BYTES: usize = 16 * 1024;
+const MAX_RPC_REQUEST_BYTES: usize = 128 * 1024;
 const MAX_RPC_RESPONSE_BYTES: usize = 4 * 1024;
 const RPC_IO_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -113,6 +113,54 @@ impl ManagedSiteOperations for NginxHelperClient {
             domain: domain.to_string(),
         }))
     }
+
+    fn apply_site_tls(
+        &self,
+        site_id: Uuid,
+        domain: &str,
+        spec: &ManagedSiteSpec,
+        cert_pem: &str,
+        key_pem: &str,
+    ) -> Result<(), ManagedSiteError> {
+        let spec = match spec {
+            ManagedSiteSpec::Static { document_root } => SiteSpec::Static {
+                document_root: document_root.clone(),
+            },
+            ManagedSiteSpec::ReverseProxy { upstream_url } => SiteSpec::ReverseProxy {
+                upstream_url: upstream_url.clone(),
+            },
+        };
+        self.call(Operation::TlsApply(TlsApplyPayload {
+            site_id,
+            domain: domain.to_string(),
+            spec,
+            source: TlsCertificateSource::CustomPem {
+                certificate_pem: cert_pem.to_string(),
+                private_key_pem: key_pem.to_string(),
+            },
+        }))
+    }
+
+    fn delete_site_tls(
+        &self,
+        site_id: Uuid,
+        domain: &str,
+        spec: &ManagedSiteSpec,
+    ) -> Result<(), ManagedSiteError> {
+        let spec = match spec {
+            ManagedSiteSpec::Static { document_root } => SiteSpec::Static {
+                document_root: document_root.clone(),
+            },
+            ManagedSiteSpec::ReverseProxy { upstream_url } => SiteSpec::ReverseProxy {
+                upstream_url: upstream_url.clone(),
+            },
+        };
+        self.call(Operation::TlsDelete(TlsDeletePayload {
+            site_id,
+            domain: domain.to_string(),
+            spec,
+        }))
+    }
 }
 
 /// Starts the standalone privileged service. It does not read agent or API
@@ -160,6 +208,29 @@ impl ManagedSiteOperations for RootOwnedManagedSiteOperations {
     fn delete_site(&self, site_id: Uuid, domain: &str) -> Result<(), ManagedSiteError> {
         validate_managed_config_tree(Path::new("/etc/nginx/fusionpanel"), 0)?;
         self.adapter.delete_site(site_id, domain)
+    }
+
+    fn apply_site_tls(
+        &self,
+        site_id: Uuid,
+        domain: &str,
+        spec: &ManagedSiteSpec,
+        cert_pem: &str,
+        key_pem: &str,
+    ) -> Result<(), ManagedSiteError> {
+        validate_managed_config_tree(Path::new("/etc/nginx/fusionpanel"), 0)?;
+        self.adapter
+            .apply_site_tls(site_id, domain, spec, cert_pem, key_pem)
+    }
+
+    fn delete_site_tls(
+        &self,
+        site_id: Uuid,
+        domain: &str,
+        spec: &ManagedSiteSpec,
+    ) -> Result<(), ManagedSiteError> {
+        validate_managed_config_tree(Path::new("/etc/nginx/fusionpanel"), 0)?;
+        self.adapter.delete_site_tls(site_id, domain, spec)
     }
 }
 
@@ -353,6 +424,42 @@ fn handle_request(bytes: &[u8], operations: &dyn ManagedSiteOperations) -> Respo
             operations.apply_site(payload.site_id, &payload.domain, &spec)
         }
         Operation::SiteDelete(payload) => operations.delete_site(payload.site_id, &payload.domain),
+        Operation::TlsApply(payload) => {
+            let spec = match payload.spec {
+                SiteSpec::Static { document_root } => ManagedSiteSpec::Static { document_root },
+                SiteSpec::ReverseProxy { upstream_url } => {
+                    ManagedSiteSpec::ReverseProxy { upstream_url }
+                }
+            };
+            match payload.source {
+                TlsCertificateSource::CustomPem {
+                    certificate_pem,
+                    private_key_pem,
+                } => operations.apply_site_tls(
+                    payload.site_id,
+                    &payload.domain,
+                    &spec,
+                    &certificate_pem,
+                    &private_key_pem,
+                ),
+                TlsCertificateSource::AcmeHttp01 { .. } => {
+                    return error_response(
+                        request_id,
+                        "unsupported_operation",
+                        "Privileged helper accepts only resolved PEM certificates",
+                    );
+                }
+            }
+        }
+        Operation::TlsDelete(payload) => {
+            let spec = match payload.spec {
+                SiteSpec::Static { document_root } => ManagedSiteSpec::Static { document_root },
+                SiteSpec::ReverseProxy { upstream_url } => {
+                    ManagedSiteSpec::ReverseProxy { upstream_url }
+                }
+            };
+            operations.delete_site_tls(payload.site_id, &payload.domain, &spec)
+        }
         Operation::SystemInfo(_) | Operation::SiteValidate(_) => {
             return error_response(
                 request_id,

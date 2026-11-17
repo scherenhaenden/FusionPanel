@@ -6,8 +6,13 @@ use std::path::Path;
 use thiserror::Error;
 use uuid::Uuid;
 
+mod tls;
 mod websites;
 
+pub use tls::{
+    WebsiteTlsMode, WebsiteTlsOperation, WebsiteTlsOperationReservation, WebsiteTlsRecord,
+    WebsiteTlsState,
+};
 pub use websites::{
     WebsiteOperation, WebsiteOperationReservation, WebsiteRecord, WebsiteSpec, WebsiteState,
 };
@@ -183,6 +188,39 @@ impl ControlStore {
                 "CREATE INDEX IF NOT EXISTS idx_websites_tenant_id ON websites (tenant_id);",
             )?;
             tx.pragma_update(None, "user_version", 4)?;
+        }
+
+        if user_version < 5 {
+            tx.execute_batch(
+                r#"
+                CREATE TABLE website_tls (
+                    site_id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    mode TEXT NOT NULL CHECK (mode IN ('custom_pem', 'acme_http01')),
+                    state TEXT NOT NULL CHECK (state IN ('disabled', 'provisioning', 'active', 'failed', 'deleting')),
+                    acme_directory_url TEXT,
+                    contact_email TEXT,
+                    last_error TEXT,
+                    last_operation TEXT,
+                    last_request_id TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX idx_website_tls_tenant_id ON website_tls (tenant_id);
+                CREATE TABLE website_tls_operations (
+                    idempotency_key TEXT PRIMARY KEY,
+                    fingerprint TEXT NOT NULL,
+                    operation TEXT NOT NULL CHECK (operation IN ('tls.apply', 'tls.delete')),
+                    site_id TEXT NOT NULL,
+                    request_id TEXT NOT NULL,
+                    tls_snapshot TEXT NOT NULL,
+                    job_id TEXT,
+                    previous_tls_snapshot TEXT
+                );
+                CREATE INDEX idx_website_tls_operations_site_id ON website_tls_operations (site_id);
+                "#,
+            )?;
+            tx.pragma_update(None, "user_version", 5)?;
         }
 
         tx.commit()?;
@@ -814,7 +852,7 @@ mod tests {
             let user_version: u32 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(user_version, 4);
+            assert_eq!(user_version, 5);
             let website_tables: u32 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('websites', 'website_operations')",
@@ -874,7 +912,7 @@ mod tests {
         let user_version: u32 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(user_version, 4);
+        assert_eq!(user_version, 5);
         let has_tenant_id: bool = conn
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM pragma_table_info('websites') WHERE name = 'tenant_id')",
