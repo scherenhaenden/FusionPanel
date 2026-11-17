@@ -6,6 +6,8 @@ import WebsitesView from './views/Websites';
 import DatabasesView from './views/Databases';
 import DnsView from './views/Dns';
 import BackupsView from './views/Backups';
+import FilesView from './views/Files';
+import CronView from './views/Cron';
 import SecurityRulesUI from './views/Security';
 import AdministrationView from './views/Administration';
 import NodesView from './views/Nodes';
@@ -24,6 +26,8 @@ function App() {
           <Route path="/databases" element={<DashboardLayout><DatabasesView /></DashboardLayout>} />
           <Route path="/dns" element={<DashboardLayout><DnsView /></DashboardLayout>} />
           <Route path="/backups" element={<DashboardLayout><BackupsView /></DashboardLayout>} />
+          <Route path="/files" element={<DashboardLayout><FilesView /></DashboardLayout>} />
+          <Route path="/cron" element={<DashboardLayout><CronView /></DashboardLayout>} />
           <Route path="/security" element={<DashboardLayout><SecurityRulesUI /></DashboardLayout>} />
           <Route path="/administration" element={<DashboardLayout><AdministrationView /></DashboardLayout>} />
           <Route path="/nodes" element={<DashboardLayout><NodesView /></DashboardLayout>} />
