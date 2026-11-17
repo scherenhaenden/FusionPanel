@@ -60,7 +60,9 @@ impl Drop for ChallengeFileGuard {
 }
 
 pub fn build_http_client() -> Result<Client, String> {
-    let mut builder = Client::builder().timeout(ACME_TIMEOUT);
+    let mut builder = Client::builder()
+        .timeout(ACME_TIMEOUT)
+        .user_agent(concat!("fusionpanel-agent/", env!("CARGO_PKG_VERSION")));
     if let Some(ca_path) = std::env::var_os("FUSIONPANEL_ACME_CA_CERT") {
         let pem = fs::read(&ca_path)
             .map_err(|e| format!("failed to read FUSIONPANEL_ACME_CA_CERT: {e}"))?;
