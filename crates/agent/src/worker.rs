@@ -2,6 +2,7 @@
 
 use crate::backup_driver::{execute_backup_create, execute_backup_restore};
 use crate::database_driver::{DatabaseDriver, RealDatabaseDriver};
+use crate::dns_driver::{execute_dns_probe, execute_dns_zone_apply, execute_dns_zone_delete};
 use crate::metrics::{MetricsCollector, SystemMetrics};
 use crate::nginx_helper_rpc::NginxHelperClient;
 use fusionpanel_agent_protocol::{
@@ -387,6 +388,9 @@ enum TypedOperation {
     },
     BackupCreate(Box<BackupCreatePayload>),
     BackupRestore(Box<BackupRestorePayload>),
+    DnsZoneApply(Box<fusionpanel_agent_protocol::DnsZoneApplyPayload>),
+    DnsZoneDelete(fusionpanel_agent_protocol::DnsZoneDeletePayload),
+    DnsProbe(fusionpanel_agent_protocol::DnsProbePayload),
 }
 
 #[derive(Debug)]
@@ -661,6 +665,37 @@ impl AgentWorker {
                     }
                 }
             }
+            Ok(TypedOperation::DnsZoneApply(payload)) => {
+                match execute_dns_zone_apply(&payload).await {
+                    Ok(()) => OperationOutcome::success(format!(
+                        "dns.zone.apply completed for {} (serial {})",
+                        payload.domain, payload.serial
+                    )),
+                    Err(err) => {
+                        eprintln!("dns.zone.apply failed for {}: {err}", payload.domain);
+                        OperationOutcome::failure("dns.zone.apply failed")
+                    }
+                }
+            }
+            Ok(TypedOperation::DnsZoneDelete(payload)) => {
+                match execute_dns_zone_delete(&payload).await {
+                    Ok(()) => OperationOutcome::success(format!(
+                        "dns.zone.delete completed for {}",
+                        payload.domain
+                    )),
+                    Err(err) => {
+                        eprintln!("dns.zone.delete failed for {}: {err}", payload.domain);
+                        OperationOutcome::failure("dns.zone.delete failed")
+                    }
+                }
+            }
+            Ok(TypedOperation::DnsProbe(payload)) => match execute_dns_probe(&payload).await {
+                Ok(summary) => OperationOutcome::success(summary),
+                Err(err) => {
+                    eprintln!("dns.probe failed for {}: {err}", payload.domain);
+                    OperationOutcome::failure("dns.probe failed")
+                }
+            },
             Ok(operation) => {
                 if let TypedOperation::TlsApply {
                     source:
@@ -836,6 +871,11 @@ fn parse_operation(payload: &Value) -> Result<TypedOperation, OperationOutcome> 
         ProtocolOperation::BackupRestore(payload) => {
             Ok(TypedOperation::BackupRestore(Box::new(payload)))
         }
+        ProtocolOperation::DnsZoneApply(payload) => {
+            Ok(TypedOperation::DnsZoneApply(Box::new(payload)))
+        }
+        ProtocolOperation::DnsZoneDelete(payload) => Ok(TypedOperation::DnsZoneDelete(payload)),
+        ProtocolOperation::DnsProbe(payload) => Ok(TypedOperation::DnsProbe(payload)),
     }
 }
 
@@ -912,7 +952,10 @@ fn execute_operation(
         | TypedOperation::DatabaseDelete { .. }
         | TypedOperation::DatabaseUserCreate { .. }
         | TypedOperation::BackupCreate(_)
-        | TypedOperation::BackupRestore(_) => {
+        | TypedOperation::BackupRestore(_)
+        | TypedOperation::DnsZoneApply(_)
+        | TypedOperation::DnsZoneDelete(_)
+        | TypedOperation::DnsProbe(_) => {
             OperationOutcome::failure("async operation requires async worker execution")
         }
     }
