@@ -982,7 +982,7 @@ fn render_reverse_proxy_site(site_id: Uuid, domain: &str, upstream_url: &str) ->
 
 fn test_main_config(includes: &[PathBuf]) -> Result<String, ManagedSiteError> {
     let mut config = String::from(
-        "worker_processes 1;\nerror_log stderr emerg;\nevents { worker_connections 64; }\nhttp {\n",
+        "worker_processes 1;\npid /tmp/fusionpanel-nginx-test.pid;\nlock_file /tmp/fusionpanel-nginx-test.lock;\nerror_log stderr emerg;\nevents { worker_connections 64; }\nhttp {\n    access_log off;\n",
     );
     for include in includes {
         validate_clean_absolute_path(include)?;
