@@ -3,20 +3,23 @@
 #[path = "../src/http2_push.rs"]
 pub mod http2_push;
 
-use http2_push::{LinkHeaderGenerator, LinkElement};
+use http2_push::{LinkElement, LinkHeaderGenerator};
 
 #[test]
 fn test_parse_link_preload() {
     let html = r#"<link rel="preload" href="/style.css" as="style">"#;
     let links = LinkHeaderGenerator::parse_html(html);
     assert_eq!(links.len(), 1);
-    assert_eq!(links[0], LinkElement {
-        uri: "/style.css".to_string(),
-        rel: Some("preload".to_string()),
-        as_attr: Some("style".to_string()),
-        crossorigin: None,
-        nopush: false,
-    });
+    assert_eq!(
+        links[0],
+        LinkElement {
+            uri: "/style.css".to_string(),
+            rel: Some("preload".to_string()),
+            as_attr: Some("style".to_string()),
+            crossorigin: None,
+            nopush: false,
+        }
+    );
 }
 
 #[test]
@@ -24,13 +27,16 @@ fn test_parse_link_preconnect() {
     let html = r#"<link rel="preconnect" href="https://example.com" crossorigin>"#;
     let links = LinkHeaderGenerator::parse_html(html);
     assert_eq!(links.len(), 1);
-    assert_eq!(links[0], LinkElement {
-        uri: "https://example.com".to_string(),
-        rel: Some("preconnect".to_string()),
-        as_attr: None,
-        crossorigin: Some("".to_string()),
-        nopush: false,
-    });
+    assert_eq!(
+        links[0],
+        LinkElement {
+            uri: "https://example.com".to_string(),
+            rel: Some("preconnect".to_string()),
+            as_attr: None,
+            crossorigin: Some("".to_string()),
+            nopush: false,
+        }
+    );
 }
 
 #[test]
@@ -47,13 +53,16 @@ fn test_parse_script_src() {
     let html = r#"<script src="/app.js"></script>"#;
     let links = LinkHeaderGenerator::parse_html(html);
     assert_eq!(links.len(), 1);
-    assert_eq!(links[0], LinkElement {
-        uri: "/app.js".to_string(),
-        rel: Some("preload".to_string()),
-        as_attr: Some("script".to_string()),
-        crossorigin: None,
-        nopush: false,
-    });
+    assert_eq!(
+        links[0],
+        LinkElement {
+            uri: "/app.js".to_string(),
+            rel: Some("preload".to_string()),
+            as_attr: Some("script".to_string()),
+            crossorigin: None,
+            nopush: false,
+        }
+    );
 }
 
 #[test]
@@ -85,7 +94,14 @@ fn test_generate_nginx_config() {
 
     // Check Link header directives
     assert!(directives.contains(&"add_header Link \"</fonts/font.woff2>; rel=\\\"preload\\\"; as=\\\"font\\\"; crossorigin=\\\"anonymous\\\"\";".to_string()));
-    assert!(directives.contains(&"add_header Link \"<https://api.example.com>; rel=\\\"preconnect\\\"\";".to_string()));
-    assert!(directives.contains(&"add_header Link \"</main.js>; rel=\\\"preload\\\"; as=\\\"script\\\"; nopush\";".to_string()));
-    assert!(directives.contains(&"add_header Link \"</style.css>; rel=\\\"preload\\\"; as=\\\"style\\\"\";".to_string()));
+    assert!(directives.contains(
+        &"add_header Link \"<https://api.example.com>; rel=\\\"preconnect\\\"\";".to_string()
+    ));
+    assert!(directives.contains(
+        &"add_header Link \"</main.js>; rel=\\\"preload\\\"; as=\\\"script\\\"; nopush\";"
+            .to_string()
+    ));
+    assert!(directives.contains(
+        &"add_header Link \"</style.css>; rel=\\\"preload\\\"; as=\\\"style\\\"\";".to_string()
+    ));
 }

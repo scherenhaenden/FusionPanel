@@ -91,7 +91,9 @@ script_filename = /path/to/file.php\0
 [0x00007f9c8b81d0a0] sleep() /path/to/file.php:123
 ";
     let mut profiler2 = FpmProfiler::new();
-    let err2 = profiler2.parse_reader(log_data_null.as_bytes()).unwrap_err();
+    let err2 = profiler2
+        .parse_reader(log_data_null.as_bytes())
+        .unwrap_err();
     assert!(matches!(err2, FpmProfilerError::PathTraversal));
 }
 

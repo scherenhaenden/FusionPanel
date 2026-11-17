@@ -99,9 +99,6 @@ impl AcmeTokenCleaner {
             }
         }
         // Additional paranoia checks just in case
-        if name.contains("..") || name.contains('/') || name.contains('\\') || name.contains('\0') {
-            return false;
-        }
-        true
+        !(name.contains("..") || name.contains('/') || name.contains('\\') || name.contains('\0'))
     }
 }

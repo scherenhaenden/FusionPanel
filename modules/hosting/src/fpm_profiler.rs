@@ -60,11 +60,11 @@ impl FpmProfiler {
     }
 
     pub fn parse_reader<R: BufRead>(&mut self, reader: R) -> Result<(), FpmProfilerError> {
-        let mut lines = reader.lines();
+        let lines = reader.lines();
 
         let mut current_entry: Option<SlowlogEntry> = None;
 
-        while let Some(line_result) = lines.next() {
+        for line_result in lines {
             let line = line_result?;
             let trimmed = line.trim();
             if trimmed.is_empty() {
@@ -118,19 +118,31 @@ impl FpmProfiler {
 
     fn add_entry(&mut self, entry: SlowlogEntry) {
         if !entry.script_filename.is_empty() {
-            *self.metrics.script_counts.entry(entry.script_filename.clone()).or_insert(0) += 1;
+            *self
+                .metrics
+                .script_counts
+                .entry(entry.script_filename.clone())
+                .or_insert(0) += 1;
         }
 
         // For function counts, we just increment for each distinct function in the stack trace,
         // or for the top blocking function. We'll count every function present in the stack trace.
         for frame in &entry.stack_frames {
-            *self.metrics.function_counts.entry(frame.function.clone()).or_insert(0) += 1;
+            *self
+                .metrics
+                .function_counts
+                .entry(frame.function.clone())
+                .or_insert(0) += 1;
         }
 
         // If we have a duration, we might want to attribute it to the topmost blocking function (the first one)
         if let Some(duration) = entry.duration_sec {
             if let Some(top_frame) = entry.stack_frames.first() {
-                *self.metrics.function_durations.entry(top_frame.function.clone()).or_insert(0.0) += duration;
+                *self
+                    .metrics
+                    .function_durations
+                    .entry(top_frame.function.clone())
+                    .or_insert(0.0) += duration;
             }
         }
 
@@ -215,5 +227,11 @@ impl FpmProfiler {
 
     pub fn entries(&self) -> &[SlowlogEntry] {
         &self.entries
+    }
+}
+
+impl Default for FpmProfiler {
+    fn default() -> Self {
+        Self::new()
     }
 }

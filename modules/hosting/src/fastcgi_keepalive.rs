@@ -53,8 +53,8 @@ impl FastcgiKeepaliveTuner {
             max_children, // Never exceed max_children
             cmp::max(
                 cmp::max(base_keepalive, throughput_keepalive),
-                core_multiplier * 4
-            )
+                core_multiplier * 4,
+            ),
         );
 
         // Ensure minimum keepalive
@@ -146,8 +146,7 @@ impl FastcgiKeepaliveTuner {
             "<Proxy \"fcgi://localhost/\" enablereuse=on max={}>\n\
             \x20\x20\x20\x20ProxySet timeout={}\n\
             </Proxy>\n",
-            config.keepalive,
-            config.timeout_clamp
+            config.keepalive, config.timeout_clamp
         )
     }
 }

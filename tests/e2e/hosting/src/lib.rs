@@ -17,3 +17,19 @@ pub fn block_if_missing(cmd: &str) {
         panic!("BLOCKED: missing {}", cmd);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{check_dependency, get_temp_dir};
+
+    #[test]
+    fn temp_dir_exists() {
+        let dir = get_temp_dir();
+        assert!(dir.path().is_dir());
+    }
+
+    #[test]
+    fn sh_dependency_is_detected() {
+        assert!(check_dependency("sh"));
+    }
+}

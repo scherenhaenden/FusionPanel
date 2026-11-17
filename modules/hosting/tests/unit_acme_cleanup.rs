@@ -7,13 +7,15 @@ use acme_cleanup::AcmeTokenCleaner;
 use std::fs::File;
 use std::io::Write;
 use std::time::Duration;
-use tempfile::tempdir;
 use std::time::SystemTime;
+use tempfile::tempdir;
 
 #[test]
 fn test_clean_directory_missing_dir() {
     let cleaner = AcmeTokenCleaner::default();
-    let summary = cleaner.clean_directory("/path/that/does/not/exist/surely").unwrap();
+    let summary = cleaner
+        .clean_directory("/path/that/does/not/exist/surely")
+        .unwrap();
     assert_eq!(summary.files_scanned, 0);
     assert_eq!(summary.files_removed, 0);
 }
@@ -67,18 +69,34 @@ fn test_invalid_filenames_ignored() {
 #[test]
 fn test_filename_validation_direct() {
     // Valid
-    assert!(acme_cleanup::AcmeTokenCleaner::is_valid_token_filename("abc_123-DEF"));
+    assert!(acme_cleanup::AcmeTokenCleaner::is_valid_token_filename(
+        "abc_123-DEF"
+    ));
     assert!(acme_cleanup::AcmeTokenCleaner::is_valid_token_filename("a"));
 
     // Invalid
     assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename(""));
-    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename(".."));
-    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename("abc.def"));
-    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename("abc/def"));
-    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename("abc\\def"));
-    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename("abc\0def"));
-    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename("abc def"));
-    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename("abc@def"));
+    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename(
+        ".."
+    ));
+    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename(
+        "abc.def"
+    ));
+    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename(
+        "abc/def"
+    ));
+    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename(
+        "abc\\def"
+    ));
+    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename(
+        "abc\0def"
+    ));
+    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename(
+        "abc def"
+    ));
+    assert!(!acme_cleanup::AcmeTokenCleaner::is_valid_token_filename(
+        "abc@def"
+    ));
 }
 
 #[test]

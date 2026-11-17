@@ -6,5 +6,6 @@ pub mod files;
 pub mod heartbeat;
 pub mod metrics;
 pub mod mode;
+pub mod nginx_helper_rpc;
 pub mod protocol;
 pub mod worker;

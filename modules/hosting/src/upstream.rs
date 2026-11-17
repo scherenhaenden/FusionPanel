@@ -152,7 +152,7 @@ pub fn generate_upstream_pool(config: &UpstreamPoolConfig) -> Result<String> {
         writeln!(&mut out, "\nmatch {} {{", mb.name).unwrap();
         if !mb.statuses.is_empty() {
             for status in &mb.statuses {
-                if status.contains(|c| c == ';' || c == '\n' || c == '\r' || c == '{' || c == '}') {
+                if status.contains([';', '\n', '\r', '{', '}']) {
                     return Err(DomainError::InvalidInput(
                         "Invalid characters in status match".into(),
                     ));
@@ -161,7 +161,7 @@ pub fn generate_upstream_pool(config: &UpstreamPoolConfig) -> Result<String> {
             writeln!(&mut out, "    status {};", mb.statuses.join(" ")).unwrap();
         }
         if let Some(body) = &mb.body_regex {
-            if body.contains(|c| c == '\n' || c == '\r' || c == ';') {
+            if body.contains(['\n', '\r', ';']) {
                 return Err(DomainError::InvalidInput(
                     "Invalid characters in body regex".into(),
                 ));

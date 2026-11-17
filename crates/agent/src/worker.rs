@@ -1,11 +1,15 @@
 #![forbid(unsafe_code)]
 
 use crate::metrics::{MetricsCollector, SystemMetrics};
+use crate::nginx_helper_rpc::NginxHelperClient;
+use fusionpanel_agent_protocol::{Operation as ProtocolOperation, Request as ProtocolRequest};
+use hosting::{ManagedSiteError, ManagedSiteOperations, ManagedSiteSpec};
 use reqwest::{Client, Method, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{net::IpAddr, path::Path, time::Duration};
 use tokio::time::{sleep, Instant};
+use uuid::Uuid;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
@@ -335,32 +339,21 @@ struct CompleteRequest<'a> {
     error_text: Option<&'a str>,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct JobRequest {
-    version: u32,
-    request_id: String,
-    operation: String,
-    payload: Value,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct SystemInfoPayload {}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct SiteValidatePayload {
-    domain: String,
-    document_root: String,
-}
-
 #[derive(Debug)]
 enum TypedOperation {
     SystemInfo,
     SiteValidate {
         domain: String,
         document_root: String,
+    },
+    SiteApply {
+        site_id: Uuid,
+        domain: String,
+        spec: ManagedSiteSpec,
+    },
+    SiteDelete {
+        site_id: Uuid,
+        domain: String,
     },
 }
 
@@ -395,6 +388,7 @@ pub struct AgentWorker {
     node_name: Option<String>,
     node: Option<NodeCredentials>,
     metrics: MetricsCollector,
+    site_operations: Box<dyn ManagedSiteOperations>,
     poll_interval: Duration,
     heartbeat_interval: Duration,
 }
@@ -411,6 +405,16 @@ impl AgentWorker {
     }
 
     pub fn from_config(config: AgentWorkerConfig) -> Result<Self, WorkerError> {
+        Self::from_config_with_site_operations(config, Box::new(NginxHelperClient::default()))
+    }
+
+    /// Build a worker with an explicit site runtime. Production defaults use a
+    /// bounded local RPC to the privileged Nginx helper; fixtures can inject an
+    /// isolated Nginx adapter or a unit fake through the same boundary.
+    pub fn from_config_with_site_operations(
+        config: AgentWorkerConfig,
+        site_operations: Box<dyn ManagedSiteOperations>,
+    ) -> Result<Self, WorkerError> {
         let api = ApiClient::new(&config.api_url)?;
         let node = match (config.node_id, config.node_token) {
             (Some(node_id), Some(token)) if is_uuid(&node_id) && !token.trim().is_empty() => {
@@ -449,6 +453,7 @@ impl AgentWorker {
             node_name,
             node,
             metrics: MetricsCollector::default(),
+            site_operations,
             poll_interval: POLL_INTERVAL,
             heartbeat_interval: HEARTBEAT_INTERVAL,
         })
@@ -500,7 +505,9 @@ impl AgentWorker {
             .as_ref()
             .ok_or(WorkerError::InvalidConfiguration)?;
         let outcome = match parse_operation(&job.payload) {
-            Ok(operation) => execute_operation(operation, &mut self.metrics),
+            Ok(operation) => {
+                execute_operation(operation, &mut self.metrics, self.site_operations.as_ref())
+            }
             Err(outcome) => outcome,
         };
         let mut secrets = vec![node.token.as_str()];
@@ -573,37 +580,48 @@ fn classify_status(status: StatusCode) -> Result<(), WorkerError> {
 }
 
 fn parse_operation(payload: &Value) -> Result<TypedOperation, OperationOutcome> {
-    let request: JobRequest = serde_json::from_value(payload.clone())
+    let request: ProtocolRequest = serde_json::from_value(payload.clone())
         .map_err(|_| OperationOutcome::failure("Malformed agent operation request"))?;
-    if request.version != 1 || !is_uuid(&request.request_id) {
+    if request.version != 1 {
         return Err(OperationOutcome::failure(
-            "Unsupported agent protocol version or request ID",
+            "Unsupported agent protocol version",
         ));
     }
-    match request.operation.as_str() {
-        "system.info" => {
-            serde_json::from_value::<SystemInfoPayload>(request.payload)
-                .map_err(|_| OperationOutcome::failure("Malformed system.info payload"))?;
-            Ok(TypedOperation::SystemInfo)
-        }
-        "site.validate" => {
-            let payload: SiteValidatePayload = serde_json::from_value(request.payload)
-                .map_err(|_| OperationOutcome::failure("Malformed site.validate payload"))?;
-            if !valid_domain(&payload.domain) || !valid_document_root(&payload.document_root) {
-                return Err(OperationOutcome::failure("site.validate input is invalid"));
-            }
-            Ok(TypedOperation::SiteValidate {
+    request
+        .validate()
+        .map_err(|_| OperationOutcome::failure("Agent operation input is invalid"))?;
+    match request.operation {
+        ProtocolOperation::SystemInfo(_) => Ok(TypedOperation::SystemInfo),
+        ProtocolOperation::SiteValidate(payload) => Ok(TypedOperation::SiteValidate {
+            domain: payload.domain,
+            document_root: payload.document_root,
+        }),
+        ProtocolOperation::SiteApply(payload) => {
+            let spec = match payload.spec {
+                fusionpanel_agent_protocol::SiteSpec::Static { document_root } => {
+                    ManagedSiteSpec::Static { document_root }
+                }
+                fusionpanel_agent_protocol::SiteSpec::ReverseProxy { upstream_url } => {
+                    ManagedSiteSpec::ReverseProxy { upstream_url }
+                }
+            };
+            Ok(TypedOperation::SiteApply {
+                site_id: payload.site_id,
                 domain: payload.domain,
-                document_root: payload.document_root,
+                spec,
             })
         }
-        _ => Err(OperationOutcome::failure("Unsupported agent operation")),
+        ProtocolOperation::SiteDelete(payload) => Ok(TypedOperation::SiteDelete {
+            site_id: payload.site_id,
+            domain: payload.domain,
+        }),
     }
 }
 
 fn execute_operation(
     operation: TypedOperation,
     metrics: &mut MetricsCollector,
+    site_operations: &dyn ManagedSiteOperations,
 ) -> OperationOutcome {
     match operation {
         TypedOperation::SystemInfo => {
@@ -624,6 +642,42 @@ fn execute_operation(
         } => OperationOutcome::success(format!(
             "site.validate passed for {domain} at {document_root}; no provisioning was performed"
         )),
+        TypedOperation::SiteApply {
+            site_id,
+            domain,
+            spec,
+        } => match site_operations.apply_site(site_id, &domain, &spec) {
+            Ok(()) => OperationOutcome::success(format!("site.apply completed for {domain}")),
+            Err(error) => OperationOutcome::failure(site_apply_failure_message(&error)),
+        },
+        TypedOperation::SiteDelete { site_id, domain } => {
+            match site_operations.delete_site(site_id, &domain) {
+                Ok(()) => OperationOutcome::success(format!("site.delete completed for {domain}")),
+                Err(error) => OperationOutcome::failure(site_delete_failure_message(&error)),
+            }
+        }
+    }
+}
+
+fn site_apply_failure_message(error: &ManagedSiteError) -> &'static str {
+    if matches!(
+        error,
+        ManagedSiteError::RollbackFailed | ManagedSiteError::OutcomeUncertain
+    ) {
+        "site.apply failed; managed config state is uncertain and manual Nginx recovery may be required"
+    } else {
+        "site.apply failed; managed config was preserved or rolled back"
+    }
+}
+
+fn site_delete_failure_message(error: &ManagedSiteError) -> &'static str {
+    if matches!(
+        error,
+        ManagedSiteError::RollbackFailed | ManagedSiteError::OutcomeUncertain
+    ) {
+        "site.delete failed; managed config state is uncertain and manual Nginx recovery may be required"
+    } else {
+        "site.delete failed; managed config was preserved or rolled back"
     }
 }
 
@@ -636,38 +690,6 @@ fn system_info_summary(metrics: &SystemMetrics) -> String {
         "disk_io_ops": metrics.disk_io_ops,
     }))
     .unwrap_or_else(|_| "system.info result could not be serialized".to_string())
-}
-
-fn valid_domain(domain: &str) -> bool {
-    if domain.is_empty()
-        || domain.len() > 253
-        || !domain.is_ascii()
-        || domain.parse::<std::net::IpAddr>().is_ok()
-    {
-        return false;
-    }
-    domain.split('.').all(|label| {
-        !label.is_empty()
-            && label.len() <= 63
-            && !label.starts_with('-')
-            && !label.ends_with('-')
-            && label
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
-    })
-}
-
-fn valid_document_root(document_root: &str) -> bool {
-    if !document_root.starts_with("/srv/fusionpanel/sites/") || document_root.contains('\0') {
-        return false;
-    }
-    let mut components = Path::new(document_root).components();
-    matches!(components.next(), Some(std::path::Component::RootDir))
-        && components.next() == Some(std::path::Component::Normal("srv".as_ref()))
-        && components.next() == Some(std::path::Component::Normal("fusionpanel".as_ref()))
-        && components.next() == Some(std::path::Component::Normal("sites".as_ref()))
-        && components.all(|component| matches!(component, std::path::Component::Normal(_)))
-        && Path::new(document_root).components().count() > 4
 }
 
 fn is_uuid(value: &str) -> bool {
@@ -704,6 +726,48 @@ pub fn sanitize_bounded(input: &str, secrets: &[&str]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct RecordingSiteOperations {
+        calls: Mutex<Vec<String>>,
+        fail: bool,
+    }
+
+    impl ManagedSiteOperations for RecordingSiteOperations {
+        fn apply_site(
+            &self,
+            site_id: Uuid,
+            domain: &str,
+            spec: &ManagedSiteSpec,
+        ) -> Result<(), hosting::ManagedSiteError> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("apply:{site_id}:{domain}:{spec:?}"));
+            if self.fail {
+                Err(hosting::ManagedSiteError::ReloadFailed)
+            } else {
+                Ok(())
+            }
+        }
+
+        fn delete_site(
+            &self,
+            site_id: Uuid,
+            domain: &str,
+        ) -> Result<(), hosting::ManagedSiteError> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("delete:{site_id}:{domain}"));
+            if self.fail {
+                Err(hosting::ManagedSiteError::ReloadFailed)
+            } else {
+                Ok(())
+            }
+        }
+    }
 
     fn valid_job(operation: &str, payload: Value) -> Value {
         json!({
@@ -735,11 +799,137 @@ mod tests {
     }
 
     #[test]
+    fn site_apply_and_delete_are_dispatched_to_the_hosting_adapter() {
+        let site_id = "00000000-0000-4000-8000-000000000001";
+        let apply = parse_operation(&valid_job(
+            "site.apply",
+            json!({
+                "site_id": site_id,
+                "domain": "static.example.test",
+                "spec": {
+                    "kind": "static",
+                    "document_root": "/srv/fusionpanel/sites/static.example.test"
+                }
+            }),
+        ))
+        .unwrap();
+        let delete = parse_operation(&valid_job(
+            "site.delete",
+            json!({ "site_id": site_id, "domain": "static.example.test" }),
+        ))
+        .unwrap();
+        let adapter = RecordingSiteOperations::default();
+        let mut metrics = MetricsCollector::default();
+
+        assert!(execute_operation(apply, &mut metrics, &adapter).succeeded);
+        assert!(execute_operation(delete, &mut metrics, &adapter).succeeded);
+        let calls = adapter.calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert!(
+            calls[0].starts_with("apply:00000000-0000-4000-8000-000000000001:static.example.test:")
+        );
+        assert_eq!(
+            calls[1],
+            "delete:00000000-0000-4000-8000-000000000001:static.example.test"
+        );
+    }
+
+    #[test]
+    fn site_apply_rejects_malformed_and_unsupported_payloads_before_dispatch() {
+        let adapter = RecordingSiteOperations::default();
+        for payload in [
+            valid_job(
+                "site.apply",
+                json!({
+                    "site_id": "00000000-0000-4000-8000-000000000001",
+                    "domain": "example.test",
+                    "spec": { "kind": "php", "version": "8.2" }
+                }),
+            ),
+            valid_job(
+                "site.apply",
+                json!({
+                    "site_id": "00000000-0000-4000-8000-000000000001",
+                    "domain": "example.test",
+                    "spec": {
+                        "kind": "static",
+                        "document_root": "/srv/fusionpanel/sites/example.test",
+                        "unexpected": true
+                    }
+                }),
+            ),
+            valid_job("executor.run", json!({ "cmd": "echo unsafe" })),
+        ] {
+            assert!(parse_operation(&payload).is_err());
+        }
+        assert!(adapter.calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn site_adapter_failures_are_reported_without_raw_backend_errors() {
+        let operation = parse_operation(&valid_job(
+            "site.apply",
+            json!({
+                "site_id": "00000000-0000-4000-8000-000000000001",
+                "domain": "example.test",
+                "spec": {
+                    "kind": "reverse_proxy",
+                    "upstream_url": "http://127.0.0.1:8080"
+                }
+            }),
+        ))
+        .unwrap();
+        let adapter = RecordingSiteOperations {
+            fail: true,
+            ..RecordingSiteOperations::default()
+        };
+        let mut metrics = MetricsCollector::default();
+        let outcome = execute_operation(operation, &mut metrics, &adapter);
+        assert!(!outcome.succeeded);
+        assert_eq!(
+            outcome.error_text.as_deref(),
+            Some("site.apply failed; managed config was preserved or rolled back")
+        );
+        assert!(!outcome.log_text.contains("ReloadFailed"));
+    }
+
+    #[test]
+    fn rollback_and_rpc_uncertainty_are_not_reported_as_successful_restoration() {
+        assert!(
+            site_apply_failure_message(&ManagedSiteError::RollbackFailed)
+                .contains("state is uncertain")
+        );
+        assert!(
+            site_delete_failure_message(&ManagedSiteError::OutcomeUncertain)
+                .contains("manual Nginx recovery")
+        );
+        assert!(site_apply_failure_message(&ManagedSiteError::ReloadFailed)
+            .contains("preserved or rolled back"));
+    }
+
+    #[test]
     fn site_validation_rejects_unicode_ip_and_path_traversal() {
-        assert!(!valid_domain("127.0.0.1"));
-        assert!(!valid_domain("éxample.test"));
-        assert!(!valid_document_root("/srv/fusionpanel/sites/../etc"));
-        assert!(valid_document_root("/srv/fusionpanel/sites/example.test"));
+        let valid_root = "/srv/fusionpanel/sites/example.test";
+        for domain in ["127.0.0.1", "éxample.test"] {
+            assert!(parse_operation(&valid_job(
+                "site.validate",
+                json!({ "domain": domain, "document_root": valid_root })
+            ))
+            .is_err());
+        }
+        assert!(parse_operation(&valid_job(
+            "site.validate",
+            json!({
+                "domain": "example.test",
+                "document_root": "/srv/fusionpanel/sites/../etc"
+            })
+        ))
+        .is_err());
+        assert!(parse_operation(&valid_job(
+            "site.validate",
+            json!({ "domain": "example.test", "document_root": valid_root })
+        ))
+        .is_ok());
     }
 
     #[test]

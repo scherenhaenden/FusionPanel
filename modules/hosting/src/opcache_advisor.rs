@@ -41,14 +41,17 @@ impl OpcacheMetrics {
         };
 
         // Recommend increasing memory if free is less than 10% of total
-        let recommended_memory_consumption = if total_memory > 0 && (self.free_memory as f64) < (total_memory as f64 * 0.10) {
-            total_memory + (total_memory / 2) // increase by 50%
-        } else {
-            total_memory
-        };
+        let recommended_memory_consumption =
+            if total_memory > 0 && (self.free_memory as f64) < (total_memory as f64 * 0.10) {
+                total_memory + (total_memory / 2) // increase by 50%
+            } else {
+                total_memory
+            };
 
         // Recommend increasing JIT buffer size if free is less than 10% of total
-        let recommended_jit_buffer_size = if self.jit_buffer_size > 0 && (self.jit_buffer_free as f64) < (self.jit_buffer_size as f64 * 0.10) {
+        let recommended_jit_buffer_size = if self.jit_buffer_size > 0
+            && (self.jit_buffer_free as f64) < (self.jit_buffer_size as f64 * 0.10)
+        {
             self.jit_buffer_size + (self.jit_buffer_size / 2)
         } else {
             self.jit_buffer_size

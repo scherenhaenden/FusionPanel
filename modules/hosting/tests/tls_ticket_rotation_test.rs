@@ -1,10 +1,10 @@
 #![forbid(unsafe_code)]
 
-use hosting::tls_ticket_rotation::{StekManager, KeyState};
+use hosting::tls_ticket_rotation::{KeyState, StekManager};
+use std::fs;
 use std::thread;
 use std::time::Duration;
 use tempfile::tempdir;
-use std::fs;
 
 #[test]
 fn test_key_generation_and_rotation() {
@@ -103,7 +103,9 @@ fn test_save_keys_to_disk() {
     manager.save_keys_to_disk(temp_dir.path()).unwrap();
 
     let keys = manager.get_valid_keys();
-    let file_path = temp_dir.path().join(format!("{:x}.key", keys[0].created_at.timestamp_micros()));
+    let file_path = temp_dir
+        .path()
+        .join(format!("{:x}.key", keys[0].created_at.timestamp_micros()));
     let data = fs::read(file_path).unwrap();
 
     assert_eq!(data, keys[0].data);
