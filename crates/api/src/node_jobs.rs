@@ -185,6 +185,17 @@ async fn enqueue_job(
             },
         });
     }
+    if matches!(
+        body.operation.as_str(),
+        "database.apply" | "database.delete" | "database.user.create"
+    ) {
+        return Err(ErrorResponse {
+            error: ErrorDetail {
+                code: "bad_request",
+                message: "Use the Databases API for database operations",
+            },
+        });
+    }
     let key = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
@@ -261,17 +272,24 @@ async fn get_job(
 }
 
 pub(super) fn sanitize_job_for_operator(mut job: Job) -> Job {
-    if let Some(source) = job
+    if let Some(payload_obj) = job
         .payload
         .get_mut("payload")
-        .and_then(|p| p.get_mut("source"))
         .and_then(Value::as_object_mut)
     {
-        if source.contains_key("private_key_pem") {
-            source.insert(
-                "private_key_pem".to_string(),
+        if payload_obj.contains_key("password") {
+            payload_obj.insert(
+                "password".to_string(),
                 Value::String("[REDACTED]".to_string()),
             );
+        }
+        if let Some(source) = payload_obj.get_mut("source").and_then(Value::as_object_mut) {
+            if source.contains_key("private_key_pem") {
+                source.insert(
+                    "private_key_pem".to_string(),
+                    Value::String("[REDACTED]".to_string()),
+                );
+            }
         }
     }
     job
@@ -370,6 +388,7 @@ async fn complete_job(
         .get(&id)
         .map_err(map_job_error)?;
     super::websites::record_completion(&state, &completed).await?;
+    super::databases::record_completion(&state, &completed).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
