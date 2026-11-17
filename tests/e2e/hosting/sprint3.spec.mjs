@@ -188,14 +188,14 @@ test('applies and deletes real static/proxy sites and preserves unrelated Nginx 
   const proxyOperation = await createSite(page, {
     domain: proxyDomain,
     kind: 'reverse_proxy',
-    upstreamUrl: 'http://upstream.sprint3.test:8080',
+    upstreamUrl: 'http://upstream.sprint3.test:8080/',
   });
   const activeProxy = await waitForWebsite(page, proxyOperation.site.id, 'active', 'reverse_proxy');
   expect(activeProxy).toMatchObject({ domain: proxyDomain, kind: 'reverse_proxy', state: 'active' });
   await waitForJob(page, proxyOperation.job.id, 'succeeded', 'site.apply', {
     site_id: proxyOperation.site.id,
     domain: proxyDomain,
-    spec: { kind: 'reverse_proxy', upstream_url: 'http://upstream.sprint3.test:8080' },
+    spec: { kind: 'reverse_proxy', upstream_url: 'http://upstream.sprint3.test:8080/' },
   });
   const proxyRow = page.getByRole('row').filter({ hasText: proxyDomain });
   await expect(proxyRow.getByRole('status')).toHaveAttribute('aria-label', `${proxyDomain} state: Active`);
@@ -204,7 +204,7 @@ test('applies and deletes real static/proxy sites and preserves unrelated Nginx 
   const failedOperation = await createSite(page, {
     domain: failedDomain,
     kind: 'reverse_proxy',
-    upstreamUrl: 'http://unresolvable.invalid',
+    upstreamUrl: 'http://unresolvable.invalid/',
   });
   const failedSite = await waitForWebsite(page, failedOperation.site.id, 'failed', 'reverse_proxy');
   expect(failedSite).toMatchObject({ domain: failedDomain, kind: 'reverse_proxy', state: 'failed' });
@@ -212,7 +212,7 @@ test('applies and deletes real static/proxy sites and preserves unrelated Nginx 
   const failedJob = await waitForJob(page, failedOperation.job.id, 'failed', 'site.apply', {
     site_id: failedOperation.site.id,
     domain: failedDomain,
-    spec: { kind: 'reverse_proxy', upstream_url: 'http://unresolvable.invalid' },
+    spec: { kind: 'reverse_proxy', upstream_url: 'http://unresolvable.invalid/' },
   });
   expect(failedJob.error_text).toBeTruthy();
   const failedRow = page.getByRole('row').filter({ hasText: failedDomain });
