@@ -29,6 +29,12 @@ pub enum Operation {
     TlsApply(TlsApplyPayload),
     #[serde(rename = "tls.delete")]
     TlsDelete(TlsDeletePayload),
+    #[serde(rename = "database.apply")]
+    DatabaseApply(DatabaseApplyPayload),
+    #[serde(rename = "database.delete")]
+    DatabaseDelete(DatabaseDeletePayload),
+    #[serde(rename = "database.user.create")]
+    DatabaseUserCreate(DatabaseUserCreatePayload),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -99,6 +105,39 @@ pub struct TlsDeletePayload {
     pub spec: SiteSpec,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DatabaseEngineKind {
+    Postgresql,
+    Mariadb,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DatabaseApplyPayload {
+    pub database_id: Uuid,
+    pub name: String,
+    pub engine: DatabaseEngineKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DatabaseDeletePayload {
+    pub database_id: Uuid,
+    pub name: String,
+    pub engine: DatabaseEngineKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DatabaseUserCreatePayload {
+    pub database_id: Uuid,
+    pub database_name: String,
+    pub engine: DatabaseEngineKind,
+    pub username: String,
+    pub password: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Response {
@@ -133,6 +172,9 @@ pub enum ValidationError {
     InvalidPrivateKeyPem,
     InvalidAcmeUrl,
     InvalidContactEmail,
+    InvalidDatabaseId,
+    InvalidDatabaseIdentifier,
+    InvalidDatabasePassword,
 }
 
 impl Request {
@@ -147,6 +189,9 @@ impl Request {
             Operation::SiteDelete(payload) => payload.validate(),
             Operation::TlsApply(payload) => payload.validate(),
             Operation::TlsDelete(payload) => payload.validate(),
+            Operation::DatabaseApply(payload) => payload.validate(),
+            Operation::DatabaseDelete(payload) => payload.validate(),
+            Operation::DatabaseUserCreate(payload) => payload.validate(),
         }
     }
 }
@@ -257,6 +302,79 @@ impl TlsDeletePayload {
         }
         .validate()
     }
+}
+
+impl DatabaseApplyPayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.database_id.is_nil() {
+            return Err(ValidationError::InvalidDatabaseId);
+        }
+        if !valid_database_identifier(&self.name) {
+            return Err(ValidationError::InvalidDatabaseIdentifier);
+        }
+        Ok(())
+    }
+}
+
+impl DatabaseDeletePayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.database_id.is_nil() {
+            return Err(ValidationError::InvalidDatabaseId);
+        }
+        if !valid_database_identifier(&self.name) {
+            return Err(ValidationError::InvalidDatabaseIdentifier);
+        }
+        Ok(())
+    }
+}
+
+impl DatabaseUserCreatePayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.database_id.is_nil() {
+            return Err(ValidationError::InvalidDatabaseId);
+        }
+        if !valid_database_identifier(&self.database_name)
+            || !valid_database_identifier(&self.username)
+        {
+            return Err(ValidationError::InvalidDatabaseIdentifier);
+        }
+        if self.password.is_empty()
+            || self.password.len() > 256
+            || self.password.chars().any(|c| c.is_control())
+        {
+            return Err(ValidationError::InvalidDatabasePassword);
+        }
+        Ok(())
+    }
+}
+
+pub fn valid_database_identifier(value: &str) -> bool {
+    if value.is_empty() || value.len() > 63 {
+        return false;
+    }
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return false;
+    }
+    if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return false;
+    }
+    !matches!(
+        value.to_ascii_lowercase().as_str(),
+        "postgres"
+            | "template0"
+            | "template1"
+            | "mysql"
+            | "information_schema"
+            | "performance_schema"
+            | "sys"
+            | "root"
+            | "fusionpanel"
+            | "rdsadmin"
+    )
 }
 
 fn valid_certificate_pem(pem: &str) -> bool {
@@ -970,5 +1088,76 @@ mod tests {
             }),
         };
         assert!(valid_delete.validate().is_ok());
+    }
+
+    #[test]
+    fn test_database_apply_delete_and_user_validation() {
+        let valid_apply = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::DatabaseApply(DatabaseApplyPayload {
+                database_id: Uuid::new_v4(),
+                name: "tenant_app_db".to_string(),
+                engine: DatabaseEngineKind::Postgresql,
+            }),
+        };
+        assert!(valid_apply.validate().is_ok());
+
+        let reserved_name = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::DatabaseApply(DatabaseApplyPayload {
+                database_id: Uuid::new_v4(),
+                name: "postgres".to_string(),
+                engine: DatabaseEngineKind::Postgresql,
+            }),
+        };
+        assert_eq!(
+            reserved_name.validate(),
+            Err(ValidationError::InvalidDatabaseIdentifier)
+        );
+
+        let invalid_chars = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::DatabaseDelete(DatabaseDeletePayload {
+                database_id: Uuid::new_v4(),
+                name: "bad;drop".to_string(),
+                engine: DatabaseEngineKind::Mariadb,
+            }),
+        };
+        assert_eq!(
+            invalid_chars.validate(),
+            Err(ValidationError::InvalidDatabaseIdentifier)
+        );
+
+        let valid_user = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::DatabaseUserCreate(DatabaseUserCreatePayload {
+                database_id: Uuid::new_v4(),
+                database_name: "tenant_app_db".to_string(),
+                engine: DatabaseEngineKind::Mariadb,
+                username: "tenant_user".to_string(),
+                password: "S3curePassword!123".to_string(),
+            }),
+        };
+        assert!(valid_user.validate().is_ok());
+
+        let empty_password = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::DatabaseUserCreate(DatabaseUserCreatePayload {
+                database_id: Uuid::new_v4(),
+                database_name: "tenant_app_db".to_string(),
+                engine: DatabaseEngineKind::Mariadb,
+                username: "tenant_user".to_string(),
+                password: "".to_string(),
+            }),
+        };
+        assert_eq!(
+            empty_password.validate(),
+            Err(ValidationError::InvalidDatabasePassword)
+        );
     }
 }
