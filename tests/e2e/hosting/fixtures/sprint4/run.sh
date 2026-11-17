@@ -325,8 +325,8 @@ export FUSIONPANEL_S3_NGINX_CONFIG="$fixture_dir/nginx.conf"
 
 if compose exec -T node sh -c \
   'test -d /etc/nginx/fusionpanel/sites-enabled \
-   && test -f /etc/nginx/fusionpanel/tls/acme-site.test/fullchain.pem \
-   && test ! -e /etc/nginx/fusionpanel/tls/custom-site.test/fullchain.pem'; then
+   && ls /etc/nginx/fusionpanel/tls/acme-site.test/fullchain-*.pem >/dev/null 2>&1 \
+   && test ! -e /etc/nginx/fusionpanel/tls/custom-site.test'; then
   printf 'PASS: ACME cert persisted and deleted Custom PEM cert was cleaned up.\n'
 else
   printf 'TLS file state on node did not match Sprint 4 expectations.\n' >&2
