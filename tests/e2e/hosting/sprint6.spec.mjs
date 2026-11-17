@@ -39,7 +39,7 @@ test('creates S3 bundle backup (static site + PostgreSQL) via MinIO and restores
   // 2. Seed static site backup-app.local/index.html and create website in UI
   const siteRootHost = path.join(sitesDir, 'backup-app.local');
   fs.mkdirSync(siteRootHost, { recursive: true });
-  fs.chmodSync(siteRootHost, 0o755);
+  fs.chmodSync(siteRootHost, 0o777);
   const indexHtmlHost = path.join(siteRootHost, 'index.html');
   fs.writeFileSync(indexHtmlHost, '<html><body>sprint6-site-marker</body></html>\n', { mode: 0o644 });
 
@@ -93,7 +93,7 @@ test('creates S3 bundle backup (static site + PostgreSQL) via MinIO and restores
 
   const backupRow = page.locator('tbody tr').first();
   await expect(backupRow).toContainText('ready', { timeout: 60_000 });
-  await expect(backupRow).toContainText('s3://fusionpanel-backups/sprint6');
+  await expect(backupRow).toContainText('http://minio:9000/fusionpanel-backups/sprint6');
   await expect(backupRow).toContainText('...');
 
   // 5. Destroy both live targets
@@ -109,8 +109,21 @@ test('creates S3 bundle backup (static site + PostgreSQL) via MinIO and restores
   await page.getByLabel('Secret Key').fill(minioPass);
   await page.getByPlaceholder('RESTORE').fill('RESTORE');
   await page.getByRole('button', { name: 'Confirm Restore' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden({ timeout: 15_000 });
 
-  await expect(backupRow).toContainText('ready', { timeout: 60_000 });
+  await expect.poll(async () => {
+    const text = await backupRow.innerText();
+    if (text.includes('failed')) {
+      const jobsData = await page.evaluate(async () => (await fetch('/v1/jobs')).json());
+      const restoreJob = (jobsData.jobs || []).find((j) => j.payload?.operation === 'backup.restore');
+      const jobId = restoreJob?.id;
+      const logs = jobId
+        ? await page.evaluate(async (id) => (await fetch(`/v1/jobs/${id}/logs`)).json(), jobId)
+        : null;
+      throw new Error(`Restore failed: ${text}; logs=${JSON.stringify(logs)}`);
+    }
+    return text.includes('ready') && !text.includes('restoring') && fs.existsSync(indexHtmlHost);
+  }, { timeout: 60_000, intervals: [500, 1000] }).toBe(true);
 
   // 7. Verify both static site file and PostgreSQL row are restored
   expect(fs.existsSync(indexHtmlHost)).toBe(true);
