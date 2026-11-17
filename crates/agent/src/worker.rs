@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use crate::backup_driver::{execute_backup_create, execute_backup_restore};
+use crate::cron_driver::{execute_cron_apply, execute_cron_delete, execute_cron_run_now};
 use crate::database_driver::{DatabaseDriver, RealDatabaseDriver};
 use crate::dns_driver::{execute_dns_probe, execute_dns_zone_apply, execute_dns_zone_delete};
 use crate::metrics::{MetricsCollector, SystemMetrics};
@@ -391,6 +392,9 @@ enum TypedOperation {
     DnsZoneApply(Box<fusionpanel_agent_protocol::DnsZoneApplyPayload>),
     DnsZoneDelete(fusionpanel_agent_protocol::DnsZoneDeletePayload),
     DnsProbe(fusionpanel_agent_protocol::DnsProbePayload),
+    CronApply(fusionpanel_agent_protocol::CronApplyPayload),
+    CronDelete(fusionpanel_agent_protocol::CronDeletePayload),
+    CronRunNow(fusionpanel_agent_protocol::CronRunNowPayload),
 }
 
 #[derive(Debug)]
@@ -696,6 +700,35 @@ impl AgentWorker {
                     OperationOutcome::failure("dns.probe failed")
                 }
             },
+            Ok(TypedOperation::CronApply(payload)) => match execute_cron_apply(&payload).await {
+                Ok(()) => OperationOutcome::success(format!(
+                    "cron.apply completed for {} ({} jobs)",
+                    payload.cron_id,
+                    payload.jobs.len()
+                )),
+                Err(err) => {
+                    eprintln!("cron.apply failed for {}: {err}", payload.cron_id);
+                    OperationOutcome::failure("cron.apply failed")
+                }
+            },
+            Ok(TypedOperation::CronDelete(payload)) => match execute_cron_delete(&payload).await {
+                Ok(()) => OperationOutcome::success(format!(
+                    "cron.delete completed for {} ({} remaining)",
+                    payload.cron_id,
+                    payload.jobs.len()
+                )),
+                Err(err) => {
+                    eprintln!("cron.delete failed for {}: {err}", payload.cron_id);
+                    OperationOutcome::failure("cron.delete failed")
+                }
+            },
+            Ok(TypedOperation::CronRunNow(payload)) => match execute_cron_run_now(&payload).await {
+                Ok(summary) => OperationOutcome::success(summary),
+                Err(err) => {
+                    eprintln!("cron.run_now failed for {}: {err}", payload.cron_id);
+                    OperationOutcome::failure("cron.run_now failed")
+                }
+            },
             Ok(operation) => {
                 if let TypedOperation::TlsApply {
                     source:
@@ -876,6 +909,9 @@ fn parse_operation(payload: &Value) -> Result<TypedOperation, OperationOutcome> 
         }
         ProtocolOperation::DnsZoneDelete(payload) => Ok(TypedOperation::DnsZoneDelete(payload)),
         ProtocolOperation::DnsProbe(payload) => Ok(TypedOperation::DnsProbe(payload)),
+        ProtocolOperation::CronApply(payload) => Ok(TypedOperation::CronApply(payload)),
+        ProtocolOperation::CronDelete(payload) => Ok(TypedOperation::CronDelete(payload)),
+        ProtocolOperation::CronRunNow(payload) => Ok(TypedOperation::CronRunNow(payload)),
     }
 }
 
@@ -955,7 +991,10 @@ fn execute_operation(
         | TypedOperation::BackupRestore(_)
         | TypedOperation::DnsZoneApply(_)
         | TypedOperation::DnsZoneDelete(_)
-        | TypedOperation::DnsProbe(_) => {
+        | TypedOperation::DnsProbe(_)
+        | TypedOperation::CronApply(_)
+        | TypedOperation::CronDelete(_)
+        | TypedOperation::CronRunNow(_) => {
             OperationOutcome::failure("async operation requires async worker execution")
         }
     }
