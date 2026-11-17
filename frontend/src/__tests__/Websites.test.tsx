@@ -163,15 +163,17 @@ describe('Websites API and view', () => {
     const site = makeStaticSite();
     mock.onGet('/v1/websites').reply(200, { websites: [site] });
     mock.onGet('/v1/websites/site-1').reply(200, { website: site });
+    mock.onGet('/v1/websites/site-1/tls').reply(200, { tls: null });
 
     render(<WebsitesView />);
     fireEvent.click(await screen.findByRole('button', { name: 'View details for app.local' }));
 
     expect(await screen.findByRole('heading', { name: 'app.local' })).toBeInTheDocument();
     expect(screen.getByText('/srv/fusionpanel/sites/app.local')).toBeInTheDocument();
-    expect(screen.getByText('Deferred to Sprint 4')).toBeInTheDocument();
+    expect(await screen.findByText('Disabled')).toBeInTheDocument();
     expect(screen.getByText('Deferred')).toBeInTheDocument();
     expect(mock.history.get.some((request) => request.url === '/v1/websites/site-1')).toBe(true);
+    expect(mock.history.get.some((request) => request.url === '/v1/websites/site-1/tls')).toBe(true);
   });
 
   it('rejects document-root traversal before sending a static-site request', async () => {
@@ -283,5 +285,99 @@ describe('Websites API and view', () => {
     expect(headerValue(mock.history.delete[1].headers, 'Idempotency-Key')).toBe(
       headerValue(mock.history.delete[0].headers, 'Idempotency-Key'),
     );
+  });
+
+  it('configures ACME HTTP-01 TLS and removes active TLS from site details', async () => {
+    const site = makeStaticSite('active');
+    const tlsProvisioning = {
+      site_id: 'site-1',
+      tenant_id: 'tenant-1',
+      mode: 'acme_http01' as const,
+      state: 'provisioning' as const,
+      acme_directory_url: 'https://pebble.local/dir',
+      contact_email: 'ops@app.local',
+      last_error: null,
+      created_at: '2026-04-12T00:00:00Z',
+      updated_at: '2026-04-12T00:00:01Z',
+    };
+    const tlsActive = { ...tlsProvisioning, state: 'active' as const };
+    const tlsDeleting = { ...tlsProvisioning, state: 'deleting' as const };
+
+    mock.onGet('/v1/websites').reply(200, { websites: [site] });
+    mock.onGet('/v1/websites/site-1').reply(200, { website: site });
+    mock.onGet('/v1/websites/site-1/tls').replyOnce(200, { tls: null })
+      .onGet('/v1/websites/site-1/tls').replyOnce(200, { tls: tlsActive })
+      .onGet('/v1/websites/site-1/tls').reply(200, { tls: null });
+    mock.onPost('/v1/websites/site-1/tls').reply(202, { tls: tlsProvisioning, job: makeJob('queued') });
+    mock.onDelete('/v1/websites/site-1/tls').reply(202, { tls: tlsDeleting, job: makeJob('queued') });
+
+    render(<WebsitesView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'View details for app.local' }));
+    expect(await screen.findByText('Disabled')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('ACME directory URL'), {
+      target: { value: 'https://pebble.local/dir' },
+    });
+    fireEvent.change(screen.getByLabelText('Contact email (optional)'), {
+      target: { value: 'ops@app.local' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enable TLS' }));
+
+    expect(await screen.findByText('TLS provisioning queued for app.local.')).toBeInTheDocument();
+    expect(JSON.parse(mock.history.post[0].data)).toEqual({
+      mode: 'acme_http01',
+      acme_directory_url: 'https://pebble.local/dir',
+      contact_email: 'ops@app.local',
+    });
+    expect(headerValue(mock.history.post[0].headers, 'Idempotency-Key')).toBeTruthy();
+
+    expect(await screen.findByText('Active (ACME HTTP-01)', {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByText('TLS is active for app.local.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove TLS' }));
+    expect(await screen.findByText('TLS removal queued for app.local.')).toBeInTheDocument();
+    expect(mock.history.delete).toHaveLength(1);
+    expect(headerValue(mock.history.delete[0].headers, 'Idempotency-Key')).toBeTruthy();
+    expect(await screen.findByText('Disabled', {}, { timeout: 5000 })).toBeInTheDocument();
+  }, 10000);
+
+  it('submits Custom PEM TLS and clears key material from inputs after submission', async () => {
+    const site = makeStaticSite('active');
+    const tlsActive = {
+      site_id: 'site-1',
+      tenant_id: 'tenant-1',
+      mode: 'custom_pem' as const,
+      state: 'active' as const,
+      acme_directory_url: null,
+      contact_email: null,
+      last_error: null,
+      created_at: '2026-04-12T00:00:00Z',
+      updated_at: '2026-04-12T00:00:01Z',
+    };
+
+    mock.onGet('/v1/websites').reply(200, { websites: [site] });
+    mock.onGet('/v1/websites/site-1').reply(200, { website: site });
+    mock.onGet('/v1/websites/site-1/tls').reply(200, { tls: null });
+    mock.onPost('/v1/websites/site-1/tls').reply(202, { tls: tlsActive, job: makeJob('succeeded') });
+
+    render(<WebsitesView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'View details for app.local' }));
+    await screen.findByText('Disabled');
+
+    fireEvent.click(screen.getByLabelText('Custom PEM'));
+    const certInput = screen.getByLabelText('Certificate PEM') as HTMLTextAreaElement;
+    const keyInput = screen.getByLabelText('Private key PEM') as HTMLTextAreaElement;
+    fireEvent.change(certInput, { target: { value: '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----' } });
+    fireEvent.change(keyInput, { target: { value: '-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enable TLS' }));
+
+    expect(await screen.findByText('TLS is active for app.local.')).toBeInTheDocument();
+    expect(JSON.parse(mock.history.post[0].data)).toEqual({
+      mode: 'custom_pem',
+      certificate_pem: '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----',
+      private_key_pem: '-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----',
+    });
+    expect(certInput.value).toBe('');
+    expect(keyInput.value).toBe('');
   });
 });
