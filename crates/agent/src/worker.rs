@@ -1,10 +1,12 @@
 #![forbid(unsafe_code)]
 
+use crate::backup_driver::{execute_backup_create, execute_backup_restore};
 use crate::database_driver::{DatabaseDriver, RealDatabaseDriver};
 use crate::metrics::{MetricsCollector, SystemMetrics};
 use crate::nginx_helper_rpc::NginxHelperClient;
 use fusionpanel_agent_protocol::{
-    DatabaseEngineKind, Operation as ProtocolOperation, Request as ProtocolRequest,
+    BackupCreatePayload, BackupDestination, BackupRestorePayload, DatabaseEngineKind,
+    Operation as ProtocolOperation, Request as ProtocolRequest,
 };
 use hosting::{ManagedSiteError, ManagedSiteOperations, ManagedSiteSpec};
 use reqwest::{Client, Method, Response, StatusCode, Url};
@@ -383,6 +385,8 @@ enum TypedOperation {
         username: String,
         password: String,
     },
+    BackupCreate(Box<BackupCreatePayload>),
+    BackupRestore(Box<BackupRestorePayload>),
 }
 
 #[derive(Debug)]
@@ -616,6 +620,47 @@ impl AgentWorker {
                     }
                 }
             }
+            Ok(TypedOperation::BackupCreate(payload)) => {
+                if let BackupDestination::S3 { ref secret_key, .. } = payload.destination {
+                    extra_secret = Some(secret_key.clone());
+                }
+                match execute_backup_create(&payload).await {
+                    Ok(sha256) => OperationOutcome::success(format!(
+                        "backup.create completed for {} sha256={sha256}",
+                        payload.backup_id
+                    )),
+                    Err(err) => {
+                        let safe_err = match &extra_secret {
+                            Some(sec) => sanitize_bounded(&err, &[sec.as_str()]),
+                            None => err,
+                        };
+                        eprintln!("backup.create failed for {}: {safe_err}", payload.backup_id);
+                        OperationOutcome::failure("backup.create failed")
+                    }
+                }
+            }
+            Ok(TypedOperation::BackupRestore(payload)) => {
+                if let BackupDestination::S3 { ref secret_key, .. } = payload.destination {
+                    extra_secret = Some(secret_key.clone());
+                }
+                match execute_backup_restore(&payload).await {
+                    Ok(()) => OperationOutcome::success(format!(
+                        "backup.restore completed for {}",
+                        payload.backup_id
+                    )),
+                    Err(err) => {
+                        let safe_err = match &extra_secret {
+                            Some(sec) => sanitize_bounded(&err, &[sec.as_str()]),
+                            None => err,
+                        };
+                        eprintln!(
+                            "backup.restore failed for {}: {safe_err}",
+                            payload.backup_id
+                        );
+                        OperationOutcome::failure("backup.restore failed")
+                    }
+                }
+            }
             Ok(operation) => {
                 if let TypedOperation::TlsApply {
                     source:
@@ -785,6 +830,12 @@ fn parse_operation(payload: &Value) -> Result<TypedOperation, OperationOutcome> 
             username: payload.username,
             password: payload.password,
         }),
+        ProtocolOperation::BackupCreate(payload) => {
+            Ok(TypedOperation::BackupCreate(Box::new(payload)))
+        }
+        ProtocolOperation::BackupRestore(payload) => {
+            Ok(TypedOperation::BackupRestore(Box::new(payload)))
+        }
     }
 }
 
@@ -859,8 +910,10 @@ fn execute_operation(
         },
         TypedOperation::DatabaseApply { .. }
         | TypedOperation::DatabaseDelete { .. }
-        | TypedOperation::DatabaseUserCreate { .. } => {
-            OperationOutcome::failure("database operations require async worker execution")
+        | TypedOperation::DatabaseUserCreate { .. }
+        | TypedOperation::BackupCreate(_)
+        | TypedOperation::BackupRestore(_) => {
+            OperationOutcome::failure("async operation requires async worker execution")
         }
     }
 }
