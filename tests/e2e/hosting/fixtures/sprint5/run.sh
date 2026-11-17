@@ -68,7 +68,7 @@ compose config --quiet
 compose_invoked=1
 compose up --detach --wait --wait-timeout 120
 
-api_addr=$(compose port api 8080)
+api_addr=$(compose port node 8080)
 api_port=${api_addr##*:}
 export FUSIONPANEL_FRONTEND_URL="http://127.0.0.1:${api_port}"
 export FUSIONPANEL_S5_PG_CONTAINER="${project_name}-postgres-1"
