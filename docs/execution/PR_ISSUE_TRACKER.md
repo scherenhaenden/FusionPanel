@@ -167,3 +167,16 @@ The implementation PRs are integrated, but this is not a Sprint 3 release qualif
 | PR | Scope | Primary issue | Evidence | Delivery / remaining |
 |---|---|---|---|---|
 | [#594](https://github.com/scherenhaenden/FusionPanel/pull/594) | Execute browser E2E only at the full Sprint release gate | None directly applies; the workflow change is cross-cutting CI policy. | Workflow commit `bd28a0d`. Follow-up fixture PRs #597, #605, and #609 supplied the disposable fixture and restart-safe admin seed. Final GitHub and local `act` Docker/Playwright runs pass 1/1. | Merged to `sprint-2` by regular merge `705d92ebaf69f66310ba90177d2df2be8cf4d87d`. |
+
+## Sprint 3 superseding release result — 17 November 2026
+
+The 16 November handoff above and the first Sprint 3 checkpoint below are historical. Sprint 3 later passed its release gate and merged through [PR #640](https://github.com/scherenhaenden/FusionPanel/pull/640) at `678fab890b9f892b441a854fbac951eacd1450d5`. The PR reports all 14 CI checks passing, the workspace/agent/frontend gates, package verification, and Docker/Playwright acceptance for static HTTP, reverse-proxy HTTP, invalid-upstream rollback, deletion, and preservation of an unrelated vhost. GitHub issue [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) was closed after PRs #640, #649, and #679. This evidence qualifies those tested slices only; it does not close every HOST capability in the catalog.
+
+## Sprint 10 preparation — 19 November 2026
+
+| Item | Current state | Evidence / next action |
+|---|---|---|
+| Integration branch | `sprint-10` created from master `a8861e6110efaae7dbc589474335ca98c93a44c2` after PR #695. | Feature branches must start from `sprint-10` and target it; final release PR is `sprint-10` -> `master`. |
+| #96 TCP/webhook repair | Implementation and component-level coverage already merged by [PR #364](https://github.com/scherenhaenden/FusionPanel/pull/364), merge `403ddff1aa812e9f39c7bca8f047ec949bf133d4`. | PR evidence: the candidate-fallback unit test passed; module integration reported 13/13; Clippy was blocked by the missing component. The product outage/incident/recovery E2E was explicitly not established and remains under #51. Do not duplicate the fix. |
+| Sprint 10 features | Open: [#683](https://github.com/scherenhaenden/FusionPanel/issues/683), [#684](https://github.com/scherenhaenden/FusionPanel/issues/684), [#685](https://github.com/scherenhaenden/FusionPanel/issues/685). | Implement on separate feature branches with local unit tests; merge only reviewed, passing PRs into `sprint-10`. |
+| Integration and live E2E | Open: [#34](https://github.com/scherenhaenden/FusionPanel/issues/34) and [#51](https://github.com/scherenhaenden/FusionPanel/issues/51). | Run only after all feature PRs are integrated and the version is bumped. Parent issue instructions must be aligned with the sprint branch workflow before dispatch. |

@@ -103,7 +103,7 @@ The Sprint 2 agent defaults to HTTP mode. Existing deployments that use the lega
 
 ---
 
-## 6. Sprint Progress & Next Backlog (Sprint 5: Databases Core)
+## 6. Sprint Progress & Next Backlog (Sprint 10: Observability, Metrics & Alerts)
 
 * **Sprint 3 (Websites & Reverse Proxy — `0.4.0-dev.1`)**: **DONE** — merged into `master` via [PR #640](https://github.com/scherenhaenden/FusionPanel/pull/640) (`678fab8`) with all 14 CI checks passing and disposable Docker Nginx/Playwright E2E verified.
 * **Sprint 4 (TLS / SSL Core — `0.5.0-dev.1`)**: **DONE** — merged into `master` via [PR #649](https://github.com/scherenhaenden/FusionPanel/pull/649) (`2aa430b`) with all 14 CI checks passing and Pebble ACME HTTP-01 + Nginx `:443` E2E verified.
@@ -112,7 +112,7 @@ The Sprint 2 agent defaults to HTTP mode. Existing deployments that use the lega
 * **Sprint 7 (DNS Manager & DKIM Sync — `0.8.0-dev.1`)**: **DONE** — merged into `master` via [PR #672](https://github.com/scherenhaenden/FusionPanel/pull/672) (`d552948`) with BIND9 9.18 Docker E2E verified.
 * **Sprint 8 (File Manager & Cron Jobs — `0.9.0-dev.1`)**: **DONE** — merged into `master` via [PR #679](https://github.com/scherenhaenden/FusionPanel/pull/679) (`289f49a`) with Nginx jailed file manager and Cron `Run Now` Docker E2E verified.
 * **Sprint 9 (Multi-User RBAC, Audit & MFA — `0.10.0-dev.1`)**: **DONE** — implemented across `feat/sprint-9-rbac-users-api` ([PR #690](https://github.com/scherenhaenden/FusionPanel/pull/690)), `feat/sprint-9-audit-mfa-api` ([PR #691](https://github.com/scherenhaenden/FusionPanel/pull/691)), `feat/sprint-9-security-admin-ui` ([PR #692](https://github.com/scherenhaenden/FusionPanel/pull/692)), and `test/sprint-9-rbac-audit-mfa-e2e` ([PR #693](https://github.com/scherenhaenden/FusionPanel/pull/693)). Verified end-to-end in Docker (multi-user `Viewer` `403` isolation, `fp_tok_` scoped API token `200`/`403` enforcement, audit log persistence, and RFC 6238 TOTP MFA enrollment/verification) alongside full workspace, `crates/agent`, and `frontend` test suites. See [the Sprint 9 implementation plan](./SPRINT_09_PLAN.md).
-* **Next — Sprint 10 (Observability, Metrics & Alerts)**: Ready to branch `sprint-10` from `master` after Sprint 9 release merge.
+* **Sprint 10 (Observability, Metrics & Alerts — target `0.11.0-dev.1`)**: **SETUP — integration branch `sprint-10` created from master `a8861e6110efaae7dbc589474335ca98c93a44c2` after Sprint 9 PR #695; feature work has not yet been merged.** See [Sprint 10 plan](./SPRINT_10_PLAN.md). Open work: [#683](https://github.com/scherenhaenden/FusionPanel/issues/683) telemetry + bounded API, [#684](https://github.com/scherenhaenden/FusionPanel/issues/684) alerts + signed webhooks, [#685](https://github.com/scherenhaenden/FusionPanel/issues/685) Dashboard; close gates [#34](https://github.com/scherenhaenden/FusionPanel/issues/34) and [#51](https://github.com/scherenhaenden/FusionPanel/issues/51) remain open. Existing #96 component fix is merged by PR #364; its integrated outage journey remains in #51.
 
 ### Sprint 2 focused release gate — 16 November 2026
 
