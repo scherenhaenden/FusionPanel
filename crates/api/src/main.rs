@@ -7,6 +7,7 @@ mod cron;
 mod databases;
 mod dns;
 mod files;
+mod metrics;
 mod node_jobs;
 mod websites;
 
@@ -43,6 +44,7 @@ struct AppState {
     identity_store: Arc<Mutex<SqliteIdentityStore>>,
     control_store: Arc<Mutex<ControlStore>>,
     jobs_store: Arc<Mutex<fusionpanel_jobs::JobStore>>,
+    metrics_store: metrics::SharedMetricsStore,
     frontend_dir: Option<PathBuf>,
 }
 
@@ -272,6 +274,7 @@ fn app(state: AppState) -> Router {
         .merge(backups::routes())
         .merge(dns::routes())
         .merge(files::routes())
+        .merge(metrics::routes())
         .merge(cron::routes())
         .merge(admin::routes())
         .merge(audit_mfa::routes())
@@ -322,6 +325,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         identity_store: Arc::new(Mutex::new(identity_store)),
         control_store: Arc::new(Mutex::new(control_store)),
         jobs_store: Arc::new(Mutex::new(jobs_store)),
+        metrics_store: metrics::shared_store(),
         frontend_dir,
     };
 
@@ -379,6 +383,7 @@ mod tests {
             control_store: Arc::new(Mutex::new(ControlStore::new_in_memory().unwrap())),
             jobs_store: Arc::new(Mutex::new(fusionpanel_jobs::JobStore::in_memory().unwrap())),
             frontend_dir: None,
+            metrics_store: crate::metrics::shared_store(),
         })
     }
 
@@ -530,6 +535,7 @@ mod tests {
                     fusionpanel_jobs::JobStore::new(&db_path).unwrap(),
                 )),
                 frontend_dir: None,
+                metrics_store: crate::metrics::shared_store(),
             })
         };
 
@@ -676,6 +682,7 @@ mod tests {
             control_store: Arc::new(Mutex::new(ControlStore::new_in_memory().unwrap())),
             jobs_store: Arc::new(Mutex::new(fusionpanel_jobs::JobStore::in_memory().unwrap())),
             frontend_dir: Some(dist),
+            metrics_store: crate::metrics::shared_store(),
         });
 
         let root_resp = router

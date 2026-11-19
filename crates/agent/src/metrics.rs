@@ -1,10 +1,11 @@
 #![forbid(unsafe_code)]
 
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{self, BufRead};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SystemMetrics {
     pub cpu_usage_percent: f64,
     pub memory_used_kb: u64,
@@ -59,7 +60,7 @@ impl MetricsCollector {
 
             if total_diff > 0 {
                 let usage = 1.0 - (idle_diff as f64 / total_diff as f64);
-                usage * 100.0
+                (usage * 100.0).clamp(0.0, 100.0)
             } else {
                 0.0
             }
