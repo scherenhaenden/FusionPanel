@@ -172,7 +172,9 @@ The implementation PRs are integrated, but this is not a Sprint 3 release qualif
 
 The 16 November handoff above and the first Sprint 3 checkpoint below are historical. Sprint 3 later passed its release gate and merged through [PR #640](https://github.com/scherenhaenden/FusionPanel/pull/640) at `678fab890b9f892b441a854fbac951eacd1450d5`. The PR reports all 14 CI checks passing, the workspace/agent/frontend gates, package verification, and Docker/Playwright acceptance for static HTTP, reverse-proxy HTTP, invalid-upstream rollback, deletion, and preservation of an unrelated vhost. GitHub issue [#45](https://github.com/scherenhaenden/FusionPanel/issues/45) was closed after PRs #640, #649, and #679. This evidence qualifies those tested slices only; it does not close every HOST capability in the catalog.
 
-## Sprint 10 feature integration checkpoint — 19 November 2026
+## Sprint 10 feature integration checkpoint — 19 November 2026 (historical; superseded below)
+
+The table below captures the pre-version-bump checkpoint only. Use the final-candidate section that follows for current Sprint 10 status and release decisions.
 
 | Item | Current state | Evidence / next action |
 |---|---|---|
@@ -183,3 +185,31 @@ The 16 November handoff above and the first Sprint 3 checkpoint below are histor
 | [#699](https://github.com/scherenhaenden/FusionPanel/pull/699) | Dashboard telemetry and alert-rule management merged to `sprint-10` at `c0e2762a6173fce559504a81dbfffbf07980b403`. | [#685](https://github.com/scherenhaenden/FusionPanel/issues/685) remains open. Dashboard/API/routes: 3 suites / 14 tests passed; `git diff --check` passed. Tests mock API responses; no live browser/control-plane acceptance claimed. |
 | Sprint 10 features | All three reviewed feature PRs are integrated. | Integrated pre-bump head: `c0e2762a6173fce559504a81dbfffbf07980b403`. Next: bump to `0.11.0-dev.1`, then run resource-safe integration, live E2E and quality gates. Do not close product issues before acceptance on `master`. |
 | Integration and live E2E | [#34](https://github.com/scherenhaenden/FusionPanel/issues/34) and [#51](https://github.com/scherenhaenden/FusionPanel/issues/51) remain open. | Product-level live verification has not been performed; no real agent-to-dashboard alert/recovery journey has run. Run after the version bump on the exact sprint candidate; record missing prerequisites as BLOCKED, never PASS. |
+
+## Sprint 10 versioned gate and follow-up PRs — 19 November 2026
+
+All PRs below target `sprint-10`; none was merged to `master`.
+
+| PR | Scope | Primary issue | Evidence | Delivery / remaining |
+|---|---|---|---|---|
+| [#700](https://github.com/scherenhaenden/FusionPanel/pull/700) | Version bump to `0.11.0-dev.1`. | Sprint-wide release metadata; no single issue. | Locked offline Cargo metadata for root and agent manifests; `git diff --check`. | Merged regularly at `347521e6c49807af1df4119fa0649e7d479dec8e`. |
+| [#701](https://github.com/scherenhaenden/FusionPanel/pull/701) | Live product E2E for agent telemetry, threshold alerts, signed webhooks, and restart persistence. | [#683](https://github.com/scherenhaenden/FusionPanel/issues/683), [#684](https://github.com/scherenhaenden/FusionPanel/issues/684), [#51](https://github.com/scherenhaenden/FusionPanel/issues/51). | Dedicated loopback-only process E2E passed 1/1 using actual API and agent binaries, temporary SQLite, and runtime credentials. Verifies a real agent sample triggers the alert; recovery uses an explicit synthetic low sample. | Merged regularly at `d5c9816d7633b1559837c724df142e236dcbae3e`. The synthetic recovery does not satisfy measured outage acceptance in #51. |
+| [#702](https://github.com/scherenhaenden/FusionPanel/pull/702) | Repair root formatting/Clippy gates and mark a host-mutating secrets integration case explicitly ignored. | Sprint-wide quality gate and secrets host-fixture limitation. | Root fmt/Clippy, agent/observability/secrets Clippy, API 34/34, observability 36/36, secrets 31 passed / 1 ignored. | Merged regularly at `8c906210d89548a77ee48684141d4b464793fb29`. The ignored systemd/machine-restore case requires an isolated runner and was not run on the workstation. |
+| [#703](https://github.com/scherenhaenden/FusionPanel/pull/703) | Remove duplicate E2E lint attributes and unused test helper. | Sprint-wide E2E quality gate. | E2E Clippy passed; default package tests 2 passed / 1 ignored; dedicated product process E2E passed 1/1. | Merged regularly at `752ebbd4265b7073278bd063d82fae100a3c86d7`. |
+
+### Exact versioned candidate verification
+
+Candidate: `sprint-10` at `752ebbd4265b7073278bd063d82fae100a3c86d7`, version `0.11.0-dev.1`.
+
+- Root workspace tests: 151 passed, 0 failed.
+- Agent: 51 passed, 0 failed. Observability: 36 passed, 0 failed. Secrets: 31 passed, 0 failed, 1 isolated systemd/machine-restore test ignored. E2E sample package: 2 passed, 0 failed, 1 SMTP fixture test ignored. Separate live API/agent E2E: 1 passed.
+- Frontend: 11 suites / 48 tests passed; production build passed.
+- Root formatting check and Clippy with `-D warnings` for root, agent, observability, secrets, and E2E packages passed. Exact API and agent binary builds passed.
+- Loopback-only test permissions were used where the sandbox denied local socket binding. Cargo ran offline, serially, with a two-job limit. No Docker, Playwright, Act, external SMTP/webhook, or host systemd workload was started.
+
+### Remaining acceptance and issue state
+
+- [#51](https://github.com/scherenhaenden/FusionPanel/issues/51) remains **BLOCKED**: the product has no integrated HTTP uptime target/collector that can observe a measured service outage. The live process E2E verifies a real agent metrics threshold trigger and a synthetic recovery only.
+- [#685](https://github.com/scherenhaenden/FusionPanel/issues/685) remains open: 48 mocked frontend tests and a production build pass, but no browser run has exercised the Dashboard against a disposable integrated API and real agent.
+- [#683](https://github.com/scherenhaenden/FusionPanel/issues/683), [#684](https://github.com/scherenhaenden/FusionPanel/issues/684), and parent [#34](https://github.com/scherenhaenden/FusionPanel/issues/34) remain open until the full release acceptance is verified on `master` and the merged PR SHA and actual results are recorded.
+- The release gate is **not 100% green**. Do not create the single `sprint-10` → `master` release PR or close issues until the measured outage/recovery journey and live Dashboard browser acceptance pass. Follow-on work is recorded in [the Sprint 10 plan](./SPRINT_10_PLAN.md).
