@@ -25,7 +25,8 @@ fn test_rotation_flow() {
     let new_wrapped_dek = planner.reencrypt_wrapped_dek(&old_kek, &new_kek, &wrapped_dek);
     assert!(new_wrapped_dek.is_ok());
 
-    let unwrapped_dek = EnvelopeKeyManager::unwrap_dek(&new_kek, &new_wrapped_dek.unwrap()).unwrap();
+    let unwrapped_dek =
+        EnvelopeKeyManager::unwrap_dek(&new_kek, &new_wrapped_dek.unwrap()).unwrap();
     assert_eq!(dek.as_bytes(), unwrapped_dek.as_bytes());
 
     assert!(planner.mark_completed().is_ok());
@@ -68,5 +69,8 @@ fn test_mark_failed() {
     let mut planner = KeyRotationPlanner::new(1);
     planner.begin_rotation().unwrap();
     planner.mark_failed("Network error".to_string());
-    assert_eq!(planner.status, RotationStatus::Failed("Network error".to_string()));
+    assert_eq!(
+        planner.status,
+        RotationStatus::Failed("Network error".to_string())
+    );
 }

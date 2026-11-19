@@ -7,18 +7,23 @@ use axum::{
     Json, Router,
 };
 use chrono::Utc;
+#[cfg(test)]
+use observability::alert_store::AlertStore;
 use observability::{
-    alert_store::{AlertStore, AlertStoreError, NewAlertRule},
+    alert_store::{AlertStoreError, NewAlertRule},
     webhook_signer::WebhookSigner,
 };
 use serde::Deserialize;
 use serde_json::json;
+#[cfg(test)]
+use std::sync::Arc;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::Arc,
     time::Duration,
 };
-use tokio::{sync::Mutex, time::sleep};
+#[cfg(test)]
+use tokio::sync::Mutex;
+use tokio::time::sleep;
 use uuid::Uuid;
 
 use super::{metrics::NodeMetricSample, node_jobs, AppState, ErrorDetail, ErrorResponse};
@@ -28,6 +33,7 @@ const MAX_WEBHOOK_SECRET_BYTES: usize = 1024;
 const MAX_DELIVERY_ATTEMPTS: u32 = 3;
 const WEBHOOK_TIMEOUT: Duration = Duration::from_secs(2);
 
+#[cfg(test)]
 pub(super) fn test_store() -> Arc<Mutex<AlertStore>> {
     let encryption_key = [0xB7; 32];
     Arc::new(Mutex::new(

@@ -55,7 +55,12 @@ pub struct SyntheticProber {
 }
 
 impl SyntheticProber {
-    pub fn new(target: ProbeTarget, config: ProbeConfig, failure_threshold: u32, latency_threshold_ms: u64) -> Result<Self, String> {
+    pub fn new(
+        target: ProbeTarget,
+        config: ProbeConfig,
+        failure_threshold: u32,
+        latency_threshold_ms: u64,
+    ) -> Result<Self, String> {
         match &target {
             ProbeTarget::Http { url, .. } => {
                 if !url.starts_with("http://") && !url.starts_with("https://") {
@@ -84,7 +89,12 @@ impl SyntheticProber {
     }
 
     pub fn from_config(config: SyntheticProberConfig) -> Result<Self, String> {
-        Self::new(config.target, config.config, config.failure_threshold, config.latency_threshold_ms)
+        Self::new(
+            config.target,
+            config.config,
+            config.failure_threshold,
+            config.latency_threshold_ms,
+        )
     }
 
     pub fn evaluate_outcome(&mut self, outcome: &ProbeOutcome) -> AlertState {
