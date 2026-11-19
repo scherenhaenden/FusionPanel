@@ -337,6 +337,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         frontend_dir,
     };
 
+    alerts::spawn_uptime_monitor(state.clone());
     let app = app(state);
 
     let listener = TcpListener::bind(&listen_addr).await?;
