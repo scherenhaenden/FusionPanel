@@ -4,6 +4,23 @@ import '@testing-library/jest-dom';
 import App from '../App';
 import { SessionManager } from '../auth/session';
 
+jest.mock('../api', () => ({
+  api: {
+    getHealth: jest.fn().mockResolvedValue({ status: 'ok', service: 'fusionpanel-api', version: 'test' }),
+    getCapabilities: jest.fn().mockResolvedValue({ capabilities: [] }),
+    getMe: jest.fn().mockResolvedValue({ user_id: 'test-user', tenant_id: 'test-tenant', roles: ['operator'] }),
+    getNodes: jest.fn().mockResolvedValue([]),
+    getJobs: jest.fn().mockResolvedValue([]),
+    getLatestMetrics: jest.fn().mockResolvedValue([]),
+    getNodeMetrics: jest.fn().mockResolvedValue([]),
+    getActiveAlerts: jest.fn().mockResolvedValue([]),
+    getAlertRules: jest.fn().mockResolvedValue([]),
+    getAlertDeliveries: jest.fn().mockResolvedValue([]),
+    createAlertRule: jest.fn(),
+    deleteAlertRule: jest.fn(),
+  },
+}));
+
 describe('App Routes (Unit Evidence)', () => {
   afterEach(() => {
     SessionManager.clear();
