@@ -339,6 +339,11 @@ fn validate_rule(request: &CreateAlertRuleRequest) -> Result<(), ErrorResponse> 
     {
         return Err(node_jobs::bad_request());
     }
+    if request.metric == "http_uptime_percent"
+        && (request.operator != "below" || request.threshold == 0.0)
+    {
+        return Err(node_jobs::bad_request());
+    }
     if request.metric == "disk_io_ops" && !(0.0..=1.0e15).contains(&request.threshold) {
         return Err(node_jobs::bad_request());
     }
@@ -623,6 +628,24 @@ struct UptimeProbeOutcome {
 }
 
 async fn probe_uptime_target(target: &UptimeTargetRecord) -> UptimeProbeOutcome {
+    let started = Instant::now();
+    let timeout = Duration::from_millis(target.timeout_millis);
+    let outcome = match tokio::time::timeout(timeout, probe_uptime_target_inner(target)).await {
+        Ok(outcome) => outcome,
+        Err(_) => UptimeProbeOutcome {
+            success: false,
+            http_status: None,
+            latency_millis: 0,
+            error_code: Some("timeout"),
+        },
+    };
+    UptimeProbeOutcome {
+        latency_millis: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        ..outcome
+    }
+}
+
+async fn probe_uptime_target_inner(target: &UptimeTargetRecord) -> UptimeProbeOutcome {
     let started = Instant::now();
     let url = match validate_webhook_url(&target.url) {
         Ok(url) => url,
@@ -1100,6 +1123,24 @@ mod tests {
             enabled: true,
         };
         assert!(validate_rule(&invalid).is_err());
+
+        let mut uptime = CreateAlertRuleRequest {
+            name: "HTTP uptime".to_string(),
+            metric: "http_uptime_percent".to_string(),
+            operator: "above".to_string(),
+            threshold: 50.0,
+            severity: "warning".to_string(),
+            webhook_url: "https://alerts.example.test/hook".to_string(),
+            webhook_secret: "x".repeat(40),
+            enabled: true,
+        };
+        assert!(validate_rule(&uptime).is_err());
+        uptime.operator = "below".to_string();
+        uptime.threshold = 0.0;
+        assert!(validate_rule(&uptime).is_err());
+        uptime.threshold = 50.0;
+        assert!(validate_rule(&uptime).is_ok());
+
         assert!(validate_webhook_url("http://203.0.113.10/hook").is_err());
         assert!(validate_webhook_url("https://user:pass@alerts.example.test/hook").is_err());
         assert!(validate_webhook_url("https://alerts.example.test/hook?token=hidden").is_err());
