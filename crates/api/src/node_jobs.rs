@@ -436,7 +436,7 @@ async fn complete_job(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn authenticate_node(
+pub(super) async fn authenticate_node(
     state: &AppState,
     node_id: Uuid,
     token: &str,
@@ -484,7 +484,7 @@ pub(super) fn authorized_admin(state: &AppState, headers: &HeaderMap) -> bool {
         && bool::from(token.as_bytes().ct_eq(state.admin_token.as_bytes()))
 }
 
-fn bearer_token(headers: &HeaderMap) -> Option<&str> {
+pub(super) fn bearer_token(headers: &HeaderMap) -> Option<&str> {
     headers
         .get(AUTHORIZATION)
         .and_then(|header| header.to_str().ok())
@@ -580,6 +580,7 @@ mod tests {
             )),
             jobs_store: Arc::new(Mutex::new(fusionpanel_jobs::JobStore::in_memory().unwrap())),
             frontend_dir: None,
+            metrics_store: crate::metrics::shared_store(),
         }
     }
 

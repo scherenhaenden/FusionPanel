@@ -972,6 +972,7 @@ mod tests {
                 fusionpanel_jobs::JobStore::new(&db_path).unwrap(),
             )),
             frontend_dir: None,
+            metrics_store: crate::metrics::shared_store(),
         };
         (super::super::app(state), dir, identity_store)
     }
