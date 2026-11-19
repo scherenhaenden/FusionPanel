@@ -286,6 +286,7 @@ async fn test_metrics_collection_interval_and_storage_retention() {
 }
 
 #[tokio::test]
+#[ignore = "requires a configured disposable SMTP fixture or notification provider"]
 async fn test_alert_delivery_dispatch_email() {
     let temp = tempfile::tempdir().unwrap();
     let database_path = temp.path().join("incidents_email.sqlite");
