@@ -20,11 +20,23 @@ The existing work for issue #96 is already on this base: PR #364 merged at `403d
 
 | Branch | Issue | Scope | Local unit gate |
 |---|---|---|---|
-| `feat/sprint-10-metrics-agent` | [#683](https://github.com/scherenhaenden/FusionPanel/issues/683) | Periodically collect actual node CPU, memory, disk-I/O, and job/agent health; report with node-scoped credentials; expose validated samples through a bounded, per-node ring-buffer API. Reuse the existing agent `MetricsCollector` and `system.info` contract where appropriate. | Agent metrics/worker tests and focused API ingestion/read authorization tests only. |
+| `feat/sprint-10-metrics-agent` | [#683](https://github.com/scherenhaenden/FusionPanel/issues/683) | Periodically collect actual node CPU, memory and disk-I/O; report with node-scoped credentials; expose validated samples through a bounded, per-node ring-buffer API. Node/job health comes from existing control-plane records. Reuse the existing agent `MetricsCollector` and `system.info` contract where appropriate. | Agent metrics/worker tests and focused API ingestion/read authorization tests only. |
 | `feat/sprint-10-alerts-webhook-api` | [#684](https://github.com/scherenhaenden/FusionPanel/issues/684), parent [#34](https://github.com/scherenhaenden/FusionPanel/issues/34) | Connect live samples to configurable threshold rules, persist rule and delivery state, send HMAC-signed webhooks with bounded timeout/retry behavior, and expose delivery history. Integrate with the main authenticated control-plane API; the separate observability example server is not product integration. | Focused alert evaluator, signing, persistence, authorization, and failure/retry tests for touched packages. |
 | `feat/sprint-10-dashboard-metrics-ui` | [#685](https://github.com/scherenhaenden/FusionPanel/issues/685) | Show current node telemetry and recent bounded history; allow operators to manage supported alert rules and webhook targets; show loading, stale, empty, unauthorized, and API error states. | Focused Dashboard and API-client frontend unit tests. |
 
 The E2E work item is [#51](https://github.com/scherenhaenden/FusionPanel/issues/51) (S48). It is a sprint-close gate, not a substitute for feature-level unit tests. Keep the existing loopback TCP/webhook coverage in #96 and add the real control-plane flow only once the three feature slices are integrated.
+
+## Integrated feature checkpoint — 19 November 2026
+
+All three atomic feature PRs have been reviewed and merged into `sprint-10`:
+
+| PR | Feature | Sprint merge SHA | Focused local evidence |
+|---|---|---|---|
+| [#697](https://github.com/scherenhaenden/FusionPanel/pull/697) | Agent metrics publication and bounded API | `e4d142a24a3993a32232115fef526f808fa35276` | API metrics 4/4; agent metrics report 1/1; agent collector 1/1. |
+| [#698](https://github.com/scherenhaenden/FusionPanel/pull/698) | Persistent alert rules and signed webhook delivery | `78ad9eeb0648eb46ae6cb2421a5c6bc9e4bcdc7b` | API alerts 5/5; API metrics 4/4; alert-store 2/2. Delivery tests use ephemeral loopback only. |
+| [#699](https://github.com/scherenhaenden/FusionPanel/pull/699) | Dashboard telemetry and alert management | `c0e2762a6173fce559504a81dbfffbf07980b403` | Dashboard/API/routes 3 suites, 14 tests passed with mocked API responses. |
+
+The integrated head before version bump is `c0e2762a6173fce559504a81dbfffbf07980b403`. These are feature-level unit results only; no product-level agent/API/browser E2E has run yet. Next, bump the version to `0.11.0-dev.1`, run the resource-safe sprint-close sequence below against that exact versioned head, and open one release PR to `master` only after recording the gate outcome. Issues #683–#685, #34 and #51 remain open pending full acceptance.
 
 ## Sprint-close acceptance
 
@@ -47,6 +59,6 @@ On the fully integrated and version-bumped `sprint-10` candidate:
 ## Scope boundaries
 
 - Reuse `modules/observability/` and `integration/observability/`; do not duplicate the already-merged #96 TCP fallback or its local webhook tests.
-- The existing `crates/agent/src/metrics.rs` collector currently feeds `system.info`; periodic authenticated publication and the main API ring-buffer route are still needed.
+- PR #697 connects the existing agent collector to authenticated periodic publication and adds the main API ring-buffer route. The API history is in memory and is cleared on restart; no durable time-series storage is claimed.
 - The existing `integration/observability` HTTP process is a standalone package and is not mounted by `fusionpanel-api`. Its unauthenticated `/metrics` behavior is not the new product endpoint contract.
 - Keep unsupported notification providers and broader observability capabilities explicit in UI/API and the capability ledger.
