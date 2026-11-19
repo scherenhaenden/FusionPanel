@@ -5,6 +5,8 @@ This standalone package contains two different test lanes:
 - `tests/e2e.rs` exercises the separate `integration/observability` sample service. It is not the FusionPanel product API.
 - `tests/live_api_alerts.rs` starts the real `fusionpanel-api` and `fusionpanel-agent` binaries, uses an isolated temporary SQLite database, and sends webhooks to a receiver bound only to `127.0.0.1`.
 
+The separate integration suite includes an email test that requires an externally configured SMTP fixture/provider. That case is explicitly ignored when the prerequisite is absent; it is not counted as a pass or as Sprint 10 product acceptance.
+
 The live API lane creates ephemeral credentials at runtime, clears the child processes' inherited environment, and suppresses their output. It reads host telemetry through the agent collector; the agent has no queued jobs and cannot modify host services. It verifies node-scoped ingestion, operator authorization, alert transitions, signed webhook delivery, and persistence of the alert rule, delivery history, and encrypted webhook secret across an API restart. Metrics history is in memory and is expected to be empty after restart.
 
 ## Run the live API lane
@@ -21,7 +23,7 @@ Then run the live process test against those exact binaries:
 ```sh
 FUSIONPANEL_API_BINARY="$PWD/target/debug/fusionpanel-api" \
 FUSIONPANEL_AGENT_BINARY="$PWD/crates/agent/target/debug/fusionpanel-agent" \
-CARGO_BUILD_JOBS=2 cargo test --offline --manifest-path tests/e2e/observability/Cargo.toml --test live_api_alerts -- --nocapture
+CARGO_BUILD_JOBS=2 cargo test --offline --manifest-path tests/e2e/observability/Cargo.toml --test live_api_alerts -- --ignored --nocapture
 ```
 
 The test chooses ephemeral loopback ports and removes the temporary database when it ends. It does not require Docker or an externally running API. Missing product binaries are reported as `BLOCKED`; the test does not silently fall back to a mock server.

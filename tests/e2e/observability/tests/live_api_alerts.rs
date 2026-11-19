@@ -61,6 +61,7 @@ async fn capture_webhook(
 }
 
 #[tokio::test]
+#[ignore = "requires locally built FusionPanel API and agent binaries; run explicitly per README"]
 async fn real_agent_metrics_trigger_and_resolve_signed_alerts_across_restart() {
     let api_binary = required_binary("FUSIONPANEL_API_BINARY");
     let agent_binary = required_binary("FUSIONPANEL_AGENT_BINARY");
