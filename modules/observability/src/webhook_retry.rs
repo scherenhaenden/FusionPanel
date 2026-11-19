@@ -73,8 +73,8 @@ impl RetryPolicy {
         if attempt == 0 {
             return Duration::from_millis(0);
         }
-        
-        let shift = attempt.saturating_sub(1) as u32;
+
+        let shift = attempt.saturating_sub(1);
         let multiplier = 2u64.checked_pow(shift).unwrap_or(u64::MAX);
         let exponential_delay = self.base_delay_ms.saturating_mul(multiplier);
         let delay = std::cmp::min(exponential_delay, self.max_delay_ms);
@@ -82,9 +82,9 @@ impl RetryPolicy {
         let jitter = (delay as f64) * self.jitter_factor;
         let rand_val: f64 = rand::random();
         let random_jitter = (rand_val * 2.0 * jitter) - jitter;
-        
+
         let final_delay = (delay as f64) + random_jitter;
-        
+
         Duration::from_millis(final_delay.max(0.0) as u64)
     }
 }
@@ -150,7 +150,12 @@ impl WebhookRetryQueue {
         // Success means the task was handled and does not return to the queue.
     }
 
-    pub fn record_failure(&mut self, mut task: WebhookDeliveryTask, status: Option<u16>, error: Option<String>) {
+    pub fn record_failure(
+        &mut self,
+        mut task: WebhookDeliveryTask,
+        status: Option<u16>,
+        error: Option<String>,
+    ) {
         task.attempt_count += 1;
         task.last_attempted_at = Some(Instant::now());
         task.last_status = status;
@@ -168,7 +173,7 @@ impl WebhookRetryQueue {
             });
         }
     }
-    
+
     pub fn generate_signature(secret: &str, payload: &[u8]) -> Option<String> {
         if let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) {
             mac.update(payload);
