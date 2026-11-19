@@ -3,14 +3,16 @@
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
     http::{HeaderMap, StatusCode},
-    routing::{delete, get},
+    routing::{delete, get, post},
     Json, Router,
 };
 use chrono::Utc;
 #[cfg(test)]
 use observability::alert_store::AlertStore;
 use observability::{
-    alert_store::{AlertStoreError, NewAlertRule},
+    alert_store::{
+        AlertStoreError, NewAlertRule, NewUptimeTarget, UptimeTargetRecord, UptimeTransition,
+    },
     webhook_signer::WebhookSigner,
 };
 use serde::Deserialize;
@@ -19,11 +21,11 @@ use serde_json::json;
 use std::sync::Arc;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::Duration,
+    time::{Duration, Instant},
 };
 #[cfg(test)]
 use tokio::sync::Mutex;
-use tokio::time::sleep;
+use tokio::{task::JoinSet, time::sleep};
 use uuid::Uuid;
 
 use super::{metrics::NodeMetricSample, node_jobs, AppState, ErrorDetail, ErrorResponse};
@@ -32,6 +34,8 @@ const MAX_RULES_BODY_BYTES: usize = 8 * 1024;
 const MAX_WEBHOOK_SECRET_BYTES: usize = 1024;
 const MAX_DELIVERY_ATTEMPTS: u32 = 3;
 const WEBHOOK_TIMEOUT: Duration = Duration::from_secs(2);
+const UPTIME_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const UPTIME_MAX_CONCURRENT_CHECKS: usize = 10;
 
 #[cfg(test)]
 pub(super) fn test_store() -> Arc<Mutex<AlertStore>> {
@@ -47,6 +51,17 @@ pub(super) fn routes() -> Router<AppState> {
         .route("/v1/alerts/rules/{id}", delete(delete_rule))
         .route("/v1/alerts/active", get(active_alerts))
         .route("/v1/alerts/deliveries", get(list_deliveries))
+        .route(
+            "/v1/uptime/targets",
+            get(list_uptime_targets).post(create_uptime_target),
+        )
+        .route("/v1/uptime/targets/{id}", delete(delete_uptime_target))
+        .route(
+            "/v1/uptime/targets/{id}/disable",
+            post(disable_uptime_target),
+        )
+        .route("/v1/uptime/targets/{id}/checks", get(list_uptime_checks))
+        .route("/v1/uptime/incidents", get(list_uptime_incidents))
         .layer(DefaultBodyLimit::max(MAX_RULES_BODY_BYTES))
 }
 
@@ -71,6 +86,12 @@ fn default_enabled() -> bool {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DeliveryQuery {
+    limit: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UptimeChecksQuery {
     limit: Option<u32>,
 }
 
@@ -170,11 +191,130 @@ async fn list_deliveries(
     Ok(Json(json!({ "deliveries": deliveries })))
 }
 
+async fn list_uptime_targets(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    require_operator(&state, &headers).await?;
+    let targets = state
+        .alerts_store
+        .lock()
+        .await
+        .uptime_targets()
+        .map_err(map_store_error)?;
+    Ok(Json(json!({ "targets": targets })))
+}
+
+async fn create_uptime_target(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(mut target): Json<NewUptimeTarget>,
+) -> Result<(StatusCode, Json<serde_json::Value>), ErrorResponse> {
+    require_operator(&state, &headers).await?;
+    let _ = validate_uptime_target(&target)?;
+    target.name = target.name.trim().to_string();
+    let now = Utc::now();
+    let created = state
+        .alerts_store
+        .lock()
+        .await
+        .create_uptime_target(&target, &now.to_rfc3339(), now.timestamp_millis())
+        .map_err(map_store_error)?;
+    Ok((StatusCode::CREATED, Json(json!({ "target": created }))))
+}
+
+async fn disable_uptime_target(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ErrorResponse> {
+    require_operator(&state, &headers).await?;
+    Uuid::parse_str(&id).map_err(|_| node_jobs::bad_request())?;
+    let disabled = state
+        .alerts_store
+        .lock()
+        .await
+        .disable_uptime_target(&id, &Utc::now().to_rfc3339())
+        .map_err(map_store_error)?;
+    if !disabled {
+        return Err(not_found("Uptime target not found"));
+    }
+    evaluate_uptime_value(&state, &id, 100.0, &Utc::now().to_rfc3339()).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_uptime_target(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ErrorResponse> {
+    require_operator(&state, &headers).await?;
+    Uuid::parse_str(&id).map_err(|_| node_jobs::bad_request())?;
+    let deleted = state
+        .alerts_store
+        .lock()
+        .await
+        .delete_uptime_target(&id)
+        .map_err(map_store_error)?;
+    if !deleted {
+        return Err(not_found("Uptime target not found"));
+    }
+    evaluate_uptime_value(&state, &id, 100.0, &Utc::now().to_rfc3339()).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn list_uptime_checks(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Query(query): Query<UptimeChecksQuery>,
+) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    require_operator(&state, &headers).await?;
+    Uuid::parse_str(&id).map_err(|_| node_jobs::bad_request())?;
+    let store = state.alerts_store.lock().await;
+    if !store
+        .uptime_targets()
+        .map_err(map_store_error)?
+        .iter()
+        .any(|target| target.id == id)
+    {
+        return Err(not_found("Uptime target not found"));
+    }
+    let checks = store
+        .uptime_checks(&id, query.limit.unwrap_or(50))
+        .map_err(map_store_error)?;
+    Ok(Json(json!({ "checks": checks })))
+}
+
+async fn list_uptime_incidents(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<UptimeChecksQuery>,
+) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    require_operator(&state, &headers).await?;
+    let incidents = state
+        .alerts_store
+        .lock()
+        .await
+        .uptime_incidents(query.limit.unwrap_or(50))
+        .map_err(map_store_error)?;
+    Ok(Json(json!({ "incidents": incidents })))
+}
+
 async fn require_operator(state: &AppState, headers: &HeaderMap) -> Result<(), ErrorResponse> {
     if node_jobs::authorized_operator(state, headers).await {
         Ok(())
     } else {
         Err(node_jobs::unauthorized())
+    }
+}
+
+fn not_found(message: &'static str) -> ErrorResponse {
+    ErrorResponse {
+        error: ErrorDetail {
+            code: "not_found",
+            message,
+        },
     }
 }
 
@@ -185,7 +325,7 @@ fn validate_rule(request: &CreateAlertRuleRequest) -> Result<(), ErrorResponse> 
     }
     if !matches!(
         request.metric.as_str(),
-        "cpu_usage_percent" | "memory_used_percent" | "disk_io_ops"
+        "cpu_usage_percent" | "memory_used_percent" | "disk_io_ops" | "http_uptime_percent"
     ) || !matches!(request.operator.as_str(), "above" | "below")
         || !matches!(request.severity.as_str(), "info" | "warning" | "critical")
         || !request.threshold.is_finite()
@@ -194,7 +334,7 @@ fn validate_rule(request: &CreateAlertRuleRequest) -> Result<(), ErrorResponse> 
     }
     if matches!(
         request.metric.as_str(),
-        "cpu_usage_percent" | "memory_used_percent"
+        "cpu_usage_percent" | "memory_used_percent" | "http_uptime_percent"
     ) && !(0.0..=100.0).contains(&request.threshold)
     {
         return Err(node_jobs::bad_request());
@@ -229,6 +369,21 @@ fn validate_webhook_url(raw_url: &str) -> Result<reqwest::Url, ErrorResponse> {
         "http" if is_loopback_host(host) => Ok(url),
         _ => Err(node_jobs::bad_request()),
     }
+}
+
+fn validate_uptime_target(target: &NewUptimeTarget) -> Result<reqwest::Url, ErrorResponse> {
+    let name = target.name.trim();
+    if name.is_empty()
+        || name.len() > 128
+        || name.chars().any(char::is_control)
+        || !(200..=299).contains(&target.expected_status)
+        || !(30..=86_400).contains(&target.interval_seconds)
+        || !(250..=10_000).contains(&target.timeout_millis)
+        || !(1..=5).contains(&target.failure_threshold)
+    {
+        return Err(node_jobs::bad_request());
+    }
+    validate_webhook_url(&target.url)
 }
 
 fn is_loopback_host(host: &str) -> bool {
@@ -335,6 +490,202 @@ pub(super) async fn evaluate_sample(
             .map_err(map_store_error)?;
     }
     Ok(())
+}
+
+async fn evaluate_uptime_value(
+    state: &AppState,
+    target_id: &str,
+    value: f64,
+    recorded_at: &str,
+) -> Result<(), ErrorResponse> {
+    let rules = match state.alerts_store.lock().await.rules_for_evaluation() {
+        Ok(rules) => rules,
+        Err(AlertStoreError::SecretKeyUnavailable) => return Ok(()),
+        Err(error) => return Err(map_store_error(error)),
+    };
+    let node_id = format!("uptime:{target_id}");
+    for rule in rules
+        .into_iter()
+        .filter(|rule| rule.rule.metric == "http_uptime_percent")
+    {
+        let triggered = compare(value, &rule.rule.operator, rule.rule.threshold);
+        let transition_at = Utc::now().to_rfc3339();
+        let transition = state
+            .alerts_store
+            .lock()
+            .await
+            .transition(&rule.rule.id, &node_id, triggered, value, &transition_at)
+            .map_err(map_store_error)?;
+        let Some(transition) = transition else {
+            continue;
+        };
+        let delivery_id = state
+            .alerts_store
+            .lock()
+            .await
+            .create_delivery(&rule.rule.id, &node_id, transition.as_str(), &transition_at)
+            .map_err(map_store_error)?;
+        let payload = json!({
+            "event": transition.as_str(),
+            "rule_id": rule.rule.id,
+            "rule_name": rule.rule.name,
+            "metric": rule.rule.metric,
+            "operator": rule.rule.operator,
+            "threshold": rule.rule.threshold,
+            "severity": rule.rule.severity,
+            "node_id": node_id,
+            "target_id": target_id,
+            "value": value,
+            "recorded_at": recorded_at,
+        });
+        let payload = serde_json::to_string(&payload).map_err(|_| node_jobs::internal_error())?;
+        let signed_at = Utc::now().timestamp().max(0) as u64;
+        let signer = WebhookSigner::new(rule.secret.as_bytes().to_vec(), 300);
+        let signature = signer.sign(&payload, signed_at);
+        let outcome = deliver_webhook(&rule.rule.webhook_url, &payload, &signature).await;
+        state
+            .alerts_store
+            .lock()
+            .await
+            .finish_delivery(
+                &delivery_id,
+                outcome.status,
+                outcome.attempt_count,
+                outcome.http_status,
+                outcome.error_code,
+                &Utc::now().to_rfc3339(),
+            )
+            .map_err(map_store_error)?;
+    }
+    Ok(())
+}
+
+pub(super) fn spawn_uptime_monitor(state: AppState) {
+    tokio::spawn(async move {
+        loop {
+            process_due_uptime_targets(&state).await;
+            sleep(UPTIME_POLL_INTERVAL).await;
+        }
+    });
+}
+
+async fn process_due_uptime_targets(state: &AppState) {
+    let now_millis = Utc::now().timestamp_millis();
+    let due = match state
+        .alerts_store
+        .lock()
+        .await
+        .due_uptime_targets(now_millis)
+    {
+        Ok(due) => due,
+        Err(_) => return,
+    };
+    for targets in due.chunks(UPTIME_MAX_CONCURRENT_CHECKS) {
+        let mut tasks = JoinSet::new();
+        for target in targets.iter().cloned() {
+            let task_state = state.clone();
+            tasks.spawn(async move {
+                check_and_record_uptime_target(&task_state, target).await;
+            });
+        }
+        while tasks.join_next().await.is_some() {}
+    }
+}
+
+async fn check_and_record_uptime_target(state: &AppState, target: UptimeTargetRecord) {
+    let outcome = probe_uptime_target(&target).await;
+    let checked_at = Utc::now();
+    let transition = state.alerts_store.lock().await.record_uptime_check(
+        &target.id,
+        outcome.success,
+        outcome.http_status,
+        outcome.latency_millis,
+        outcome.error_code,
+        &checked_at.to_rfc3339(),
+        checked_at.timestamp_millis(),
+    );
+    match transition {
+        Ok(Some(UptimeTransition::Down)) => {
+            let _ = evaluate_uptime_value(state, &target.id, 0.0, &checked_at.to_rfc3339()).await;
+        }
+        Ok(Some(UptimeTransition::Recovered)) => {
+            let _ = evaluate_uptime_value(state, &target.id, 100.0, &checked_at.to_rfc3339()).await;
+        }
+        Ok(None) | Err(_) => {}
+    }
+}
+
+struct UptimeProbeOutcome {
+    success: bool,
+    http_status: Option<u16>,
+    latency_millis: u64,
+    error_code: Option<&'static str>,
+}
+
+async fn probe_uptime_target(target: &UptimeTargetRecord) -> UptimeProbeOutcome {
+    let started = Instant::now();
+    let url = match validate_webhook_url(&target.url) {
+        Ok(url) => url,
+        Err(_) => {
+            return UptimeProbeOutcome {
+                success: false,
+                http_status: None,
+                latency_millis: 0,
+                error_code: Some("invalid_target"),
+            };
+        }
+    };
+    let Some(addresses) = safe_target_addresses(&url).await else {
+        return UptimeProbeOutcome {
+            success: false,
+            http_status: None,
+            latency_millis: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            error_code: Some("blocked_target"),
+        };
+    };
+    let host = url.host_str().unwrap_or_default();
+    let mut builder = reqwest::Client::builder()
+        .timeout(Duration::from_millis(target.timeout_millis))
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy();
+    if host.parse::<IpAddr>().is_err() {
+        if let Some(address) = addresses.first() {
+            builder = builder.resolve(host, *address);
+        }
+    }
+    let client = match builder.build() {
+        Ok(client) => client,
+        Err(_) => {
+            return UptimeProbeOutcome {
+                success: false,
+                http_status: None,
+                latency_millis: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                error_code: Some("client_config"),
+            };
+        }
+    };
+    match client.get(url).send().await {
+        Ok(response) => {
+            let status = response.status().as_u16();
+            let success = status == target.expected_status;
+            UptimeProbeOutcome {
+                success,
+                http_status: Some(status),
+                latency_millis: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                error_code: (!success).then_some("unexpected_status"),
+            }
+        }
+        Err(error) => UptimeProbeOutcome {
+            success: false,
+            http_status: None,
+            latency_millis: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            error_code: Some(if error.is_timeout() {
+                "timeout"
+            } else {
+                "transport_error"
+            }),
+        },
+    }
 }
 
 struct DeliveryOutcome {
@@ -510,6 +861,14 @@ fn map_store_error(error: AlertStoreError) -> ErrorResponse {
                 message: "Alert rule limit reached",
             },
         },
+        AlertStoreError::UptimeTargetLimitReached => ErrorResponse {
+            error: ErrorDetail {
+                code: "conflict",
+                message: "Uptime target limit reached",
+            },
+        },
+        AlertStoreError::UptimeTargetNotFound => not_found("Uptime target not found"),
+        AlertStoreError::InvalidUptimeTarget => node_jobs::bad_request(),
         _ => node_jobs::internal_error(),
     }
 }
@@ -626,6 +985,108 @@ mod tests {
         assert_eq!(rules["rules"].as_array().unwrap().len(), 1);
     }
 
+    #[tokio::test]
+    async fn uptime_target_routes_require_operator_auth_and_return_persisted_targets() {
+        let router = super::super::app(test_state());
+        let unauthorized = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/uptime/targets")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
+
+        let created = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/uptime/targets")
+                    .header("authorization", "Bearer test-admin-token")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "name": "Local health",
+                            "url": "http://127.0.0.1:8080/health",
+                            "expected_status": 200,
+                            "interval_seconds": 60,
+                            "timeout_millis": 1000,
+                            "failure_threshold": 2
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(created.status(), StatusCode::CREATED);
+        let response: serde_json::Value =
+            serde_json::from_slice(&created.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        assert_eq!(response["target"]["name"], "Local health");
+        assert_eq!(response["target"]["status"], "pending");
+        assert_eq!(response["target"]["enabled"], true);
+        let id = response["target"]["id"].as_str().unwrap();
+        let disabled = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/v1/uptime/targets/{id}/disable"))
+                    .header("authorization", "Bearer test-admin-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(disabled.status(), StatusCode::NO_CONTENT);
+        let listed = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/uptime/targets")
+                    .header("authorization", "Bearer test-admin-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let listed: serde_json::Value =
+            serde_json::from_slice(&listed.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        assert_eq!(listed["targets"][0]["enabled"], false);
+        let deleted = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!("/v1/uptime/targets/{id}"))
+                    .header("authorization", "Bearer test-admin-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(deleted.status(), StatusCode::NO_CONTENT);
+        let empty = router
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/uptime/targets")
+                    .header("authorization", "Bearer test-admin-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let empty: serde_json::Value =
+            serde_json::from_slice(&empty.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert!(empty["targets"].as_array().unwrap().is_empty());
+    }
+
     #[test]
     fn rules_reject_unbounded_thresholds_and_unsafe_webhook_urls() {
         let invalid = CreateAlertRuleRequest {
@@ -644,6 +1105,26 @@ mod tests {
         assert!(validate_webhook_url("https://alerts.example.test/hook?token=hidden").is_err());
         assert!(validate_webhook_url("http://127.0.0.1:9000/hook").is_ok());
         assert!(validate_webhook_url("https://alerts.example.test/hook").is_ok());
+    }
+
+    #[test]
+    fn uptime_targets_reject_unsafe_urls_and_unbounded_check_settings() {
+        let mut target = NewUptimeTarget {
+            name: "Public health endpoint".to_string(),
+            url: "https://status.example.test/health".to_string(),
+            expected_status: 200,
+            interval_seconds: 60,
+            timeout_millis: 1_000,
+            failure_threshold: 2,
+        };
+        assert!(validate_uptime_target(&target).is_ok());
+        target.url = "http://192.168.1.1/health".to_string();
+        assert!(validate_uptime_target(&target).is_err());
+        target.url = "https://status.example.test/health?token=secret".to_string();
+        assert!(validate_uptime_target(&target).is_err());
+        target.url = "http://127.0.0.1:8080/health".to_string();
+        target.interval_seconds = 1;
+        assert!(validate_uptime_target(&target).is_err());
     }
 
     #[test]
@@ -816,5 +1297,158 @@ mod tests {
         assert_eq!(deliveries.len(), 1);
         assert_eq!(deliveries[0].status, "delivered");
         assert_eq!(deliveries[0].attempt_count, 1);
+    }
+
+    #[tokio::test]
+    async fn measured_http_outage_and_recovery_create_one_resolved_incident() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            for (status, label) in [(503, "Service Unavailable"), (200, "OK")] {
+                let (stream, _) = listener.accept().await.unwrap();
+                let mut reader = BufReader::new(stream);
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).await.unwrap();
+                    if line == "\r\n" {
+                        break;
+                    }
+                }
+                reader
+                    .get_mut()
+                    .write_all(
+                        format!(
+                            "HTTP/1.1 {status} {label}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        )
+                        .as_bytes(),
+                    )
+                    .await
+                    .unwrap();
+            }
+        });
+        let webhook_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let webhook_address = webhook_listener.local_addr().unwrap();
+        let receiver = tokio::spawn(async move {
+            let mut events = Vec::new();
+            for _ in 0..2 {
+                let (stream, _) = webhook_listener.accept().await.unwrap();
+                let mut reader = BufReader::new(stream);
+                let mut headers = String::new();
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).await.unwrap();
+                    if line == "\r\n" {
+                        break;
+                    }
+                    headers.push_str(&line);
+                }
+                let body_length = headers
+                    .lines()
+                    .find_map(|line| {
+                        let (name, value) = line.split_once(':')?;
+                        name.eq_ignore_ascii_case("content-length")
+                            .then(|| value.trim().parse::<usize>().ok())
+                            .flatten()
+                    })
+                    .unwrap_or_default();
+                let mut body = vec![0; body_length];
+                reader.read_exact(&mut body).await.unwrap();
+                reader
+                    .get_mut()
+                    .write_all(
+                        b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    )
+                    .await
+                    .unwrap();
+                events.push((headers, String::from_utf8(body).unwrap()));
+            }
+            events
+        });
+        let state = test_state();
+        let secret = "uptime fixture signing secret for recovery";
+        state
+            .alerts_store
+            .lock()
+            .await
+            .create_rule(
+                &NewAlertRule {
+                    name: "HTTP service down".to_string(),
+                    metric: "http_uptime_percent".to_string(),
+                    operator: "below".to_string(),
+                    threshold: 50.0,
+                    severity: "warning".to_string(),
+                    webhook_url: format!("http://{webhook_address}/alerts"),
+                    enabled: true,
+                },
+                secret,
+                &Utc::now().to_rfc3339(),
+            )
+            .unwrap();
+        let target = state
+            .alerts_store
+            .lock()
+            .await
+            .create_uptime_target(
+                &NewUptimeTarget {
+                    name: "Recovery fixture".to_string(),
+                    url: format!("http://{address}/health"),
+                    expected_status: 200,
+                    interval_seconds: 30,
+                    timeout_millis: 1_000,
+                    failure_threshold: 1,
+                },
+                &Utc::now().to_rfc3339(),
+                Utc::now().timestamp_millis(),
+            )
+            .unwrap();
+
+        check_and_record_uptime_target(&state, target.clone()).await;
+        check_and_record_uptime_target(&state, target).await;
+        server.await.unwrap();
+        let events = receiver.await.unwrap();
+
+        let signer = WebhookSigner::new(secret, 300);
+        for (headers, body) in &events {
+            let signature = headers
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("x-fusionpanel-signature")
+                        .then(|| value.trim())
+                })
+                .unwrap();
+            signer
+                .verify(body, signature, Utc::now().timestamp().max(0) as u64)
+                .unwrap();
+        }
+        assert_eq!(events.len(), 2);
+        let triggered: serde_json::Value = serde_json::from_str(&events[0].1).unwrap();
+        assert_eq!(triggered["event"], "triggered");
+        assert_eq!(triggered["metric"], "http_uptime_percent");
+        assert_eq!(triggered["value"], 0.0);
+        let resolved: serde_json::Value = serde_json::from_str(&events[1].1).unwrap();
+        assert_eq!(resolved["event"], "resolved");
+        assert_eq!(resolved["value"], 100.0);
+
+        let store = state.alerts_store.lock().await;
+        let targets = store.uptime_targets().unwrap();
+        assert_eq!(targets[0].status, "up");
+        assert_eq!(targets[0].last_http_status, Some(200));
+        assert_eq!(targets[0].consecutive_failures, 0);
+        let checks = store.uptime_checks(&targets[0].id, 10).unwrap();
+        assert_eq!(checks.len(), 2);
+        assert!(checks[0].success);
+        assert_eq!(checks[1].http_status, Some(503));
+        assert_eq!(checks[1].error_code.as_deref(), Some("unexpected_status"));
+        let incidents = store.uptime_incidents(10).unwrap();
+        assert_eq!(incidents.len(), 1);
+        assert_eq!(incidents[0].state, "recovered");
+        assert!(incidents[0].recovered_at.is_some());
+        assert!(store.active_states().unwrap().is_empty());
+        let deliveries = store.deliveries(10).unwrap();
+        assert_eq!(deliveries.len(), 2);
+        assert!(deliveries
+            .iter()
+            .all(|delivery| delivery.status == "delivered"));
     }
 }
