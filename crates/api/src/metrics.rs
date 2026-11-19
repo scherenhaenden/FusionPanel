@@ -82,13 +82,13 @@ struct MetricIngestRequest {
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct NodeMetricSample {
-    node_id: String,
-    cpu_usage_percent: f64,
-    memory_used_kb: u64,
-    memory_available_kb: u64,
-    disk_io_ops: u64,
-    recorded_at: String,
+pub(super) struct NodeMetricSample {
+    pub(super) node_id: String,
+    pub(super) cpu_usage_percent: f64,
+    pub(super) memory_used_kb: u64,
+    pub(super) memory_available_kb: u64,
+    pub(super) disk_io_ops: u64,
+    pub(super) recorded_at: String,
 }
 
 impl MetricIngestRequest {
@@ -141,6 +141,7 @@ async fn ingest_node_metrics(
         .lock()
         .await
         .push(node_id, sample.clone());
+    super::alerts::evaluate_sample(&state, &sample).await?;
     Ok((StatusCode::CREATED, Json(json!({ "sample": sample }))))
 }
 
@@ -192,6 +193,7 @@ mod tests {
             )),
             jobs_store: Arc::new(Mutex::new(fusionpanel_jobs::JobStore::in_memory().unwrap())),
             metrics_store: shared_store(),
+            alerts_store: crate::alerts::test_store(),
             frontend_dir: None,
         }
     }

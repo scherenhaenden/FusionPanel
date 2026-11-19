@@ -531,6 +531,7 @@ mod tests {
             )),
             frontend_dir: None,
             metrics_store: crate::metrics::shared_store(),
+            alerts_store: crate::alerts::test_store(),
         };
         (crate::app(state), dir)
     }
