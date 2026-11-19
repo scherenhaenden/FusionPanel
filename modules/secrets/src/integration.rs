@@ -149,6 +149,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires an isolated systemd service runner and machine restore capability"]
     fn test_e2e_inject_secret_into_isolated_service() {
         // E2E Verification: Inject secret into isolated service without logging it; recover after restore.
         // As defined in the issue, runtime prerequisites (isolated service injection, full OS restore)
