@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod admin;
+mod alerts;
 mod audit_mfa;
 mod backups;
 mod cron;
@@ -45,6 +46,7 @@ struct AppState {
     control_store: Arc<Mutex<ControlStore>>,
     jobs_store: Arc<Mutex<fusionpanel_jobs::JobStore>>,
     metrics_store: metrics::SharedMetricsStore,
+    alerts_store: Arc<Mutex<observability::alert_store::AlertStore>>,
     frontend_dir: Option<PathBuf>,
 }
 
@@ -81,6 +83,7 @@ impl IntoResponse for ErrorResponse {
             "bad_request" => StatusCode::BAD_REQUEST,
             "conflict" => StatusCode::CONFLICT,
             "forbidden" => StatusCode::FORBIDDEN,
+            "service_unavailable" => StatusCode::SERVICE_UNAVAILABLE,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(self)).into_response()
@@ -278,6 +281,7 @@ fn app(state: AppState) -> Router {
         .merge(cron::routes())
         .merge(admin::routes())
         .merge(audit_mfa::routes())
+        .merge(alerts::routes())
         .fallback(fallback_handler)
         .with_state(state)
         .merge(auth_router)
@@ -317,6 +321,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Ensure core control-store schema migrations are applied on the shared SQLite file
     let control_store = ControlStore::new(Path::new(&db_path))?;
     let jobs_store = fusionpanel_jobs::JobStore::new(Path::new(&db_path))?;
+    let webhook_key = webhook_encryption_key()?;
+    let alerts_store =
+        observability::alert_store::AlertStore::new(Path::new(&db_path), webhook_key.as_deref())?;
     let identity_store = SqliteIdentityStore::open(&db_path)?;
     let frontend_dir = resolve_frontend_dir();
 
@@ -326,6 +333,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         control_store: Arc::new(Mutex::new(control_store)),
         jobs_store: Arc::new(Mutex::new(jobs_store)),
         metrics_store: metrics::shared_store(),
+        alerts_store: Arc::new(Mutex::new(alerts_store)),
         frontend_dir,
     };
 
@@ -339,6 +347,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     Ok(())
+}
+
+fn webhook_encryption_key() -> Result<Option<Vec<u8>>, std::io::Error> {
+    let value = match env::var("FUSIONPANEL_WEBHOOK_ENCRYPTION_KEY") {
+        Ok(value) => value,
+        Err(env::VarError::NotPresent) => return Ok(None),
+        Err(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "FUSIONPANEL_WEBHOOK_ENCRYPTION_KEY is invalid",
+            ));
+        }
+    };
+    let key = hex::decode(value.trim()).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "FUSIONPANEL_WEBHOOK_ENCRYPTION_KEY must be 64 hexadecimal characters",
+        )
+    })?;
+    if key.len() != 32 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "FUSIONPANEL_WEBHOOK_ENCRYPTION_KEY must decode to 32 bytes",
+        ));
+    }
+    Ok(Some(key))
 }
 
 async fn shutdown_signal() {
@@ -384,6 +418,7 @@ mod tests {
             jobs_store: Arc::new(Mutex::new(fusionpanel_jobs::JobStore::in_memory().unwrap())),
             frontend_dir: None,
             metrics_store: crate::metrics::shared_store(),
+            alerts_store: crate::alerts::test_store(),
         })
     }
 
@@ -536,6 +571,7 @@ mod tests {
                 )),
                 frontend_dir: None,
                 metrics_store: crate::metrics::shared_store(),
+                alerts_store: crate::alerts::test_store(),
             })
         };
 
@@ -683,6 +719,7 @@ mod tests {
             jobs_store: Arc::new(Mutex::new(fusionpanel_jobs::JobStore::in_memory().unwrap())),
             frontend_dir: Some(dist),
             metrics_store: crate::metrics::shared_store(),
+            alerts_store: crate::alerts::test_store(),
         });
 
         let root_resp = router
