@@ -56,6 +56,15 @@ The version bump was integrated by [PR #700](https://github.com/scherenhaenden/F
 
 The local Rust tests that bind sockets passed when run with the narrow permission needed for loopback/Unix socket operations. Cargo workloads were run serially with `CARGO_BUILD_JOBS=2` and offline dependencies. No Docker, Playwright, Act, external webhook, external SMTP, or host systemd workload was started.
 
+## Product HTTP uptime implementation — PR #705 — 19 November 2026
+
+PR [#705](https://github.com/scherenhaenden/FusionPanel/pull/705) is open from `feat/sprint-10-uptime`, based on `sprint-10` at `834ad4f02329eeffeef5fa365bf4993ea3030df5`, with implementation commit `e7730d3218bdda837f96c9eda2d6f4d2c1cf262f`. It adds authenticated target management, a scheduled product API collector, bounded SQLite check/incident history, and outage/recovery evaluation through signed alert rules.
+
+- `cargo fmt --all -- --check` and `git diff --check` passed.
+- `cargo test --manifest-path modules/observability/Cargo.toml --offline -j 2 alert_store::tests::` — 4 passed.
+- `cargo test --manifest-path crates/api/Cargo.toml --locked --offline -j 2 alerts::tests:: -- --test-threads=2` — 8 passed, including a local 503 → 200 measured probe, persisted incident recovery, and verified signed trigger/resolution webhook deliveries.
+- The test fixtures used ephemeral loopback listeners only. This is feature-level local evidence; it is not a process-level product E2E or Dashboard browser acceptance. Keep #51 open until the implementation is integrated and the measured outage/recovery E2E passes on the sprint candidate.
+
 ## S48 capability status and follow-on work
 
 The S48 capability register below preserves the broader observability domain; the Sprint 10 release acceptance covers only its integrated subset.
@@ -79,7 +88,7 @@ The S48 capability register below preserves the broader observability domain; th
 
 Next work items before release qualification:
 
-1. Add product-managed HTTP uptime targets and a scheduled collector that records measured failure/recovery, evaluates alert rules, and persists incident transitions. Cover failure, flapping, receiver errors, and recovery with disposable local fixtures; this is the blocker for #51.
+1. Review and integrate [PR #705](https://github.com/scherenhaenden/FusionPanel/pull/705) into `sprint-10`, then verify the measured outage/recovery flow with a disposable product-process fixture. The local feature tests cover failure, flapping, recovery, signed alerts, and retry boundaries; they do not close #51.
 2. Add a disposable browser fixture that starts the integrated API, real agent, and Dashboard together, then verifies live samples, stale/offline states, alert creation, signed delivery feedback, and safe teardown. This is the missing browser acceptance for #685.
 3. Re-run the release gate on one exact candidate after those changes, update this plan and the tracker, then open the single `sprint-10` → `master` release PR only when the documented S48 acceptance is green.
 
@@ -92,7 +101,7 @@ On the fully integrated and version-bumped `sprint-10` candidate:
 1. A registered agent submits fresh node telemetry using its own node credential; missing, invalid, cross-node, malformed, non-finite, or oversized samples are rejected.
 2. The API retains only the configured bounded window per node and returns it only to an authorized operator. Agent credentials cannot read the dashboard API.
 3. The Dashboard displays live CPU, memory, disk-I/O, and node/job health with sample timestamps; it reports stale/offline data clearly.
-4. A real threshold crossing creates one durable alert/delivery record and sends a signed webhook. The receiver verifies the signature and payload. Failure is recorded, retry remains bounded, and recovery resolves the incident without a false healthy transition. The current product live lane verifies sample-triggered alerts and synthetic threshold resolution; measured service uptime/outage recovery remains BLOCKED pending the product collector work above.
+4. A real threshold crossing creates one durable alert/delivery record and sends a signed webhook. The receiver verifies the signature and payload. Failure is recorded, retry remains bounded, and recovery resolves the incident without a false healthy transition. The current product live lane verifies sample-triggered alerts and synthetic threshold resolution; measured service uptime/outage recovery remains BLOCKED until PR #705 is integrated and the product-process fixture passes.
 5. Existing login, RBAC, jobs, and node workflows continue to work. No credential, signing secret, or private payload material appears in logs or API errors.
 6. Update `SPRINTS.md`, this plan, and `PR_ISSUE_TRACKER.md` with the exact candidate SHA, commands, observed results, limits, and remaining OBS capabilities before opening the release PR. The 19 November candidate evidence is recorded above; because browser and measured outage acceptance are BLOCKED, no release PR is opened yet.
 
