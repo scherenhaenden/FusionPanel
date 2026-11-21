@@ -10,9 +10,7 @@ use chrono::Utc;
 #[cfg(test)]
 use observability::alert_store::AlertStore;
 use observability::{
-    alert_store::{
-        AlertStoreError, NewAlertRule, NewUptimeTarget, UptimeTargetRecord, UptimeTransition,
-    },
+    alert_store::{AlertStoreError, NewAlertRule, NewUptimeTarget, UptimeTargetRecord},
     webhook_signer::WebhookSigner,
 };
 use serde::Deserialize;
@@ -34,6 +32,8 @@ const MAX_RULES_BODY_BYTES: usize = 8 * 1024;
 const MAX_WEBHOOK_SECRET_BYTES: usize = 1024;
 const MAX_DELIVERY_ATTEMPTS: u32 = 3;
 const WEBHOOK_TIMEOUT: Duration = Duration::from_secs(2);
+static DELIVERY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+static UPTIME_EVENT_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 const UPTIME_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const UPTIME_MAX_CONCURRENT_CHECKS: usize = 10;
 
@@ -144,6 +144,7 @@ async fn delete_rule(
 ) -> Result<StatusCode, ErrorResponse> {
     require_operator(&state, &headers).await?;
     Uuid::parse_str(&id).map_err(|_| node_jobs::bad_request())?;
+    let _delivery_guard = DELIVERY_LOCK.lock().await;
     let deleted = state
         .alerts_store
         .lock()
@@ -230,6 +231,7 @@ async fn disable_uptime_target(
 ) -> Result<StatusCode, ErrorResponse> {
     require_operator(&state, &headers).await?;
     Uuid::parse_str(&id).map_err(|_| node_jobs::bad_request())?;
+    let _delivery_guard = DELIVERY_LOCK.lock().await;
     let disabled = state
         .alerts_store
         .lock()
@@ -239,7 +241,6 @@ async fn disable_uptime_target(
     if !disabled {
         return Err(not_found("Uptime target not found"));
     }
-    evaluate_uptime_value(&state, &id, 100.0, &Utc::now().to_rfc3339()).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -250,6 +251,7 @@ async fn delete_uptime_target(
 ) -> Result<StatusCode, ErrorResponse> {
     require_operator(&state, &headers).await?;
     Uuid::parse_str(&id).map_err(|_| node_jobs::bad_request())?;
+    let _delivery_guard = DELIVERY_LOCK.lock().await;
     let deleted = state
         .alerts_store
         .lock()
@@ -259,7 +261,6 @@ async fn delete_uptime_target(
     if !deleted {
         return Err(not_found("Uptime target not found"));
     }
-    evaluate_uptime_value(&state, &id, 100.0, &Utc::now().to_rfc3339()).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -302,11 +303,7 @@ async fn list_uptime_incidents(
 }
 
 async fn require_operator(state: &AppState, headers: &HeaderMap) -> Result<(), ErrorResponse> {
-    if node_jobs::authorized_operator(state, headers).await {
-        Ok(())
-    } else {
-        Err(node_jobs::unauthorized())
-    }
+    node_jobs::require_global_observability_admin(state, headers).await
 }
 
 fn not_found(message: &'static str) -> ErrorResponse {
@@ -436,50 +433,36 @@ pub(super) async fn evaluate_sample(
         };
         let triggered = compare(value, &rule.rule.operator, rule.rule.threshold);
         let transition_at = Utc::now().to_rfc3339();
-        let transition = state
+        let event = if triggered { "triggered" } else { "resolved" };
+        let payload = json!({
+            "event": event, "rule_id": rule.rule.id, "rule_name": rule.rule.name,
+            "metric": rule.rule.metric, "operator": rule.rule.operator,
+            "threshold": rule.rule.threshold, "severity": rule.rule.severity,
+            "node_id": sample.node_id, "value": value, "recorded_at": sample.recorded_at,
+        })
+        .to_string();
+        let _delivery_guard = DELIVERY_LOCK.lock().await;
+        let delivery_id = state
             .alerts_store
             .lock()
             .await
-            .transition(
+            .transition_and_enqueue(
                 &rule.rule.id,
                 &sample.node_id,
                 triggered,
                 value,
                 &transition_at,
+                &payload,
             )
             .map_err(map_store_error)?;
-        let Some(transition) = transition else {
+        let Some(delivery_id) = delivery_id else {
             continue;
         };
-
-        let delivery_id = state
-            .alerts_store
-            .lock()
-            .await
-            .create_delivery(
-                &rule.rule.id,
-                &sample.node_id,
-                transition.as_str(),
-                &transition_at,
-            )
-            .map_err(map_store_error)?;
-        let payload = json!({
-            "event": transition.as_str(),
-            "rule_id": rule.rule.id,
-            "rule_name": rule.rule.name,
-            "metric": rule.rule.metric,
-            "operator": rule.rule.operator,
-            "threshold": rule.rule.threshold,
-            "severity": rule.rule.severity,
-            "node_id": sample.node_id,
-            "value": value,
-            "recorded_at": sample.recorded_at,
-        });
-        let payload = serde_json::to_string(&payload).map_err(|_| node_jobs::internal_error())?;
         let signed_at = Utc::now().timestamp().max(0) as u64;
         let signer = WebhookSigner::new(rule.secret.as_bytes().to_vec(), 300);
         let signature = signer.sign(&payload, signed_at);
-        let outcome = deliver_webhook(&rule.rule.webhook_url, &payload, &signature).await;
+        let outcome =
+            deliver_webhook(&rule.rule.webhook_url, &payload, &signature, &delivery_id).await;
         state
             .alerts_store
             .lock()
@@ -505,7 +488,7 @@ async fn evaluate_uptime_value(
 ) -> Result<(), ErrorResponse> {
     let rules = match state.alerts_store.lock().await.rules_for_evaluation() {
         Ok(rules) => rules,
-        Err(AlertStoreError::SecretKeyUnavailable) => return Ok(()),
+        Err(error @ AlertStoreError::SecretKeyUnavailable) => return Err(map_store_error(error)),
         Err(error) => return Err(map_store_error(error)),
     };
     let node_id = format!("uptime:{target_id}");
@@ -515,39 +498,36 @@ async fn evaluate_uptime_value(
     {
         let triggered = compare(value, &rule.rule.operator, rule.rule.threshold);
         let transition_at = Utc::now().to_rfc3339();
-        let transition = state
-            .alerts_store
-            .lock()
-            .await
-            .transition(&rule.rule.id, &node_id, triggered, value, &transition_at)
-            .map_err(map_store_error)?;
-        let Some(transition) = transition else {
-            continue;
-        };
+        let event = if triggered { "triggered" } else { "resolved" };
+        let payload = json!({
+            "event": event, "rule_id": rule.rule.id, "rule_name": rule.rule.name,
+            "metric": rule.rule.metric, "operator": rule.rule.operator,
+            "threshold": rule.rule.threshold, "severity": rule.rule.severity,
+            "node_id": node_id, "target_id": target_id, "value": value, "recorded_at": recorded_at,
+        })
+        .to_string();
+        let _delivery_guard = DELIVERY_LOCK.lock().await;
         let delivery_id = state
             .alerts_store
             .lock()
             .await
-            .create_delivery(&rule.rule.id, &node_id, transition.as_str(), &transition_at)
+            .transition_and_enqueue(
+                &rule.rule.id,
+                &node_id,
+                triggered,
+                value,
+                &transition_at,
+                &payload,
+            )
             .map_err(map_store_error)?;
-        let payload = json!({
-            "event": transition.as_str(),
-            "rule_id": rule.rule.id,
-            "rule_name": rule.rule.name,
-            "metric": rule.rule.metric,
-            "operator": rule.rule.operator,
-            "threshold": rule.rule.threshold,
-            "severity": rule.rule.severity,
-            "node_id": node_id,
-            "target_id": target_id,
-            "value": value,
-            "recorded_at": recorded_at,
-        });
-        let payload = serde_json::to_string(&payload).map_err(|_| node_jobs::internal_error())?;
+        let Some(delivery_id) = delivery_id else {
+            continue;
+        };
         let signed_at = Utc::now().timestamp().max(0) as u64;
         let signer = WebhookSigner::new(rule.secret.as_bytes().to_vec(), 300);
         let signature = signer.sign(&payload, signed_at);
-        let outcome = deliver_webhook(&rule.rule.webhook_url, &payload, &signature).await;
+        let outcome =
+            deliver_webhook(&rule.rule.webhook_url, &payload, &signature, &delivery_id).await;
         state
             .alerts_store
             .lock()
@@ -565,9 +545,75 @@ async fn evaluate_uptime_value(
     Ok(())
 }
 
+/// Recover pending deliveries and reconcile any uptime transition interrupted by shutdown.
+pub(super) async fn recover_alerts(state: &AppState) -> Result<(), ErrorResponse> {
+    let (pending, rules) = {
+        let store = state.alerts_store.lock().await;
+        let rules = match store.rules_for_evaluation() {
+            Ok(rules) => rules,
+            Err(AlertStoreError::SecretKeyUnavailable) => return Ok(()),
+            Err(error) => return Err(map_store_error(error)),
+        };
+        (store.pending_deliveries().map_err(map_store_error)?, rules)
+    };
+    for (id, rule_id, payload) in pending {
+        let _delivery_guard = DELIVERY_LOCK.lock().await;
+        if !state
+            .alerts_store
+            .lock()
+            .await
+            .delivery_pending(&id)
+            .map_err(map_store_error)?
+        {
+            continue;
+        }
+        if let Some(rule) = rules.iter().find(|rule| rule.rule.id == rule_id) {
+            let signer = WebhookSigner::new(rule.secret.as_bytes().to_vec(), 300);
+            let signature = signer.sign(&payload, Utc::now().timestamp().max(0) as u64);
+            let outcome = deliver_webhook(&rule.rule.webhook_url, &payload, &signature, &id).await;
+            state
+                .alerts_store
+                .lock()
+                .await
+                .finish_delivery(
+                    &id,
+                    outcome.status,
+                    outcome.attempt_count,
+                    outcome.http_status,
+                    outcome.error_code,
+                    &Utc::now().to_rfc3339(),
+                )
+                .map_err(map_store_error)?;
+        }
+    }
+    process_uptime_events(state).await?;
+    Ok(())
+}
+
+async fn process_uptime_events(state: &AppState) -> Result<(), ErrorResponse> {
+    let _guard = UPTIME_EVENT_LOCK.lock().await;
+    let events = state
+        .alerts_store
+        .lock()
+        .await
+        .pending_uptime_events()
+        .map_err(map_store_error)?;
+    for (id, target, value, recorded_at) in events {
+        evaluate_uptime_value(state, &target, value, &recorded_at).await?;
+        state
+            .alerts_store
+            .lock()
+            .await
+            .complete_uptime_event(id)
+            .map_err(map_store_error)?;
+    }
+    Ok(())
+}
+
 pub(super) fn spawn_uptime_monitor(state: AppState) {
     tokio::spawn(async move {
         loop {
+            let _ = recover_alerts(&state).await;
             process_due_uptime_targets(&state).await;
             sleep(UPTIME_POLL_INTERVAL).await;
         }
@@ -609,14 +655,8 @@ async fn check_and_record_uptime_target(state: &AppState, target: UptimeTargetRe
         &checked_at.to_rfc3339(),
         checked_at.timestamp_millis(),
     );
-    match transition {
-        Ok(Some(UptimeTransition::Down)) => {
-            let _ = evaluate_uptime_value(state, &target.id, 0.0, &checked_at.to_rfc3339()).await;
-        }
-        Ok(Some(UptimeTransition::Recovered)) => {
-            let _ = evaluate_uptime_value(state, &target.id, 100.0, &checked_at.to_rfc3339()).await;
-        }
-        Ok(None) | Err(_) => {}
+    if matches!(transition, Ok(Some(_))) {
+        let _ = process_uptime_events(state).await;
     }
 }
 
@@ -718,7 +758,12 @@ struct DeliveryOutcome {
     error_code: Option<&'static str>,
 }
 
-async fn deliver_webhook(raw_url: &str, payload: &str, signature: &str) -> DeliveryOutcome {
+async fn deliver_webhook(
+    raw_url: &str,
+    payload: &str,
+    signature: &str,
+    delivery_id: &str,
+) -> DeliveryOutcome {
     let url = match validate_webhook_url(raw_url) {
         Ok(url) => url,
         Err(_) => {
@@ -767,6 +812,7 @@ async fn deliver_webhook(raw_url: &str, payload: &str, signature: &str) -> Deliv
             .post(url.clone())
             .header("content-type", "application/json")
             .header("x-fusionpanel-signature", signature)
+            .header("x-fusionpanel-delivery-id", delivery_id)
             .body(payload.to_string())
             .send()
             .await;
@@ -1231,7 +1277,13 @@ mod tests {
         let signed_at = Utc::now().timestamp().max(0) as u64;
         let signer = WebhookSigner::new(secret.to_vec(), 300);
         let signature = signer.sign(payload, signed_at);
-        let outcome = deliver_webhook(&format!("http://{address}/hook"), payload, &signature).await;
+        let outcome = deliver_webhook(
+            &format!("http://{address}/hook"),
+            payload,
+            &signature,
+            "test-id",
+        )
+        .await;
         let requests = server.await.unwrap();
 
         assert_eq!(outcome.status, "failed");
@@ -1243,6 +1295,9 @@ mod tests {
             assert!(headers
                 .to_ascii_lowercase()
                 .contains(&format!("x-fusionpanel-signature: {signature}")));
+            assert!(headers
+                .to_ascii_lowercase()
+                .contains("x-fusionpanel-delivery-id: test-id"));
             assert_eq!(body, payload);
             signer.verify(&body, &signature, signed_at).unwrap();
         }
