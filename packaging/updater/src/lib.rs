@@ -1,6 +1,9 @@
 #![forbid(unsafe_code)]
 
+pub mod preflight;
+
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use preflight::{validate_paths, PreflightError, PreflightRequest, run_preflight};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -8,6 +11,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum UpdaterError {
+    #[error("Preflight check failed: {0}")]
+    Preflight(#[from] PreflightError),
     #[error("Download failed: {0}")]
     Download(String),
     #[error("IO error: {0}")]
@@ -34,7 +39,17 @@ pub struct UpdateConfig {
 use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 
+pub fn run_update_with_preflight(
+    config: &UpdateConfig,
+    preflight_request: &PreflightRequest,
+) -> Result<std::process::Child, UpdaterError> {
+    run_preflight(preflight_request)?;
+    run_update(config)
+}
+
 pub fn run_update(config: &UpdateConfig) -> Result<std::process::Child, UpdaterError> {
+    validate_paths(&config.target_path, &[])?;
+
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(300))
