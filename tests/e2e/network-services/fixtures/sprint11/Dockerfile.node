@@ -1,0 +1,12 @@
+ARG UBUNTU_BASE=ubuntu:24.04@sha256:77eb101c607d6e3d4f5ad0c8a02c2136c689b98aba1f359e6502ba517e5c57ec
+FROM ${UBUNTU_BASE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y \
+      ca-certificates \
+      curl \
+      libgcc-s1 \
+      bind9-utils \
+    && rm -rf /var/lib/apt/lists/*
