@@ -1,4 +1,4 @@
-import { apiClient, api } from '../api/index';
+import { apiClient, api, MAX_CONTAINER_LOG_LINES } from '../api/index';
 import { SessionManager } from '../auth/session';
 import { AxiosError } from 'axios';
 import MockAdapter from 'axios-mock-adapter';
@@ -119,6 +119,33 @@ describe('API Client', () => {
       expect(request.headers?.['Idempotency-Key']).toBeTruthy();
       expect(JSON.parse(request.data)).toEqual({ operation: 'system.info', payload: {} });
       expect(request.withCredentials).toBe(true);
+    });
+  });
+
+  describe('/v1/containers', () => {
+    it('fetches pinned catalog apps and containers', async () => {
+      const app = { id: 'nginx-alpine', name: 'Nginx', image: 'nginx:1.27-alpine', pinned: true };
+      const container = {
+        id: 'ctr-1',
+        name: 'web',
+        image: 'nginx:1.27-alpine',
+        state: 'running' as const,
+        created_at: '2026-11-27T20:00:00Z',
+        updated_at: '2026-11-27T20:00:00Z',
+      };
+      mockAdapter.onGet('/v1/containers/catalog').reply(200, { apps: [app] });
+      mockAdapter.onGet('/v1/containers').reply(200, { containers: [container] });
+
+      await expect(api.getContainerCatalog()).resolves.toEqual([app]);
+      await expect(api.getContainers()).resolves.toEqual([container]);
+    });
+
+    it('clamps container log tail requests to MAX_CONTAINER_LOG_LINES', async () => {
+      mockAdapter.onGet('/v1/containers/ctr-1/logs').reply(200, { logs: [], truncated: false });
+
+      await api.getContainerLogs('ctr-1', 9999);
+      const request = mockAdapter.history.get[0];
+      expect(request.params).toEqual({ tail: MAX_CONTAINER_LOG_LINES });
     });
   });
 

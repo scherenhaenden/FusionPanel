@@ -321,6 +321,80 @@ export interface ProbeDnsRequest {
   expected_substring?: string;
 }
 
+export type ContainerState =
+  | 'creating'
+  | 'starting'
+  | 'running'
+  | 'stopping'
+  | 'stopped'
+  | 'restarting'
+  | 'failed'
+  | 'deleting'
+  | 'unknown';
+
+export interface ContainerCatalogApp {
+  id: string;
+  name: string;
+  image: string;
+  description?: string;
+  default_port?: number | null;
+  pinned?: boolean;
+}
+
+export interface ContainerPortMapping {
+  host_port: number;
+  container_port: number;
+  protocol?: string;
+}
+
+export interface ContainerRecord {
+  id: string;
+  tenant_id?: string;
+  name: string;
+  app_id?: string | null;
+  image: string;
+  state: ContainerState;
+  status_text?: string | null;
+  ports?: Array<string | ContainerPortMapping>;
+  stale?: boolean;
+  status_updated_at?: string | null;
+  last_error?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateContainerRequest {
+  name: string;
+  app_id: string;
+  image?: string;
+  port?: number | null;
+}
+
+export interface ContainerOperationResponse {
+  container: ContainerRecord;
+  job?: JobRecord;
+}
+
+export interface ContainerLogEntry {
+  sequence?: number;
+  timestamp?: string;
+  stream?: 'stdout' | 'stderr' | 'system' | string;
+  text: string;
+}
+
+export interface ContainerLogsResponse {
+  logs: ContainerLogEntry[];
+  truncated?: boolean;
+}
+
+export const MAX_CONTAINER_LOG_LINES = 500;
+export const DEFAULT_CONTAINER_LOG_LINES = 200;
+
+export const clampContainerLogLimit = (limit: number): number => {
+  if (!Number.isFinite(limit) || limit <= 0) return DEFAULT_CONTAINER_LOG_LINES;
+  return Math.min(Math.floor(limit), MAX_CONTAINER_LOG_LINES);
+};
+
 export const createIdempotencyKey = (): string => {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
@@ -810,7 +884,101 @@ export const api = {
   addSecurityRule: async (data: any): Promise<any> => {
     const response = await apiClient.post<any>('/v1/security/rules', data);
     return response.data;
-  }
+  },
+
+  // Containers
+  getContainerCatalog: async (): Promise<ContainerCatalogApp[]> => {
+    const response = await apiClient.get<{ apps: ContainerCatalogApp[] } | ContainerCatalogApp[]>(
+      '/v1/containers/catalog',
+    );
+    return Array.isArray(response.data) ? response.data : (response.data.apps ?? []);
+  },
+
+  getContainers: async (): Promise<ContainerRecord[]> => {
+    const response = await apiClient.get<{ containers: ContainerRecord[] } | ContainerRecord[]>(
+      '/v1/containers',
+    );
+    return Array.isArray(response.data) ? response.data : (response.data.containers ?? []);
+  },
+
+  createContainer: async (
+    data: CreateContainerRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<ContainerOperationResponse | ContainerRecord> => {
+    const response = await apiClient.post<ContainerOperationResponse | ContainerRecord>(
+      '/v1/containers',
+      data,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  startContainer: async (
+    id: string,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<ContainerOperationResponse | ContainerRecord> => {
+    const response = await apiClient.post<ContainerOperationResponse | ContainerRecord>(
+      `/v1/containers/${encodeURIComponent(id)}/start`,
+      {},
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  stopContainer: async (
+    id: string,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<ContainerOperationResponse | ContainerRecord> => {
+    const response = await apiClient.post<ContainerOperationResponse | ContainerRecord>(
+      `/v1/containers/${encodeURIComponent(id)}/stop`,
+      {},
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  restartContainer: async (
+    id: string,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<ContainerOperationResponse | ContainerRecord> => {
+    const response = await apiClient.post<ContainerOperationResponse | ContainerRecord>(
+      `/v1/containers/${encodeURIComponent(id)}/restart`,
+      {},
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  removeContainer: async (
+    id: string,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<void> => {
+    await apiClient.delete(`/v1/containers/${encodeURIComponent(id)}`, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
+  },
+
+  getContainerLogs: async (
+    id: string,
+    tail = DEFAULT_CONTAINER_LOG_LINES,
+  ): Promise<ContainerLogsResponse> => {
+    const boundedTail = clampContainerLogLimit(tail);
+    const response = await apiClient.get<ContainerLogsResponse | ContainerLogEntry[]>(
+      `/v1/containers/${encodeURIComponent(id)}/logs`,
+      { params: { tail: boundedTail } },
+    );
+    if (Array.isArray(response.data)) {
+      return {
+        logs: response.data.slice(-boundedTail),
+        truncated: response.data.length > boundedTail,
+      };
+    }
+    const entries = response.data.logs ?? [];
+    return {
+      logs: entries.slice(-boundedTail),
+      truncated: Boolean(response.data.truncated) || entries.length > boundedTail,
+    };
+  },
 };
 
 export * from './client';

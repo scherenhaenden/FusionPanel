@@ -407,6 +407,11 @@ enum TypedOperation {
     CronApply(fusionpanel_agent_protocol::CronApplyPayload),
     CronDelete(fusionpanel_agent_protocol::CronDeletePayload),
     CronRunNow(fusionpanel_agent_protocol::CronRunNowPayload),
+    ContainerApply(Box<fusionpanel_agent_protocol::ContainerApplyPayload>),
+    ContainerStart(fusionpanel_agent_protocol::ContainerLifecyclePayload),
+    ContainerStop(fusionpanel_agent_protocol::ContainerLifecyclePayload),
+    ContainerRestart(fusionpanel_agent_protocol::ContainerLifecyclePayload),
+    ContainerDelete(fusionpanel_agent_protocol::ContainerDeletePayload),
 }
 
 #[derive(Debug)]
@@ -758,6 +763,51 @@ impl AgentWorker {
                     OperationOutcome::failure("cron.run_now failed")
                 }
             },
+            Ok(TypedOperation::ContainerApply(payload)) => {
+                match execute_container_apply(&node.node_id, &payload).await {
+                    Ok(summary) => OperationOutcome::success(summary),
+                    Err(err) => {
+                        eprintln!("container.apply failed for {}: {err}", payload.name);
+                        OperationOutcome::failure("container.apply failed")
+                    }
+                }
+            }
+            Ok(TypedOperation::ContainerStart(payload)) => {
+                match execute_container_lifecycle(&node.node_id, "start", &payload.name).await {
+                    Ok(summary) => OperationOutcome::success(summary),
+                    Err(err) => {
+                        eprintln!("container.start failed for {}: {err}", payload.name);
+                        OperationOutcome::failure("container.start failed")
+                    }
+                }
+            }
+            Ok(TypedOperation::ContainerStop(payload)) => {
+                match execute_container_lifecycle(&node.node_id, "stop", &payload.name).await {
+                    Ok(summary) => OperationOutcome::success(summary),
+                    Err(err) => {
+                        eprintln!("container.stop failed for {}: {err}", payload.name);
+                        OperationOutcome::failure("container.stop failed")
+                    }
+                }
+            }
+            Ok(TypedOperation::ContainerRestart(payload)) => {
+                match execute_container_lifecycle(&node.node_id, "restart", &payload.name).await {
+                    Ok(summary) => OperationOutcome::success(summary),
+                    Err(err) => {
+                        eprintln!("container.restart failed for {}: {err}", payload.name);
+                        OperationOutcome::failure("container.restart failed")
+                    }
+                }
+            }
+            Ok(TypedOperation::ContainerDelete(payload)) => {
+                match execute_container_lifecycle(&node.node_id, "delete", &payload.name).await {
+                    Ok(summary) => OperationOutcome::success(summary),
+                    Err(err) => {
+                        eprintln!("container.delete failed for {}: {err}", payload.name);
+                        OperationOutcome::failure("container.delete failed")
+                    }
+                }
+            }
             Ok(operation) => {
                 if let TypedOperation::TlsApply {
                     source:
@@ -951,6 +1001,15 @@ fn parse_operation(payload: &Value) -> Result<TypedOperation, OperationOutcome> 
         ProtocolOperation::CronApply(payload) => Ok(TypedOperation::CronApply(payload)),
         ProtocolOperation::CronDelete(payload) => Ok(TypedOperation::CronDelete(payload)),
         ProtocolOperation::CronRunNow(payload) => Ok(TypedOperation::CronRunNow(payload)),
+        ProtocolOperation::ContainerApply(payload) => {
+            Ok(TypedOperation::ContainerApply(Box::new(payload)))
+        }
+        ProtocolOperation::ContainerStart(payload) => Ok(TypedOperation::ContainerStart(payload)),
+        ProtocolOperation::ContainerStop(payload) => Ok(TypedOperation::ContainerStop(payload)),
+        ProtocolOperation::ContainerRestart(payload) => {
+            Ok(TypedOperation::ContainerRestart(payload))
+        }
+        ProtocolOperation::ContainerDelete(payload) => Ok(TypedOperation::ContainerDelete(payload)),
     }
 }
 
@@ -1033,7 +1092,12 @@ fn execute_operation(
         | TypedOperation::DnsProbe(_)
         | TypedOperation::CronApply(_)
         | TypedOperation::CronDelete(_)
-        | TypedOperation::CronRunNow(_) => {
+        | TypedOperation::CronRunNow(_)
+        | TypedOperation::ContainerApply(_)
+        | TypedOperation::ContainerStart(_)
+        | TypedOperation::ContainerStop(_)
+        | TypedOperation::ContainerRestart(_)
+        | TypedOperation::ContainerDelete(_) => {
             OperationOutcome::failure("async operation requires async worker execution")
         }
     }
@@ -1101,6 +1165,78 @@ pub fn sanitize_bounded(input: &str, secrets: &[&str]) -> String {
         bounded.push(character);
     }
     bounded
+}
+
+async fn execute_container_apply(
+    node_id: &str,
+    payload: &fusionpanel_agent_protocol::ContainerApplyPayload,
+) -> Result<String, crate::container_driver::ContainerDriverError> {
+    let driver = crate::container_driver::NodeContainerDriver::new(node_id)?;
+    let driver_payload = crate::container_driver::ContainerApplyPayload {
+        container_id: payload.name.clone(),
+        tenant_id: Some(payload.tenant_id),
+        image: payload.image.clone(),
+        ports: payload
+            .ports
+            .iter()
+            .map(|p| crate::container_driver::ContainerPortSpec {
+                host_port: p.host_port,
+                container_port: p.container_port,
+            })
+            .collect(),
+        mounts: Vec::new(),
+        network: None,
+        env: payload.env.clone(),
+        command: payload.command.clone(),
+        restart_policy: Some(
+            match payload.restart_policy {
+                fusionpanel_agent_protocol::ContainerRestartPolicy::No => "no",
+                fusionpanel_agent_protocol::ContainerRestartPolicy::Always => "always",
+                fusionpanel_agent_protocol::ContainerRestartPolicy::OnFailure => "on-failure",
+                fusionpanel_agent_protocol::ContainerRestartPolicy::UnlessStopped => {
+                    "unless-stopped"
+                }
+            }
+            .to_string(),
+        ),
+        desired_running: true,
+    };
+    let outcome = driver.apply(&driver_payload).await?;
+    Ok(format!(
+        "container.apply completed for {} ({:?})",
+        payload.name, outcome
+    ))
+}
+
+async fn execute_container_lifecycle(
+    node_id: &str,
+    action: &str,
+    container_name: &str,
+) -> Result<String, crate::container_driver::ContainerDriverError> {
+    let driver = crate::container_driver::NodeContainerDriver::new(node_id)?;
+    match action {
+        "start" => {
+            driver.start(container_name).await?;
+            Ok(format!("container.start completed for {container_name}"))
+        }
+        "stop" => {
+            driver.stop(container_name).await?;
+            Ok(format!("container.stop completed for {container_name}"))
+        }
+        "restart" => {
+            driver.restart(container_name).await?;
+            Ok(format!("container.restart completed for {container_name}"))
+        }
+        "delete" => {
+            let removed = driver.remove(container_name).await?;
+            Ok(format!(
+                "container.delete completed for {container_name} (removed={removed})"
+            ))
+        }
+        other => Err(crate::container_driver::ContainerDriverError::InvalidInput(
+            format!("unsupported container action '{other}'"),
+        )),
+    }
 }
 
 #[cfg(test)]

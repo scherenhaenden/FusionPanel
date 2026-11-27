@@ -12,6 +12,7 @@ import SecurityRulesUI from './views/Security';
 import AdministrationView from './views/Administration';
 import NodesView from './views/Nodes';
 import JobsView from './views/Jobs';
+import ContainersView from './views/Containers';
 import LoginView from './views/Login';
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
           <Route path="/administration" element={<DashboardLayout><AdministrationView /></DashboardLayout>} />
           <Route path="/nodes" element={<DashboardLayout><NodesView /></DashboardLayout>} />
           <Route path="/jobs" element={<DashboardLayout><JobsView /></DashboardLayout>} />
+          <Route path="/containers" element={<DashboardLayout><ContainersView /></DashboardLayout>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

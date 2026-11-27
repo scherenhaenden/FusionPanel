@@ -472,7 +472,12 @@ fn handle_request(bytes: &[u8], operations: &dyn ManagedSiteOperations) -> Respo
         | Operation::DnsProbe(_)
         | Operation::CronApply(_)
         | Operation::CronDelete(_)
-        | Operation::CronRunNow(_) => {
+        | Operation::CronRunNow(_)
+        | Operation::ContainerApply(_)
+        | Operation::ContainerStart(_)
+        | Operation::ContainerStop(_)
+        | Operation::ContainerRestart(_)
+        | Operation::ContainerDelete(_) => {
             return error_response(
                 request_id,
                 "unsupported_operation",

@@ -4,6 +4,7 @@ mod admin;
 mod alerts;
 mod audit_mfa;
 mod backups;
+mod containers;
 mod cron;
 mod databases;
 mod dns;
@@ -279,6 +280,7 @@ fn app(state: AppState) -> Router {
         .merge(files::routes())
         .merge(metrics::routes())
         .merge(cron::routes())
+        .merge(containers::routes())
         .merge(admin::routes())
         .merge(audit_mfa::routes())
         .merge(alerts::routes())

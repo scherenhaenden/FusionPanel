@@ -7,6 +7,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod backups;
+mod containers;
 mod cron;
 mod databases;
 mod dns;
@@ -15,6 +16,10 @@ mod tls;
 mod websites;
 
 pub use backups::{BackupOperation, BackupOperationReservation, BackupRecord, BackupState};
+pub use containers::{
+    ContainerOperation, ContainerOperationReservation, ContainerPortSpec, ContainerRecord,
+    ContainerResourceSpec, ContainerState, NewContainerSpec,
+};
 pub use cron::{CronJobRecord, CronJobState, CronOperation, CronOperationReservation};
 pub use security::{ApiTokenRecord, AuditLogEntry, SecurityRuleRecord, UserMfaRecord};
 
@@ -83,6 +88,12 @@ pub enum StoreError {
     DatabaseConflict(String),
     #[error("Database operation is still in progress")]
     DatabaseOperationInProgress,
+    #[error("Container not found: {0}")]
+    ContainerNotFound(Uuid),
+    #[error("Container request conflicts with existing state: {0}")]
+    ContainerConflict(String),
+    #[error("Container operation is still in progress")]
+    ContainerOperationInProgress,
 }
 
 pub struct ControlStore {
@@ -444,6 +455,43 @@ impl ControlStore {
             tx.pragma_update(None, "user_version", 10)?;
         }
 
+        if user_version < 11 {
+            tx.execute_batch(
+                r#"
+                CREATE TABLE containers (
+                    container_id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    node_id TEXT,
+                    name TEXT NOT NULL,
+                    image TEXT NOT NULL,
+                    ports TEXT NOT NULL,
+                    resources TEXT NOT NULL,
+                    env TEXT NOT NULL,
+                    command TEXT NOT NULL,
+                    restart_policy TEXT NOT NULL,
+                    state TEXT NOT NULL CHECK (state IN ('provisioning', 'starting', 'running', 'stopping', 'stopped', 'restarting', 'deleting', 'failed')),
+                    last_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    operation_request_id TEXT NOT NULL,
+                    UNIQUE (tenant_id, name)
+                );
+                CREATE INDEX idx_containers_tenant ON containers (tenant_id);
+                CREATE INDEX idx_containers_state ON containers (state);
+                CREATE TABLE container_operations (
+                    idempotency_key TEXT PRIMARY KEY,
+                    fingerprint TEXT NOT NULL,
+                    operation TEXT NOT NULL,
+                    container_id TEXT NOT NULL,
+                    request_id TEXT NOT NULL UNIQUE,
+                    job_id TEXT,
+                    snapshot TEXT NOT NULL
+                );
+                "#,
+            )?;
+            tx.pragma_update(None, "user_version", 11)?;
+        }
+
         tx.commit()?;
         Ok(())
     }
@@ -523,6 +571,14 @@ impl ControlStore {
                 |row| row.get(0),
             )
             .optional()?)
+    }
+
+    pub fn node_exists(&self, node_id: Uuid) -> Result<bool, StoreError> {
+        Ok(self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM nodes WHERE node_id = ?1)",
+            [node_id.to_string()],
+            |row| row.get(0),
+        )?)
     }
 
     pub fn touch_node(&mut self, node_id: Uuid, now: &str) -> Result<bool, StoreError> {
@@ -1073,7 +1129,7 @@ mod tests {
             let user_version: u32 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(user_version, 10);
+            assert_eq!(user_version, 11);
             let website_tables: u32 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('websites', 'website_operations')",
@@ -1133,7 +1189,7 @@ mod tests {
         let user_version: u32 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(user_version, 10);
+        assert_eq!(user_version, 11);
         let has_tenant_id: bool = conn
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM pragma_table_info('websites') WHERE name = 'tenant_id')",
