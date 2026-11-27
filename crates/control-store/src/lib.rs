@@ -454,9 +454,23 @@ impl ControlStore {
         }
 
         if user_version < 11 {
+            let has_nodes_table: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'nodes')",
+                [],
+                |row| row.get(0),
+            )?;
+            if has_nodes_table {
+                let has_nodes_tenant_id: bool = tx.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM pragma_table_info('nodes') WHERE name = 'tenant_id')",
+                    [],
+                    |row| row.get(0),
+                )?;
+                if !has_nodes_tenant_id {
+                    tx.execute("ALTER TABLE nodes ADD COLUMN tenant_id TEXT", [])?;
+                }
+            }
             tx.execute_batch(
                 r#"
-                ALTER TABLE nodes ADD COLUMN tenant_id TEXT;
                 CREATE TABLE mail_domains (
                     domain_id TEXT PRIMARY KEY,
                     tenant_id TEXT NOT NULL,
@@ -1205,7 +1219,7 @@ mod tests {
             let user_version: u32 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(user_version, 10);
+            assert_eq!(user_version, 11);
             let website_tables: u32 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('websites', 'website_operations')",
@@ -1265,7 +1279,7 @@ mod tests {
         let user_version: u32 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(user_version, 10);
+        assert_eq!(user_version, 11);
         let has_tenant_id: bool = conn
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM pragma_table_info('websites') WHERE name = 'tenant_id')",
