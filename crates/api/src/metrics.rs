@@ -149,9 +149,7 @@ async fn latest_metrics(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
-    if !node_jobs::authorized_operator(&state, &headers).await {
-        return Err(node_jobs::unauthorized());
-    }
+    node_jobs::require_global_observability_admin(&state, &headers).await?;
     let samples = state.metrics_store.lock().await.latest();
     Ok(Json(json!({ "samples": samples })))
 }
@@ -161,9 +159,7 @@ async fn node_metrics(
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
-    if !node_jobs::authorized_operator(&state, &headers).await {
-        return Err(node_jobs::unauthorized());
-    }
+    node_jobs::require_global_observability_admin(&state, &headers).await?;
     let node_id = parse_uuid(&id)?;
     let samples = state.metrics_store.lock().await.recent(node_id);
     Ok(Json(json!({ "samples": samples })))
@@ -226,6 +222,64 @@ mod tests {
             body["node_id"].as_str().unwrap().to_string(),
             body["token"].as_str().unwrap().to_string(),
         )
+    }
+
+    #[tokio::test]
+    async fn global_observability_rejects_tenant_roles_and_accepts_global_admin() {
+        let state = test_state();
+        let tenant = identity::TenantId::new_v4();
+        let mut tokens = Vec::new();
+        for (role, scope) in [
+            (
+                identity::Role::viewer(),
+                identity::Scope::Tenant { tenant_id: tenant },
+            ),
+            (
+                identity::Role::tenant_admin(),
+                identity::Scope::Tenant { tenant_id: tenant },
+            ),
+            (identity::Role::super_admin(), identity::Scope::Global),
+        ] {
+            let user = identity::User::new(
+                format!("observability-{}", Uuid::new_v4()),
+                format!("{}@example.test", Uuid::new_v4()),
+                "test-hash".into(),
+            )
+            .unwrap();
+            let session = identity::Session::new(user.id(), tenant, 3600, 1800).unwrap();
+            let store = state.identity_store.lock().await;
+            store.create_user(&user).unwrap();
+            store
+                .save_role_binding(&identity::RoleBinding {
+                    user_id: user.id(),
+                    role,
+                    scope,
+                })
+                .unwrap();
+            store.save_session(&session).unwrap();
+            tokens.push(session.id().to_string());
+        }
+        let router = super::super::app(state);
+        for (token, expected) in
+            tokens
+                .iter()
+                .zip([StatusCode::FORBIDDEN, StatusCode::FORBIDDEN, StatusCode::OK])
+        {
+            for uri in ["/v1/metrics", "/v1/alerts/rules", "/v1/uptime/targets"] {
+                let response = router
+                    .clone()
+                    .oneshot(
+                        Request::builder()
+                            .uri(uri)
+                            .header("authorization", format!("Bearer {token}"))
+                            .body(Body::empty())
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(response.status(), expected, "{uri}");
+            }
+        }
     }
 
     #[tokio::test]

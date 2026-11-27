@@ -273,6 +273,11 @@ impl AlertStore {
              );
              CREATE INDEX IF NOT EXISTS idx_uptime_targets_due
                 ON uptime_targets(enabled, next_check_at_ms);
+             CREATE TABLE IF NOT EXISTS uptime_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                target_id TEXT NOT NULL REFERENCES uptime_targets(id) ON DELETE CASCADE,
+                value REAL NOT NULL, recorded_at TEXT NOT NULL
+             );
              CREATE TABLE IF NOT EXISTS uptime_checks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 target_id TEXT NOT NULL REFERENCES uptime_targets(id) ON DELETE CASCADE,
@@ -297,6 +302,15 @@ impl AlertStore {
              CREATE INDEX IF NOT EXISTS idx_uptime_incidents_started
                 ON uptime_incidents(started_at DESC, id DESC);",
         )?;
+        let has_payload: bool = connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('alert_deliveries') WHERE name = 'payload')",
+            [], |row| row.get(0),
+        )?;
+        if !has_payload {
+            connection.execute("ALTER TABLE alert_deliveries ADD COLUMN payload TEXT", [])?;
+        }
+        // Earlier versions did not persist payloads and cannot replay those events.
+        connection.execute("UPDATE alert_deliveries SET status = 'failed', last_error = 'missing_persisted_payload' WHERE status = 'pending' AND payload IS NULL", [])?;
         let secret_engine = encryption_key.map(CryptoEngine::new).transpose()?;
         Ok(Self {
             connection,
@@ -481,6 +495,84 @@ impl AlertStore {
         }
     }
 
+    /// Persist a state transition and its retryable event as one SQLite transaction.
+    pub fn transition_and_enqueue(
+        &mut self,
+        rule_id: &str,
+        node_id: &str,
+        active: bool,
+        value: f64,
+        now: &str,
+        payload: &str,
+    ) -> Result<Option<String>, AlertStoreError> {
+        if let Some(target_id) = node_id.strip_prefix("uptime:") {
+            let enabled: bool = self.connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM uptime_targets WHERE id = ?1 AND enabled = 1)",
+                params![target_id],
+                |row| row.get(0),
+            )?;
+            if !enabled {
+                return Ok(None);
+            }
+        }
+        self.connection
+            .execute_batch("SAVEPOINT alert_transition")?;
+        let result = (|| {
+            let Some(transition) = self.transition(rule_id, node_id, active, value, now)? else {
+                return Ok(None);
+            };
+            let id = self.create_delivery(rule_id, node_id, transition.as_str(), now)?;
+            self.connection.execute(
+                "UPDATE alert_deliveries SET payload = ?2 WHERE id = ?1",
+                params![id, payload],
+            )?;
+            Ok(Some(id))
+        })();
+        match result {
+            Ok(value) => {
+                self.connection.execute_batch("RELEASE alert_transition")?;
+                Ok(value)
+            }
+            Err(error) => {
+                self.connection
+                    .execute_batch("ROLLBACK TO alert_transition; RELEASE alert_transition")?;
+                Err(error)
+            }
+        }
+    }
+
+    pub fn pending_uptime_events(
+        &self,
+    ) -> Result<Vec<(i64, String, f64, String)>, AlertStoreError> {
+        let mut stmt = self
+            .connection
+            .prepare("SELECT id, target_id, value, recorded_at FROM uptime_events ORDER BY id")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    pub fn complete_uptime_event(&mut self, id: i64) -> Result<(), AlertStoreError> {
+        self.connection
+            .execute("DELETE FROM uptime_events WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn delivery_pending(&self, id: &str) -> Result<bool, AlertStoreError> {
+        Ok(self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM alert_deliveries WHERE id = ?1 AND status = 'pending')",
+            params![id],
+            |row| row.get(0),
+        )?)
+    }
+
+    pub fn pending_deliveries(&self) -> Result<Vec<(String, String, String)>, AlertStoreError> {
+        let mut statement = self.connection.prepare(
+            "SELECT id, rule_id, payload FROM alert_deliveries WHERE status = 'pending' AND payload IS NOT NULL ORDER BY rowid"
+        )?;
+        let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
     pub fn active_states(&self) -> Result<Vec<AlertStateRecord>, AlertStoreError> {
         let mut statement = self.connection.prepare(
             "SELECT rule_id, node_id, active, last_value, started_at, resolved_at, updated_at
@@ -515,7 +607,7 @@ impl AlertStore {
             params![id, rule_id, node_id, event, now],
         )?;
         self.connection.execute(
-            "DELETE FROM alert_deliveries WHERE id NOT IN
+            "DELETE FROM alert_deliveries WHERE status != 'pending' AND id NOT IN
              (SELECT id FROM alert_deliveries ORDER BY created_at DESC, id DESC LIMIT ?1)",
             params![MAX_DELIVERY_HISTORY],
         )?;
@@ -666,6 +758,19 @@ impl AlertStore {
              WHERE id = ?1",
             params![id, disabled_at],
         )?;
+        let node_id = format!("uptime:{id}");
+        transaction.execute(
+            "DELETE FROM uptime_events WHERE target_id = ?1",
+            params![id],
+        )?;
+        transaction.execute(
+            "DELETE FROM alert_states WHERE node_id = ?1",
+            params![node_id],
+        )?;
+        transaction.execute(
+            "DELETE FROM alert_deliveries WHERE node_id = ?1 AND status = 'pending'",
+            params![node_id],
+        )?;
         transaction.execute(
             "UPDATE uptime_incidents SET state = 'cancelled', last_error_code = 'target_disabled'
              WHERE target_id = ?1 AND state = 'down'",
@@ -682,10 +787,22 @@ impl AlertStore {
     }
 
     pub fn delete_uptime_target(&mut self, id: &str) -> Result<bool, AlertStoreError> {
-        Ok(self
-            .connection
-            .execute("DELETE FROM uptime_targets WHERE id = ?1", params![id])?
-            > 0)
+        let transaction = self.connection.transaction()?;
+        let deleted =
+            transaction.execute("DELETE FROM uptime_targets WHERE id = ?1", params![id])? > 0;
+        if deleted {
+            let node_id = format!("uptime:{id}");
+            transaction.execute(
+                "DELETE FROM alert_states WHERE node_id = ?1",
+                params![node_id],
+            )?;
+            transaction.execute(
+                "DELETE FROM alert_deliveries WHERE node_id = ?1 AND status = 'pending'",
+                params![node_id],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(deleted)
     }
 
     pub fn due_uptime_targets(
@@ -814,6 +931,16 @@ impl AlertStore {
                 )?;
             }
             None => {}
+        }
+        if let Some(event) = transition {
+            let value = match event {
+                UptimeTransition::Down => 0.0,
+                UptimeTransition::Recovered => 100.0,
+            };
+            transaction.execute(
+                "INSERT INTO uptime_events (target_id, value, recorded_at) VALUES (?1, ?2, ?3)",
+                params![target_id, value, checked_at],
+            )?;
         }
         transaction.commit()?;
         Ok(transition)
@@ -997,6 +1124,41 @@ mod tests {
         assert_eq!(deliveries[0].last_error.as_deref(), Some("http_status"));
     }
 
+    #[test]
+    fn transition_outbox_survives_reopen_without_duplicate_events() {
+        let path =
+            std::env::temp_dir().join(format!("fusionpanel-alert-test-{}.sqlite", Uuid::new_v4()));
+        let key = CryptoEngine::generate_key();
+        let rule_id;
+        {
+            let mut store = AlertStore::new(&path, Some(&key)).unwrap();
+            rule_id = store
+                .create_rule(&sample_rule(), "secret", "2026-11-19T10:00:00Z")
+                .unwrap()
+                .id;
+            let result = store
+                .transition_and_enqueue(
+                    &rule_id,
+                    "node-1",
+                    true,
+                    90.0,
+                    "2026-11-19T10:01:00Z",
+                    "{\"event\":\"triggered\"}",
+                )
+                .unwrap();
+            assert!(result.is_some());
+        }
+        let mut store = AlertStore::new(&path, Some(&key)).unwrap();
+        assert_eq!(store.pending_deliveries().unwrap().len(), 1);
+        assert!(store
+            .transition_and_enqueue(&rule_id, "node-1", true, 90.0, "2026-11-19T10:02:00Z", "{}")
+            .unwrap()
+            .is_none());
+        assert_eq!(store.pending_deliveries().unwrap().len(), 1);
+        drop(store);
+        std::fs::remove_file(path).unwrap();
+    }
+
     fn sample_uptime_target() -> NewUptimeTarget {
         NewUptimeTarget {
             name: "Local service".to_string(),
@@ -1147,12 +1309,25 @@ mod tests {
                 )
                 .unwrap();
         }
+        assert_eq!(store.pending_uptime_events().unwrap().len(), 1);
         assert!(store
             .disable_uptime_target(&target.id, "2026-11-19T10:01:00Z")
             .unwrap());
         assert!(!store
             .disable_uptime_target("missing", "2026-11-19T10:01:00Z")
             .unwrap());
+        assert!(store.pending_uptime_events().unwrap().is_empty());
+        assert!(store
+            .transition_and_enqueue(
+                "missing-rule",
+                &format!("uptime:{}", target.id),
+                true,
+                0.0,
+                "now",
+                "{}"
+            )
+            .unwrap()
+            .is_none());
         let disabled = store.uptime_targets().unwrap().remove(0);
         assert!(!disabled.enabled);
         assert_eq!(disabled.status, "disabled");

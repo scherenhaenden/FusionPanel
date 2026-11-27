@@ -476,6 +476,42 @@ pub(super) async fn authorized_operator(state: &AppState, headers: &HeaderMap) -
     }
 }
 
+// Node telemetry and observability records are global and have no tenant ownership.
+// Limit access to principals with system-wide administrative authority.
+pub(super) async fn require_global_observability_admin(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<(), ErrorResponse> {
+    if authorized_admin(state, headers) {
+        return Ok(());
+    }
+    let context = super::websites::website_authorization_context(state, headers).await?;
+    let scopes_allow = context.token_scopes.as_ref().is_none_or(|scopes| {
+        scopes
+            .iter()
+            .any(|scope| scope == "*" || scope == "system:admin")
+    });
+    let authorized = context.user_id.is_some_and(|user_id| {
+        identity::AccessControl::evaluate_principal(
+            user_id,
+            &context.role_bindings,
+            identity::Permission::SystemAdmin,
+            &identity::Scope::Global,
+        )
+        .is_ok()
+    });
+    if scopes_allow && authorized {
+        Ok(())
+    } else {
+        Err(ErrorResponse {
+            error: ErrorDetail {
+                code: "forbidden",
+                message: "Global observability access requires system administration permission",
+            },
+        })
+    }
+}
+
 pub(super) fn authorized_admin(state: &AppState, headers: &HeaderMap) -> bool {
     let Some(token) = bearer_token(headers) else {
         return false;

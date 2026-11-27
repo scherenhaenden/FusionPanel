@@ -211,7 +211,7 @@ async fn run_cli(
                 let binding = RoleBinding {
                     user_id: user.id(),
                     role: Role::super_admin(),
-                    scope: Scope::Tenant { tenant_id },
+                    scope: Scope::Global,
                 };
                 id_store.save_role_binding(&binding)?;
 

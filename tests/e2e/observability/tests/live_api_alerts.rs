@@ -33,6 +33,7 @@ const WEBHOOK_TIMEOUT: Duration = Duration::from_secs(10);
 struct WebhookEvent {
     body: String,
     signature: String,
+    delivery_id: String,
 }
 
 async fn capture_webhook(
@@ -46,11 +47,17 @@ async fn capture_webhook(
     else {
         return StatusCode::BAD_REQUEST;
     };
+    let delivery_id = headers
+        .get("x-fusionpanel-delivery-id")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_owned();
 
     if sender
         .send(WebhookEvent {
             body,
             signature: signature.to_owned(),
+            delivery_id,
         })
         .is_err()
     {
@@ -538,4 +545,438 @@ async fn stop_process(child: &mut Child) {
 
     let _ = child.start_kill();
     let _ = timeout(Duration::from_secs(5), child.wait()).await;
+}
+
+#[tokio::test]
+#[ignore = "requires locally built FusionPanel API and agent binaries; run explicitly per README"]
+async fn measured_http_outage_recovery_and_cancel_deliver_signed_webhooks() {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+    let api_binary = required_binary("FUSIONPANEL_API_BINARY");
+    let temp = TempDir::new().expect("temporary directory for isolated uptime E2E");
+    let admin_token = format!("e2e-admin-{}", Uuid::new_v4().simple());
+    let webhook_secret = format!("e2e-webhook-secret-{}", Uuid::new_v4().simple());
+    let encryption_key = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+    let database_path = temp.path().join("fusionpanel-uptime-e2e.sqlite");
+    let api_port = reserve_loopback_port();
+    let webhook_port = reserve_loopback_port();
+    let api_url = format!("http://127.0.0.1:{api_port}");
+    let webhook_url = format!("http://127.0.0.1:{webhook_port}/hook");
+    let client = Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(5))
+        .build()
+        .expect("bounded local HTTP client");
+
+    let (webhook_sender, mut webhook_receiver) = mpsc::unbounded_channel();
+    let webhook_listener = TcpListener::bind(("127.0.0.1", webhook_port))
+        .await
+        .expect("bind disposable webhook receiver");
+    let webhook_app = Router::new()
+        .route("/hook", post(capture_webhook))
+        .with_state(webhook_sender);
+    let webhook_task = tokio::spawn(async move {
+        let _ = axum::serve(webhook_listener, webhook_app).await;
+    });
+
+    // Target 1: 503 on first probe, 200 on second probe.
+    let target1_listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind target 1 listener");
+    let target1_port = target1_listener.local_addr().unwrap().port();
+    let target1_task = tokio::spawn(async move {
+        for (status, label) in [(503, "Service Unavailable"), (200, "OK")] {
+            let (stream, _) = target1_listener.accept().await.unwrap();
+            let mut reader = BufReader::new(stream);
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).await.unwrap();
+                if line == "\r\n" || line.is_empty() {
+                    break;
+                }
+            }
+            let _ = reader
+                .get_mut()
+                .write_all(
+                    format!(
+                        "HTTP/1.1 {status} {label}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    )
+                    .as_bytes(),
+                )
+                .await;
+        }
+    });
+
+    // Target 2: stays 503 until disabled.
+    let target2_listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind target 2 listener");
+    let target2_port = target2_listener.local_addr().unwrap().port();
+    let target2_task = tokio::spawn(async move {
+        loop {
+            let Ok((stream, _)) = target2_listener.accept().await else {
+                break;
+            };
+            let mut reader = BufReader::new(stream);
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).await.unwrap_or(0) == 0 || line == "\r\n" {
+                    break;
+                }
+            }
+            let _ = reader
+                .get_mut()
+                .write_all(
+                    b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .await;
+        }
+    });
+
+    let mut api = spawn_api(
+        &api_binary,
+        &database_path,
+        &admin_token,
+        &encryption_key,
+        api_port,
+        temp.path(),
+    );
+    assert!(
+        wait_for_health(&mut api, &client, &api_url).await,
+        "BLOCKED: isolated FusionPanel API did not become healthy"
+    );
+
+    let rule_response = client
+        .post(format!("{api_url}/v1/alerts/rules"))
+        .bearer_auth(&admin_token)
+        .json(&json!({
+            "name": "HTTP service availability",
+            "metric": "http_uptime_percent",
+            "operator": "below",
+            "threshold": 50.0,
+            "severity": "critical",
+            "webhook_url": webhook_url,
+            "webhook_secret": webhook_secret,
+            "enabled": true
+        }))
+        .send()
+        .await
+        .expect("create uptime alert rule");
+    assert_eq!(rule_response.status(), ClientStatus::CREATED);
+    let rule_id = rule_response.json::<Value>().await.unwrap()["rule"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let target1_resp = client
+        .post(format!("{api_url}/v1/uptime/targets"))
+        .bearer_auth(&admin_token)
+        .json(&json!({
+            "name": "Measured outage target",
+            "url": format!("http://127.0.0.1:{target1_port}/health"),
+            "expected_status": 200,
+            "interval_seconds": 30,
+            "timeout_millis": 1000,
+            "failure_threshold": 1
+        }))
+        .send()
+        .await
+        .expect("create uptime target 1");
+    assert_eq!(target1_resp.status(), ClientStatus::CREATED);
+    let target1_id = target1_resp.json::<Value>().await.unwrap()["target"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let target1_node_id = format!("uptime:{target1_id}");
+
+    let triggered1 = next_webhook(&mut webhook_receiver, "uptime trigger").await;
+    verify_webhook_event(
+        &triggered1,
+        &webhook_secret,
+        "triggered",
+        &target1_node_id,
+        &rule_id,
+    );
+    assert!(!triggered1.delivery_id.is_empty());
+
+    // Wait up to 45s for the 30s interval second probe to observe 200 OK and resolve.
+    let resolved1 = timeout(Duration::from_secs(45), webhook_receiver.recv())
+        .await
+        .expect("BLOCKED: timed out waiting for measured HTTP recovery webhook")
+        .expect("webhook channel closed");
+    verify_webhook_event(
+        &resolved1,
+        &webhook_secret,
+        "resolved",
+        &target1_node_id,
+        &rule_id,
+    );
+    assert!(!resolved1.delivery_id.is_empty());
+
+    let incidents = operator_json(&client, &api_url, &admin_token, "/v1/uptime/incidents").await;
+    assert_eq!(incidents["incidents"][0]["state"], "recovered");
+
+    // Target 2: trigger outage, then disable target and confirm cancellation without recovery webhook.
+    let target2_resp = client
+        .post(format!("{api_url}/v1/uptime/targets"))
+        .bearer_auth(&admin_token)
+        .json(&json!({
+            "name": "Cancelled outage target",
+            "url": format!("http://127.0.0.1:{target2_port}/health"),
+            "expected_status": 200,
+            "interval_seconds": 30,
+            "timeout_millis": 1000,
+            "failure_threshold": 1
+        }))
+        .send()
+        .await
+        .expect("create uptime target 2");
+    assert_eq!(target2_resp.status(), ClientStatus::CREATED);
+    let target2_id = target2_resp.json::<Value>().await.unwrap()["target"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let target2_node_id = format!("uptime:{target2_id}");
+
+    let triggered2 = next_webhook(&mut webhook_receiver, "target 2 outage").await;
+    verify_webhook_event(
+        &triggered2,
+        &webhook_secret,
+        "triggered",
+        &target2_node_id,
+        &rule_id,
+    );
+
+    let disable_resp = client
+        .post(format!("{api_url}/v1/uptime/targets/{target2_id}/disable"))
+        .bearer_auth(&admin_token)
+        .send()
+        .await
+        .expect("disable down uptime target");
+    assert_eq!(disable_resp.status(), ClientStatus::NO_CONTENT);
+
+    assert!(
+        timeout(Duration::from_secs(2), webhook_receiver.recv())
+            .await
+            .is_err(),
+        "disabling a down monitor must not emit a recovery webhook"
+    );
+    let active = operator_json(&client, &api_url, &admin_token, "/v1/alerts/active").await;
+    assert_eq!(active["active"].as_array().map(Vec::len), Some(0));
+    let incidents_after =
+        operator_json(&client, &api_url, &admin_token, "/v1/uptime/incidents").await;
+    let cancelled = incidents_after["incidents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|inc| inc["target_id"] == target2_id)
+        .expect("cancelled incident recorded");
+    assert_eq!(cancelled["state"], "cancelled");
+
+    stop_process(&mut api).await;
+    target1_task.abort();
+    target2_task.abort();
+    webhook_task.abort();
+}
+
+#[tokio::test]
+#[ignore = "requires locally built FusionPanel API and agent binaries; run explicitly per README"]
+async fn pending_signed_webhook_recovers_after_api_restart_with_same_delivery_id() {
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+
+    let api_binary = required_binary("FUSIONPANEL_API_BINARY");
+    let temp = TempDir::new().expect("temporary directory for isolated recovery E2E");
+    let admin_token = format!("e2e-admin-{}", Uuid::new_v4().simple());
+    let webhook_secret = format!("e2e-webhook-secret-{}", Uuid::new_v4().simple());
+    let encryption_key = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+    let database_path = temp.path().join("fusionpanel-recovery-e2e.sqlite");
+    let api_port = reserve_loopback_port();
+    let api_url = format!("http://127.0.0.1:{api_port}");
+    let client = Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(5))
+        .build()
+        .expect("bounded local HTTP client");
+
+    let webhook_listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind custom webhook listener");
+    let webhook_port = webhook_listener.local_addr().unwrap().port();
+    let webhook_url = format!("http://127.0.0.1:{webhook_port}/hook");
+
+    let (first_tx, first_rx) = tokio::sync::oneshot::channel::<String>();
+    let (second_tx, second_rx) = tokio::sync::oneshot::channel::<WebhookEvent>();
+    let webhook_task = tokio::spawn(async move {
+        // Attempt 1: read headers, report delivery_id, and stall until API is killed.
+        let (stream1, _) = webhook_listener.accept().await.unwrap();
+        let mut reader1 = BufReader::new(stream1);
+        let mut headers1 = String::new();
+        loop {
+            let mut line = String::new();
+            if reader1.read_line(&mut line).await.unwrap_or(0) == 0 || line == "\r\n" {
+                break;
+            }
+            headers1.push_str(&line);
+        }
+        let first_delivery_id = headers1
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("x-fusionpanel-delivery-id")
+                    .then(|| value.trim().to_owned())
+            })
+            .unwrap_or_default();
+        let _ = first_tx.send(first_delivery_id);
+
+        // Attempt 2 (after API restart): accept, verify, and return 204.
+        let (stream2, _) = webhook_listener.accept().await.unwrap();
+        drop(reader1);
+        let mut reader2 = BufReader::new(stream2);
+        let mut headers2 = String::new();
+        loop {
+            let mut line = String::new();
+            reader2.read_line(&mut line).await.unwrap();
+            if line == "\r\n" || line.is_empty() {
+                break;
+            }
+            headers2.push_str(&line);
+        }
+        let content_length = headers2
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().ok())
+                    .flatten()
+            })
+            .unwrap_or_default();
+        let mut body = vec![0u8; content_length];
+        reader2.read_exact(&mut body).await.unwrap();
+        let _ = reader2
+            .get_mut()
+            .write_all(b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            .await;
+
+        let signature = headers2
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("x-fusionpanel-signature")
+                    .then(|| value.trim().to_owned())
+            })
+            .unwrap_or_default();
+        let delivery_id = headers2
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("x-fusionpanel-delivery-id")
+                    .then(|| value.trim().to_owned())
+            })
+            .unwrap_or_default();
+        let _ = second_tx.send(WebhookEvent {
+            body: String::from_utf8(body).unwrap(),
+            signature,
+            delivery_id,
+        });
+    });
+
+    let mut api = spawn_api(
+        &api_binary,
+        &database_path,
+        &admin_token,
+        &encryption_key,
+        api_port,
+        temp.path(),
+    );
+    assert!(
+        wait_for_health(&mut api, &client, &api_url).await,
+        "BLOCKED: isolated FusionPanel API did not become healthy"
+    );
+
+    let registration = client
+        .post(format!("{api_url}/v1/nodes/register"))
+        .bearer_auth(&admin_token)
+        .json(&json!({ "name": "recovery-node" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(registration.status(), ClientStatus::CREATED);
+    let reg_json: Value = registration.json().await.unwrap();
+    let node_id = reg_json["node_id"].as_str().unwrap().to_owned();
+    let node_token = reg_json["token"].as_str().unwrap().to_owned();
+
+    let rule_resp = client
+        .post(format!("{api_url}/v1/alerts/rules"))
+        .bearer_auth(&admin_token)
+        .json(&json!({
+            "name": "Pending delivery recovery rule",
+            "metric": "memory_used_percent",
+            "operator": "above",
+            "threshold": 0.0,
+            "severity": "warning",
+            "webhook_url": webhook_url,
+            "webhook_secret": webhook_secret,
+            "enabled": true
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(rule_resp.status(), ClientStatus::CREATED);
+    let rule_id = rule_resp.json::<Value>().await.unwrap()["rule"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    // Post sample in background because the handler awaits the stalled webhook delivery.
+    let post_client = client.clone();
+    let post_url = format!("{api_url}/v1/nodes/{node_id}/metrics");
+    let post_token = node_token.clone();
+    tokio::spawn(async move {
+        let _ = post_client
+            .post(post_url)
+            .bearer_auth(post_token)
+            .json(&json!({
+                "cpu_usage_percent": 10.0,
+                "memory_used_kb": 1024,
+                "memory_available_kb": 1024,
+                "disk_io_ops": 1
+            }))
+            .send()
+            .await;
+    });
+
+    let first_delivery_id = timeout(Duration::from_secs(10), first_rx)
+        .await
+        .expect("BLOCKED: webhook attempt never started")
+        .expect("first_tx dropped");
+    assert!(!first_delivery_id.is_empty());
+
+    // Interrupt API immediately while the delivery is in-flight/pending.
+    let _ = api.start_kill();
+    let _ = timeout(Duration::from_secs(5), api.wait()).await;
+
+    // Restart API on the same SQLite DB; recover_alerts should replay with the same delivery ID.
+    let mut api = spawn_api(
+        &api_binary,
+        &database_path,
+        &admin_token,
+        &encryption_key,
+        api_port,
+        temp.path(),
+    );
+    assert!(
+        wait_for_health(&mut api, &client, &api_url).await,
+        "BLOCKED: FusionPanel API did not restart cleanly"
+    );
+
+    let recovered = timeout(Duration::from_secs(10), second_rx)
+        .await
+        .expect("BLOCKED: pending delivery was not replayed after API restart")
+        .expect("second_tx dropped");
+    assert_eq!(recovered.delivery_id, first_delivery_id);
+    verify_webhook_event(&recovered, &webhook_secret, "triggered", &node_id, &rule_id);
+    wait_for_deliveries(&client, &api_url, &admin_token, 1).await;
+
+    stop_process(&mut api).await;
+    webhook_task.abort();
 }
