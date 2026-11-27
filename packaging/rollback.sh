@@ -4,6 +4,19 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$SCRIPT_DIR/layout.sh"
 
+FORCE_REWIND=0
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --force-rewind) FORCE_REWIND=1 ;;
+        *)
+            echo "Error: Unknown rollback option: $1" >&2
+            exit 1
+            ;;
+    esac
+    shift
+done
+ALLOW_INCOMPATIBLE_REWIND="${FUSIONPANEL_ALLOW_INCOMPATIBLE_REWIND:-0}"
+
 BACKUP_PARENT="/var/lib/fusionpanel-update"
 BACKUP_DIR="$BACKUP_PARENT/backup-pre-update"
 CONFIG_DIR="/etc/fusionpanel"
@@ -48,6 +61,12 @@ if [ "$BACKUP_DIR" = "$BACKUP_PARENT/backup-pre-update" ]; then
         echo "Error: update backup directory must be root-owned with mode 0700; refusing to restore it." >&2
         exit 1
     fi
+fi
+if [ -e "$BACKUP_DIR/incompatible-migration" ] \
+    && [ "$FORCE_REWIND" -ne 1 ] \
+    && [ "$ALLOW_INCOMPATIBLE_REWIND" != "1" ]; then
+    echo "Error: Automatic rewind is blocked because $BACKUP_DIR/incompatible-migration is marked. Pass --force-rewind or set FUSIONPANEL_ALLOW_INCOMPATIBLE_REWIND=1 to override." >&2
+    exit 1
 fi
 
 echo "Stopping services..."
