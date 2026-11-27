@@ -121,4 +121,44 @@ describe('API Client', () => {
       expect(request.withCredentials).toBe(true);
     });
   });
+
+  describe('/v1/mail/domains', () => {
+    it('lists mail domains and sends Idempotency-Key on mail mutations', async () => {
+      const domain = {
+        id: 'dom-1',
+        tenant_id: 'ten-1',
+        node_id: 'node-1',
+        domain: 'example.com',
+        dns_zone_id: null,
+        active: true,
+        state: 'ready' as const,
+        desired_revision: 1,
+        queued_revision: null,
+        applied_revision: 1,
+        failed_revision: null,
+        pending_job_id: null,
+        last_error: null,
+        created_at: '2026-11-27T10:00:00Z',
+        updated_at: '2026-11-27T10:00:00Z',
+      };
+      mockAdapter.onGet('/v1/mail/domains').reply(200, { domains: [domain] });
+      mockAdapter.onPost('/v1/mail/domains').reply(202, {
+        domain,
+        job: {
+          id: 'job-mail-1',
+          kind: 'agent_operation',
+          payload: {},
+          state: 'queued',
+          worker_id: null,
+          error_text: null,
+          created_at: '',
+          updated_at: '',
+        },
+      });
+
+      await expect(api.getMailDomains()).resolves.toEqual([domain]);
+      await api.createMailDomain({ domain: 'example.com', node_id: 'node-1' }, 'idem-key-123');
+      expect(mockAdapter.history.post[0].headers?.['Idempotency-Key']).toBe('idem-key-123');
+    });
+  });
 });

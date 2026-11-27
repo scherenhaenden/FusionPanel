@@ -1,5 +1,27 @@
 import { apiClient } from './client';
-import { HealthResponse, CapabilitiesResponse, JobLogEntry, JobRecord, NodeRecord } from '../types';
+import {
+  HealthResponse,
+  CapabilitiesResponse,
+  JobLogEntry,
+  JobRecord,
+  NodeRecord,
+  MailDomainRecord,
+  MailDomainDetailsResponse,
+  CreateMailDomainRequest,
+  UpdateMailDomainRequest,
+  MailDomainOperationResponse,
+  MailboxRecord,
+  CreateMailboxRequest,
+  UpdateMailboxRequest,
+  MailboxOperationResponse,
+  MailAliasRecord,
+  CreateMailAliasRequest,
+  UpdateMailAliasRequest,
+  MailAliasOperationResponse,
+  MailDkimRecord,
+  UpsertMailDkimRequest,
+  MailDkimOperationResponse,
+} from '../types';
 
 export type WebsiteKind = 'static' | 'reverse_proxy';
 export type WebsiteState = 'provisioning' | 'active' | 'failed' | 'deleting';
@@ -760,7 +782,177 @@ export const api = {
   addSecurityRule: async (data: any): Promise<any> => {
     const response = await apiClient.post<any>('/v1/security/rules', data);
     return response.data;
-  }
+  },
+
+  // Mail
+  getMailDomains: async (): Promise<MailDomainRecord[]> => {
+    const response = await apiClient.get<{ domains: MailDomainRecord[] }>('/v1/mail/domains');
+    return response.data.domains;
+  },
+
+  getMailDomain: async (domainId: string): Promise<MailDomainDetailsResponse> => {
+    const response = await apiClient.get<MailDomainDetailsResponse>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}`,
+    );
+    return response.data;
+  },
+
+  createMailDomain: async (
+    data: CreateMailDomainRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<MailDomainOperationResponse> => {
+    const response = await apiClient.post<MailDomainOperationResponse>('/v1/mail/domains', data, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
+    return response.data;
+  },
+
+  updateMailDomain: async (
+    domainId: string,
+    data: UpdateMailDomainRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<MailDomainOperationResponse> => {
+    const response = await apiClient.put<MailDomainOperationResponse>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}`,
+      data,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  deleteMailDomain: async (
+    domainId: string,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<MailDomainOperationResponse> => {
+    const response = await apiClient.delete<MailDomainOperationResponse>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}`,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  getMailboxes: async (domainId: string): Promise<MailboxRecord[]> => {
+    const response = await apiClient.get<{ mailboxes: MailboxRecord[] }>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}/mailboxes`,
+    );
+    return response.data.mailboxes;
+  },
+
+  createMailbox: async (
+    domainId: string,
+    data: CreateMailboxRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<MailboxOperationResponse> => {
+    const response = await apiClient.post<MailboxOperationResponse>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}/mailboxes`,
+      data,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  updateMailbox: async (
+    domainId: string,
+    mailboxId: string,
+    data: UpdateMailboxRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<MailboxOperationResponse> => {
+    const response = await apiClient.put<MailboxOperationResponse>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}/mailboxes/${encodeURIComponent(mailboxId)}`,
+      data,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  deleteMailbox: async (
+    domainId: string,
+    mailboxId: string,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<MailDomainOperationResponse> => {
+    const response = await apiClient.delete<MailDomainOperationResponse>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}/mailboxes/${encodeURIComponent(mailboxId)}`,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  getMailAliases: async (domainId: string): Promise<MailAliasRecord[]> => {
+    const response = await apiClient.get<{ aliases: MailAliasRecord[] }>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}/aliases`,
+    );
+    return response.data.aliases;
+  },
+
+  createMailAlias: async (
+    domainId: string,
+    data: CreateMailAliasRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<MailAliasOperationResponse> => {
+    const response = await apiClient.post<MailAliasOperationResponse>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}/aliases`,
+      data,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  updateMailAlias: async (
+    domainId: string,
+    aliasId: string,
+    data: UpdateMailAliasRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<MailAliasOperationResponse> => {
+    const response = await apiClient.put<MailAliasOperationResponse>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}/aliases/${encodeURIComponent(aliasId)}`,
+      data,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  deleteMailAlias: async (
+    domainId: string,
+    aliasId: string,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<MailDomainOperationResponse> => {
+    const response = await apiClient.delete<MailDomainOperationResponse>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}/aliases/${encodeURIComponent(aliasId)}`,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  getMailDkim: async (domainId: string): Promise<MailDkimRecord | null> => {
+    const response = await apiClient.get<{ dkim: MailDkimRecord | null }>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}/dkim`,
+    );
+    return response.data.dkim;
+  },
+
+  upsertMailDkim: async (
+    domainId: string,
+    data: UpsertMailDkimRequest,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<MailDkimOperationResponse> => {
+    const response = await apiClient.post<MailDkimOperationResponse>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}/dkim`,
+      data,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
+
+  deleteMailDkim: async (
+    domainId: string,
+    idempotencyKey = createIdempotencyKey(),
+  ): Promise<MailDkimOperationResponse> => {
+    const response = await apiClient.delete<MailDkimOperationResponse>(
+      `/v1/mail/domains/${encodeURIComponent(domainId)}/dkim`,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
+    return response.data;
+  },
 };
 
 export * from './client';
