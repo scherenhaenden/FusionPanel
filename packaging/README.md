@@ -40,3 +40,5 @@ To build locally, provide Rust, Node.js 20 with npm, a non-release label, and an
 ```sh
 bash packaging/build-package.sh ci-local /tmp/fusionpanel-package
 ```
+
+When `dpkg-deb` is available (or `FUSIONPANEL_BUILD_DEB=1`), `build-package.sh` also produces a reproducible Debian Bookworm `amd64` `.deb` package via `packaging/build-deb.sh` from the same locked binaries and frontend build, using `SOURCE_DATE_EPOCH` and `--root-owner-group`. Set `FUSIONPANEL_DEB_VERSION` to override the Cargo-derived Debian version or `FUSIONPANEL_BUILD_DEB=0` to skip `.deb` generation.

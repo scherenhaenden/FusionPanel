@@ -488,3 +488,100 @@ fusionpanel_set_frontend_env() {
     chmod 0600 "$temp_file"
     mv -f "$temp_file" "$env_file"
 }
+
+fusionpanel_normalize_deb_version() {
+    fusionpanel_raw_ver=$1
+    if [ -z "$fusionpanel_raw_ver" ]; then
+        echo "Error: Empty version string for Debian package." >&2
+        return 1
+    fi
+    case "$fusionpanel_raw_ver" in
+        [0-9]*) ;;
+        *)
+            echo "Error: Debian package version must start with a digit: $fusionpanel_raw_ver" >&2
+            return 1
+            ;;
+    esac
+    # Convert Cargo-style prerelease separators (-dev.1, -rc.1, -alpha.1, -beta.1)
+    # to Debian tilde (~) so prereleases sort before the final release, and append
+    # a -1 Debian revision when none is present.
+    fusionpanel_deb_ver=$(printf '%s' "$fusionpanel_raw_ver" \
+        | sed -E 's/-(dev|alpha|beta|rc)([.0-9A-Za-z]*)$/~\1\2/; s/[^A-Za-z0-9.+~:-]/+/g')
+    case "$fusionpanel_deb_ver" in
+        *-[0-9]*) ;;
+        *-*)
+            fusionpanel_deb_ver=$(printf '%s' "$fusionpanel_deb_ver" | sed 's/-/~/g')
+            fusionpanel_deb_ver="${fusionpanel_deb_ver}-1"
+            ;;
+        *)
+            fusionpanel_deb_ver="${fusionpanel_deb_ver}-1"
+            ;;
+    esac
+    printf '%s\n' "$fusionpanel_deb_ver"
+}
+
+fusionpanel_stage_deb_tree() {
+    fusionpanel_payload_dir=$1
+    fusionpanel_deb_root=$2
+    fusionpanel_source_sha=${3:-unknown}
+    fusionpanel_deb_version=${4:-0.12.0~dev.1-1}
+    fusionpanel_build_epoch=${5:-0}
+
+    fusionpanel_validate_payload "$fusionpanel_payload_dir" || return 1
+
+    mkdir -p \
+        "$fusionpanel_deb_root/DEBIAN" \
+        "$fusionpanel_deb_root/usr/bin" \
+        "$fusionpanel_deb_root/lib/systemd/system" \
+        "$fusionpanel_deb_root/usr/share/fusionpanel/frontend/dist" \
+        "$fusionpanel_deb_root/usr/share/fusionpanel/packaging" \
+        "$fusionpanel_deb_root/etc/fusionpanel" || return 1
+
+    chmod 0755 \
+        "$fusionpanel_deb_root" \
+        "$fusionpanel_deb_root/DEBIAN" \
+        "$fusionpanel_deb_root/usr" \
+        "$fusionpanel_deb_root/usr/bin" \
+        "$fusionpanel_deb_root/lib" \
+        "$fusionpanel_deb_root/lib/systemd" \
+        "$fusionpanel_deb_root/lib/systemd/system" \
+        "$fusionpanel_deb_root/usr/share" \
+        "$fusionpanel_deb_root/usr/share/fusionpanel" \
+        "$fusionpanel_deb_root/usr/share/fusionpanel/frontend" \
+        "$fusionpanel_deb_root/usr/share/fusionpanel/frontend/dist" \
+        "$fusionpanel_deb_root/usr/share/fusionpanel/packaging" || return 1
+    chmod 0700 "$fusionpanel_deb_root/etc/fusionpanel" || return 1
+    chmod 0755 "$fusionpanel_deb_root/etc" || return 1
+
+    for binary in fusionpanel-api fusionpanel-agent fusionpanel-cli fusionpanel-nginx-helper; do
+        install -m 0755 "$fusionpanel_payload_dir/$binary" "$fusionpanel_deb_root/usr/bin/$binary" || return 1
+    done
+
+    for unit in fusionpanel.service fusionpanel-agent.service fusionpanel-nginx-helper.service; do
+        sed 's|^ExecStart=/usr/local/bin/|ExecStart=/usr/bin/|' \
+            "$fusionpanel_payload_dir/systemd/$unit" > "$fusionpanel_deb_root/lib/systemd/system/$unit" || return 1
+        chmod 0644 "$fusionpanel_deb_root/lib/systemd/system/$unit" || return 1
+    done
+
+    cp -a "$fusionpanel_payload_dir/frontend/dist/." "$fusionpanel_deb_root/usr/share/fusionpanel/frontend/dist/" || return 1
+    find "$fusionpanel_deb_root/usr/share/fusionpanel/frontend/dist" -type d -exec chmod 0755 {} + || return 1
+    find "$fusionpanel_deb_root/usr/share/fusionpanel/frontend/dist" -type f -exec chmod 0644 {} + || return 1
+
+    install -m 0755 "$fusionpanel_payload_dir/packaging/nginx-include.sh" \
+        "$fusionpanel_deb_root/usr/share/fusionpanel/packaging/nginx-include.sh" || return 1
+
+    if [ -f "$fusionpanel_payload_dir/RELEASE_MANIFEST.json" ]; then
+        install -m 0644 "$fusionpanel_payload_dir/RELEASE_MANIFEST.json" \
+            "$fusionpanel_deb_root/usr/share/fusionpanel/RELEASE_MANIFEST.json" || return 1
+    fi
+
+    {
+        printf 'Package: fusionpanel\n'
+        printf 'Version: %s\n' "$fusionpanel_deb_version"
+        printf 'Architecture: amd64\n'
+        printf 'Target: debian-bookworm\n'
+        printf 'Source commit: %s\n' "$fusionpanel_source_sha"
+        printf 'SOURCE_DATE_EPOCH: %s\n' "$fusionpanel_build_epoch"
+    } > "$fusionpanel_deb_root/usr/share/fusionpanel/BUILD_INFO.txt" || return 1
+    chmod 0644 "$fusionpanel_deb_root/usr/share/fusionpanel/BUILD_INFO.txt" || return 1
+}
