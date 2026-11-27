@@ -821,6 +821,7 @@ impl AlertStore {
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn record_uptime_check(
         &mut self,
         target_id: &str,
