@@ -362,8 +362,7 @@ impl ContainerResourceLimits {
         {
             return Err(ValidationError::InvalidContainerResources);
         }
-        if self.memory_bytes < Self::MIN_MEMORY_BYTES
-            || self.memory_bytes > Self::MAX_MEMORY_BYTES
+        if self.memory_bytes < Self::MIN_MEMORY_BYTES || self.memory_bytes > Self::MAX_MEMORY_BYTES
         {
             return Err(ValidationError::InvalidContainerResources);
         }
@@ -1298,7 +1297,9 @@ pub fn valid_pinned_image_ref(image: &str) -> bool {
     if image.is_empty()
         || image.len() > 512
         || !image.is_ascii()
-        || image.bytes().any(|b| b.is_ascii_whitespace() || b.is_ascii_control())
+        || image
+            .bytes()
+            .any(|b| b.is_ascii_whitespace() || b.is_ascii_control())
         || image.contains("..")
         || image.contains("//")
     {
@@ -1308,7 +1309,11 @@ pub fn valid_pinned_image_ref(image: &str) -> bool {
     let Some((repo_and_tag, digest)) = image.split_once("@sha256:") else {
         return false;
     };
-    if digest.len() != 64 || !digest.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    {
         return false;
     }
     if repo_and_tag.is_empty() || repo_and_tag.contains('@') {
@@ -1369,9 +1374,9 @@ fn valid_image_name_segment(seg: &str) -> bool {
         && !seg.starts_with('-')
         && !seg.ends_with('.')
         && !seg.ends_with('-')
-        && seg
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'.' | b'_' | b'-'))
+        && seg.bytes().all(|b| {
+            b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'.' | b'_' | b'-')
+        })
 }
 
 fn valid_image_tag(tag: &str) -> bool {
@@ -1428,7 +1433,8 @@ impl ContainerApplyPayload {
             if k.is_empty()
                 || k.len() > 128
                 || !k.is_ascii()
-                || k.bytes().any(|b| b == b'\0' || b == b'\n' || b == b'\r' || b == b'=')
+                || k.bytes()
+                    .any(|b| b == b'\0' || b == b'\n' || b == b'\r' || b == b'=')
                 || v.len() > 4096
                 || v.contains('\0')
             {

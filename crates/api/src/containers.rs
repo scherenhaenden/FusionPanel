@@ -14,8 +14,8 @@ use axum::{
 use chrono::Utc;
 use fusionpanel_agent_protocol::{
     normalize_container_ports, ContainerApplyPayload, ContainerDeletePayload,
-    ContainerLifecyclePayload, ContainerPortMapping, ContainerResourceLimits,
-    ContainerRestartPolicy, Operation, Request,
+    ContainerLifecyclePayload, ContainerPortMapping, ContainerPortProtocol,
+    ContainerResourceLimits, ContainerRestartPolicy, Operation, Request,
 };
 use fusionpanel_control_store::{
     ContainerOperation, ContainerPortSpec, ContainerResourceSpec, NewContainerSpec, StoreError,
@@ -27,15 +27,28 @@ use serde_json::json;
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
+fn default_container_resources() -> ContainerResourceLimits {
+    ContainerResourceLimits {
+        cpu_millicores: 500,
+        memory_bytes: 256 * 1024 * 1024,
+        pids_limit: Some(256),
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CreateContainerRequest {
     name: String,
     image: String,
     #[serde(default)]
+    app_id: Option<String>,
+    #[serde(default)]
     node_id: Option<Uuid>,
     #[serde(default)]
     ports: Vec<ContainerPortMapping>,
+    #[serde(default)]
+    port: Option<u16>,
+    #[serde(default = "default_container_resources")]
     resources: ContainerResourceLimits,
     #[serde(default)]
     env: BTreeMap<String, String>,
@@ -47,7 +60,12 @@ struct CreateContainerRequest {
 
 pub(super) fn routes() -> Router<AppState> {
     Router::new()
-        .route("/v1/containers", get(list_containers).post(create_container))
+        .route("/v1/containers/catalog", get(list_container_catalog))
+        .route("/api/v1/containers/catalog", get(list_container_catalog))
+        .route(
+            "/v1/containers",
+            get(list_containers).post(create_container),
+        )
         .route(
             "/api/v1/containers",
             get(list_containers).post(create_container),
@@ -60,12 +78,41 @@ pub(super) fn routes() -> Router<AppState> {
             "/api/v1/containers/{id}",
             get(get_container).delete(delete_container),
         )
+        .route("/v1/containers/{id}/logs", get(get_container_logs))
+        .route("/api/v1/containers/{id}/logs", get(get_container_logs))
         .route("/v1/containers/{id}/start", post(start_container))
         .route("/api/v1/containers/{id}/start", post(start_container))
         .route("/v1/containers/{id}/stop", post(stop_container))
         .route("/api/v1/containers/{id}/stop", post(stop_container))
         .route("/v1/containers/{id}/restart", post(restart_container))
         .route("/api/v1/containers/{id}/restart", post(restart_container))
+}
+
+async fn list_container_catalog(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    let context = website_authorization_context(&state, &headers).await?;
+    require_website_permission(&context, Permission::SiteRead, None)?;
+    Ok(Json(json!({ "apps": [] })))
+}
+
+async fn get_container_logs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    let context = website_authorization_context(&state, &headers).await?;
+    require_website_permission(&context, Permission::SiteRead, None)?;
+    let container_id = parse_uuid(&id)?;
+    let _container = state
+        .control_store
+        .lock()
+        .await
+        .get_container_for_tenant(container_id, context.tenant_id.to_uuid())
+        .map_err(|_| node_jobs::internal_error())?
+        .ok_or_else(not_found)?;
+    Ok(Json(json!({ "logs": [], "truncated": false })))
 }
 
 async fn list_containers(
@@ -111,9 +158,23 @@ async fn create_container(
     let idempotency_key = require_idempotency_key(&headers)?;
     let tenant_id = context.tenant_id.to_uuid();
 
+    let _app_id = body.app_id.as_deref();
     let name = body.name.trim().to_string();
     let image = body.image.trim().to_string();
-    let normalized_ports = normalize_container_ports(&body.ports)
+    let raw_ports = if body.ports.is_empty() {
+        if let Some(host_port) = body.port {
+            vec![ContainerPortMapping {
+                host_port,
+                container_port: 8080,
+                protocol: ContainerPortProtocol::Tcp,
+            }]
+        } else {
+            Vec::new()
+        }
+    } else {
+        body.ports.clone()
+    };
+    let normalized_ports = normalize_container_ports(&raw_ports)
         .map_err(|_| bad_request("Invalid or duplicate container port mappings"))?;
 
     if let Some(node_id) = body.node_id {
@@ -192,7 +253,8 @@ async fn create_container(
         "command": &body.command,
         "restart_policy": body.restart_policy,
     });
-    let fingerprint = serde_json::to_string(&fingerprint_json).map_err(|_| node_jobs::internal_error())?;
+    let fingerprint =
+        serde_json::to_string(&fingerprint_json).map_err(|_| node_jobs::internal_error())?;
     let scoped_key = format!("container-create:{tenant_id}:{idempotency_key}");
     let now = Utc::now().to_rfc3339();
 

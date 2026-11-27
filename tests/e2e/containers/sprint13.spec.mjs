@@ -150,7 +150,7 @@ test('launches digest-pinned container, verifies lifecycle, isolation, restart i
   await page.getByRole('link', { name: 'Administration' }).click();
   await page.getByRole('button', { name: /API Tokens/i }).click();
   await page.getByLabel('Token Name').fill(`s13-owner-${suffix}`);
-  await page.getByLabel('Scopes (comma-separated)').fill('containers:read,containers:write');
+  await page.getByLabel('Scopes (comma-separated)').fill('site:read,site:create,site:update,site:delete');
   await page.getByRole('button', { name: 'Create API Token' }).click();
   const ownerTokenStatus = page.getByRole('status');
   await expect(ownerTokenStatus).toContainText('fp_tok_', { timeout: 15_000 });

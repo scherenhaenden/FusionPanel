@@ -99,7 +99,10 @@ impl std::fmt::Display for ContainerDriverError {
                 write!(f, "container '{id}' is not managed by this node")
             }
             Self::NameCollision(id) => {
-                write!(f, "container name collision with unmanaged container '{id}'")
+                write!(
+                    f,
+                    "container name collision with unmanaged container '{id}'"
+                )
             }
             Self::NotFound(id) => write!(f, "managed container '{id}' not found"),
             Self::InvalidInput(msg) => write!(f, "invalid container request: {msg}"),
@@ -327,7 +330,10 @@ impl NodeContainerDriver {
         }))
     }
 
-    async fn require_owned(&self, container_id: &str) -> Result<InspectDetails, ContainerDriverError> {
+    async fn require_owned(
+        &self,
+        container_id: &str,
+    ) -> Result<InspectDetails, ContainerDriverError> {
         let Some(details) = self.inspect_details(container_id).await? else {
             return Err(ContainerDriverError::NotFound(container_id.to_string()));
         };
@@ -491,11 +497,8 @@ impl NodeContainerDriver {
         if details.running {
             return Ok(());
         }
-        self.run_checked(
-            vec!["start".to_string(), container_id.to_string()],
-            "start",
-        )
-        .await
+        self.run_checked(vec!["start".to_string(), container_id.to_string()], "start")
+            .await
     }
 
     pub async fn stop(&self, container_id: &str) -> Result<(), ContainerDriverError> {
@@ -618,8 +621,7 @@ impl NodeContainerDriver {
         desired: &[ContainerApplyPayload],
     ) -> Result<ContainerReconcileReport, ContainerDriverError> {
         let mut report = ContainerReconcileReport::default();
-        let desired_ids: BTreeSet<&str> =
-            desired.iter().map(|d| d.container_id.as_str()).collect();
+        let desired_ids: BTreeSet<&str> = desired.iter().map(|d| d.container_id.as_str()).collect();
 
         for item in desired {
             match self.apply(item).await {
@@ -816,10 +818,7 @@ mod tests {
                 }
                 "logs" => {
                     let id = args.last().cloned().unwrap_or_default();
-                    let stdout = map
-                        .get(&id)
-                        .map(|c| c.logs.join("\n"))
-                        .unwrap_or_default();
+                    let stdout = map.get(&id).map(|c| c.logs.join("\n")).unwrap_or_default();
                     Ok(DockerOutput {
                         success: true,
                         stdout,
@@ -857,7 +856,10 @@ mod tests {
         let driver = NodeContainerDriver::with_runner("node-1", runner.clone()).unwrap();
 
         assert_eq!(
-            driver.apply(&sample_payload("sentinel-c")).await.unwrap_err(),
+            driver
+                .apply(&sample_payload("sentinel-c"))
+                .await
+                .unwrap_err(),
             ContainerDriverError::NameCollision("sentinel-c".to_string())
         );
         assert_eq!(
@@ -891,7 +893,13 @@ mod tests {
 
         driver.apply(&sample_payload("app-1")).await.unwrap();
         driver.apply(&sample_payload("app-orphan")).await.unwrap();
-        runner.containers.lock().unwrap().get_mut("app-1").unwrap().logs = vec![
+        runner
+            .containers
+            .lock()
+            .unwrap()
+            .get_mut("app-1")
+            .unwrap()
+            .logs = vec![
             "booting".to_string(),
             "token=secret-abc".to_string(),
             "y".repeat(200),
@@ -900,7 +908,11 @@ mod tests {
         let report = driver.reconcile(&[sample_payload("app-1")]).await.unwrap();
         assert_eq!(report.applied, vec!["app-1"]);
         assert_eq!(report.removed_orphans, vec!["app-orphan"]);
-        assert!(runner.containers.lock().unwrap().contains_key("sentinel-keep"));
+        assert!(runner
+            .containers
+            .lock()
+            .unwrap()
+            .contains_key("sentinel-keep"));
         assert!(!runner.containers.lock().unwrap().contains_key("app-orphan"));
 
         let logs = driver

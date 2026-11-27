@@ -51,6 +51,10 @@ impl ContainerEngine for MockContainerEngine {
         Ok(())
     }
 
+    async fn restart(&self, _id: &ContainerId) -> Result<(), containers::domain::DomainError> {
+        Ok(())
+    }
+
     async fn remove(&self, id: &ContainerId) -> Result<(), containers::domain::DomainError> {
         self.remove_calls.lock().unwrap().push(id.clone());
         Ok(())

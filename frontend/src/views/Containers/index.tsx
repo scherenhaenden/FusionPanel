@@ -117,8 +117,10 @@ export default function ContainersView() {
 
   const [showDeployModal, setShowDeployModal] = useState(false);
   const [selectedAppId, setSelectedAppId] = useState('');
+  const [customImage, setCustomImage] = useState('');
   const [containerName, setContainerName] = useState('');
   const [hostPort, setHostPort] = useState('');
+  const [containerPort, setContainerPort] = useState('8080');
   const [formError, setFormError] = useState<string | null>(null);
 
   const [confirmRemoveTarget, setConfirmRemoveTarget] = useState<ContainerRecord | null>(null);
@@ -248,8 +250,9 @@ export default function ContainersView() {
     if (isReadOnly) return;
 
     const trimmedName = containerName.trim();
-    if (!selectedCatalogApp) {
-      setFormError('Please select a pinned app from the catalog.');
+    const effectiveImage = customImage.trim() || selectedCatalogApp?.image || '';
+    if (!effectiveImage) {
+      setFormError('Please select a pinned app from the catalog or enter a digest-pinned image.');
       return;
     }
     if (!trimmedName || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(trimmedName)) {
@@ -267,17 +270,29 @@ export default function ContainersView() {
       parsedPort = portNum;
     }
 
+    const targetPortNum = Number(containerPort.trim() || '8080');
+    if (!Number.isInteger(targetPortNum) || targetPortNum < 1 || targetPortNum > 65535) {
+      setFormError('Container port must be an integer between 1 and 65535.');
+      return;
+    }
+
     setDeployBusy(true);
     setFormError(null);
     setError(null);
     try {
+      const useExplicitPorts = customImage.trim() !== '' || targetPortNum !== 8080;
       await api.createContainer({
         name: trimmedName,
-        app_id: selectedCatalogApp.id,
-        image: selectedCatalogApp.image,
-        ...(parsedPort !== undefined ? { port: parsedPort } : {}),
+        app_id: selectedCatalogApp?.id ?? 'custom',
+        image: effectiveImage,
+        ...(parsedPort !== undefined
+          ? useExplicitPorts
+            ? { ports: [{ host_port: parsedPort, container_port: targetPortNum, protocol: 'tcp' }] }
+            : { port: parsedPort }
+          : {}),
       });
       setContainerName('');
+      setCustomImage('');
       setShowDeployModal(false);
       await loadContainers(false);
     } catch (err) {
@@ -719,21 +734,58 @@ export default function ContainersView() {
 
               <div>
                 <label
-                  htmlFor="container-port-input"
+                  htmlFor="container-image-input"
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                 >
-                  Host Port (optional)
+                  Image
                 </label>
                 <input
-                  id="container-port-input"
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={hostPort}
-                  onChange={(e) => setHostPort(e.target.value)}
-                  placeholder="8080"
+                  id="container-image-input"
+                  type="text"
+                  value={customImage}
+                  onChange={(e) => setCustomImage(e.target.value)}
+                  placeholder={selectedCatalogApp?.image || 'registry/app@sha256:...'}
                   className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor="container-port-input"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    Host Port (optional)
+                  </label>
+                  <input
+                    id="container-port-input"
+                    type="number"
+                    min={1}
+                    max={65535}
+                    value={hostPort}
+                    onChange={(e) => setHostPort(e.target.value)}
+                    placeholder="8080"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="container-target-port-input"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    Container Port
+                  </label>
+                  <input
+                    id="container-target-port-input"
+                    type="number"
+                    min={1}
+                    max={65535}
+                    value={containerPort}
+                    onChange={(e) => setContainerPort(e.target.value)}
+                    placeholder="8080"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">

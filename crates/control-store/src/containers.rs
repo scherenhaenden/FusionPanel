@@ -61,22 +61,27 @@ impl ContainerState {
     }
 
     pub fn can_transition_to(self, next: Self) -> bool {
-        match (self, next) {
-            (Self::Provisioning, Self::Running) | (Self::Provisioning, Self::Failed) => true,
-            (Self::Stopped, Self::Starting) | (Self::Failed, Self::Starting) => true,
-            (Self::Starting, Self::Running) | (Self::Starting, Self::Failed) => true,
-            (Self::Running, Self::Stopping) => true,
-            (Self::Stopping, Self::Stopped) | (Self::Stopping, Self::Failed) => true,
-            (Self::Running, Self::Restarting)
-            | (Self::Stopped, Self::Restarting)
-            | (Self::Failed, Self::Restarting) => true,
-            (Self::Restarting, Self::Running) | (Self::Restarting, Self::Failed) => true,
-            (Self::Running, Self::Deleting)
-            | (Self::Stopped, Self::Deleting)
-            | (Self::Failed, Self::Deleting) => true,
-            (Self::Deleting, Self::Failed) => true,
-            _ => false,
-        }
+        matches!(
+            (self, next),
+            (Self::Provisioning, Self::Running)
+                | (Self::Provisioning, Self::Failed)
+                | (Self::Stopped, Self::Starting)
+                | (Self::Failed, Self::Starting)
+                | (Self::Starting, Self::Running)
+                | (Self::Starting, Self::Failed)
+                | (Self::Running, Self::Stopping)
+                | (Self::Stopping, Self::Stopped)
+                | (Self::Stopping, Self::Failed)
+                | (Self::Running, Self::Restarting)
+                | (Self::Stopped, Self::Restarting)
+                | (Self::Failed, Self::Restarting)
+                | (Self::Restarting, Self::Running)
+                | (Self::Restarting, Self::Failed)
+                | (Self::Running, Self::Deleting)
+                | (Self::Stopped, Self::Deleting)
+                | (Self::Failed, Self::Deleting)
+                | (Self::Deleting, Self::Failed)
+        )
     }
 }
 
@@ -548,13 +553,9 @@ fn check_host_port_conflicts(
         return Ok(());
     }
     let mut stmt = if node_id.is_some() {
-        tx.prepare(
-            "SELECT ports FROM containers WHERE node_id = ?1 AND state != 'deleting'",
-        )?
+        tx.prepare("SELECT ports FROM containers WHERE node_id = ?1 AND state != 'deleting'")?
     } else {
-        tx.prepare(
-            "SELECT ports FROM containers WHERE tenant_id = ?1 AND state != 'deleting'",
-        )?
+        tx.prepare("SELECT ports FROM containers WHERE tenant_id = ?1 AND state != 'deleting'")?
     };
     let scope_id = node_id.unwrap_or(tenant_id).to_string();
     let rows = stmt.query_map([scope_id], |row| row.get::<_, String>(0))?;
@@ -608,8 +609,7 @@ fn find_existing_container_operation(
         .map_err(|e| StoreError::Parse(format!("invalid request_id '{req_id_str}': {e}")))?;
     let existing_job_id = job_id_str
         .map(|s| {
-            Uuid::parse_str(&s)
-                .map_err(|e| StoreError::Parse(format!("invalid job_id '{s}': {e}")))
+            Uuid::parse_str(&s).map_err(|e| StoreError::Parse(format!("invalid job_id '{s}': {e}")))
         })
         .transpose()?;
     Ok(Some(ContainerOperationReservation {
@@ -846,7 +846,10 @@ mod tests {
             "fp-port-dup",
             "2026-11-27T00:00:04Z",
         );
-        assert!(matches!(port_conflict, Err(StoreError::ContainerConflict(_))));
+        assert!(matches!(
+            port_conflict,
+            Err(StoreError::ContainerConflict(_))
+        ));
 
         // Tenant isolation: another tenant cannot see or operate on it
         let other_tenant = Uuid::new_v4();
@@ -862,6 +865,9 @@ mod tests {
             "fp-foreign",
             "2026-11-27T00:00:05Z",
         );
-        assert!(matches!(foreign_stop, Err(StoreError::ContainerNotFound(_))));
+        assert!(matches!(
+            foreign_stop,
+            Err(StoreError::ContainerNotFound(_))
+        ));
     }
 }
