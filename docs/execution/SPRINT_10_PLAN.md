@@ -66,7 +66,21 @@ PR [#705](https://github.com/scherenhaenden/FusionPanel/pull/705) merged from `f
 - `cargo test --manifest-path crates/api/Cargo.toml --locked --offline -j 2 alerts::tests:: -- --test-threads=2` — 8 passed, including a local 503 → 200 measured probe, persisted incident recovery, and verified signed trigger/resolution webhook deliveries.
 - The test fixtures used ephemeral loopback listeners only. This is feature-level local evidence; it is not a process-level product E2E or Dashboard browser acceptance. Keep #51 open until the measured outage/recovery E2E passes on the sprint candidate.
 
-Current `sprint-10` head: `7f8883755679d40dbe693dea73c5bb7fe61a7556` (`0.11.0-dev.1`). The full release gate above ran on earlier candidate `752ebbd4265b7073278bd063d82fae100a3c86d7` and must be repeated on this current head.
+Current `sprint-10` head: `8de77acebeced37db45fd758c5c9cd598b8fac92` (`0.11.0-dev.1`), following [PR #707](https://github.com/scherenhaenden/FusionPanel/pull/707).
+
+## Final release qualification — 27 November 2026
+
+| Gate | Result on `8de77acebeced37db45fd758c5c9cd598b8fac92` | Status |
+|---|---|---|
+| Audit & bootstrap fixes | Global observability authorization, durable transition outbox / same-`delivery_id` restart replay, down-monitor cancellation without false recovery, and `Scope::Global` on `fusionpanel-cli bootstrap operator` integrated via PR #707. | Complete |
+| Workspace unit/integration suite | `CARGO_BUILD_JOBS=2 cargo test --locked --offline --workspace` — passed. | Pass |
+| Agent tests | `CARGO_BUILD_JOBS=2 cargo test --locked --offline --manifest-path crates/agent/Cargo.toml` — passed. | Pass |
+| Observability tests | `CARGO_BUILD_JOBS=2 cargo test --locked --offline --manifest-path modules/observability/Cargo.toml` — passed. | Pass |
+| Observability E2E package | `CARGO_BUILD_JOBS=2 cargo test --offline --manifest-path tests/e2e/observability/Cargo.toml` — 2 passed, 0 failed; 1 external SMTP test ignored. | Pass for exercised cases |
+| Live API process E2E (`live_api_alerts`) | `live_api_alerts --ignored --test-threads=1` — 3 passed, 0 failed (real agent metrics across restart, measured 503→200 HTTP outage/recovery + down-monitor cancellation, and pending webhook replay with same `x-fusionpanel-delivery-id` across API restart). | Pass |
+| Product Dashboard in browser | `node tests/e2e/browser/fixtures/sprint10/run.mjs` (Playwright Chromium against `fusionpanel-api` + `fusionpanel-agent` + built `frontend/dist`) — 1 passed, 0 failed. | Pass |
+| Frontend | `CI=true npm test -- --runInBand` — 11 suites / 48 tests passed; `npm run build` passed. | Pass |
+| Format & builds | `git diff --check`, `cargo fmt --all -- --check`, `fusionpanel-api`, `fusionpanel-cli`, and `fusionpanel-agent` builds — passed. | Pass |
 
 ## S48 capability status and follow-on work
 
