@@ -4,6 +4,9 @@ use crate::backup_driver::{execute_backup_create, execute_backup_restore};
 use crate::cron_driver::{execute_cron_apply, execute_cron_delete, execute_cron_run_now};
 use crate::database_driver::{DatabaseDriver, RealDatabaseDriver};
 use crate::dns_driver::{execute_dns_probe, execute_dns_zone_apply, execute_dns_zone_delete};
+use crate::mail_driver::{
+    execute_mail_dkim_apply, execute_mail_domain_apply, execute_mail_domain_delete,
+};
 use crate::metrics::{MetricsCollector, SystemMetrics};
 use crate::nginx_helper_rpc::NginxHelperClient;
 use fusionpanel_agent_protocol::{
@@ -263,6 +266,7 @@ impl ApiClient {
                         "failed"
                     },
                     error_text: outcome.error_text.as_deref(),
+                    result: outcome.result.as_ref(),
                 },
             )
             .await?;
@@ -344,6 +348,8 @@ struct CompleteRequest<'a> {
     state: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     error_text: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    result: Option<&'a Value>,
 }
 
 #[derive(Debug)]
@@ -395,6 +401,9 @@ enum TypedOperation {
     CronApply(fusionpanel_agent_protocol::CronApplyPayload),
     CronDelete(fusionpanel_agent_protocol::CronDeletePayload),
     CronRunNow(fusionpanel_agent_protocol::CronRunNowPayload),
+    MailDomainApply(Box<fusionpanel_agent_protocol::MailDomainApplyPayload>),
+    MailDomainDelete(fusionpanel_agent_protocol::MailDomainDeletePayload),
+    MailDkimApply(fusionpanel_agent_protocol::MailDkimApplyPayload),
 }
 
 #[derive(Debug)]
@@ -402,6 +411,7 @@ struct OperationOutcome {
     succeeded: bool,
     log_text: String,
     error_text: Option<String>,
+    result: Option<Value>,
 }
 
 impl OperationOutcome {
@@ -410,6 +420,16 @@ impl OperationOutcome {
             succeeded: true,
             log_text: text,
             error_text: None,
+            result: None,
+        }
+    }
+
+    fn success_with_result(text: String, result: Value) -> Self {
+        Self {
+            succeeded: true,
+            log_text: text,
+            error_text: None,
+            result: Some(result),
         }
     }
 
@@ -418,6 +438,7 @@ impl OperationOutcome {
             succeeded: false,
             log_text: message.to_string(),
             error_text: Some(message.to_string()),
+            result: None,
         }
     }
 }
@@ -545,6 +566,7 @@ impl AgentWorker {
             .as_ref()
             .ok_or(WorkerError::InvalidConfiguration)?;
         let mut extra_secret: Option<String> = None;
+        let mut extra_secrets: Vec<String> = Vec::new();
         let outcome = match parse_operation(&job.payload) {
             Ok(TypedOperation::TlsApply {
                 site_id,
@@ -729,6 +751,81 @@ impl AgentWorker {
                     OperationOutcome::failure("cron.run_now failed")
                 }
             },
+            Ok(TypedOperation::MailDomainApply(payload)) => {
+                for mb in &payload.mailboxes {
+                    if let Some(hash) = mb.password_hash.as_ref().filter(|s| !s.is_empty()) {
+                        extra_secrets.push(hash.clone());
+                    }
+                }
+                match execute_mail_domain_apply(&payload).await {
+                    Ok(mut mail_outcome) => {
+                        extra_secrets.append(&mut mail_outcome.secrets);
+                        let result_val = serde_json::to_value(&mail_outcome.result)
+                            .unwrap_or(Value::Null);
+                        OperationOutcome::success_with_result(
+                            format!(
+                                "mail.domain.apply completed for {} (rev {})",
+                                payload.domain, payload.revision
+                            ),
+                            result_val,
+                        )
+                    }
+                    Err(err) => {
+                        let refs: Vec<&str> = extra_secrets.iter().map(String::as_str).collect();
+                        let safe_err = sanitize_bounded(&err, &refs);
+                        eprintln!(
+                            "mail.domain.apply failed for {} (rev {}): {safe_err}",
+                            payload.domain, payload.revision
+                        );
+                        OperationOutcome::failure("mail.domain.apply failed")
+                    }
+                }
+            }
+            Ok(TypedOperation::MailDomainDelete(payload)) => {
+                match execute_mail_domain_delete(&payload).await {
+                    Ok(mail_outcome) => {
+                        let result_val = serde_json::to_value(&mail_outcome.result)
+                            .unwrap_or(Value::Null);
+                        OperationOutcome::success_with_result(
+                            format!(
+                                "mail.domain.delete completed for {} (rev {})",
+                                payload.domain, payload.revision
+                            ),
+                            result_val,
+                        )
+                    }
+                    Err(err) => {
+                        eprintln!(
+                            "mail.domain.delete failed for {} (rev {}): {err}",
+                            payload.domain, payload.revision
+                        );
+                        OperationOutcome::failure("mail.domain.delete failed")
+                    }
+                }
+            }
+            Ok(TypedOperation::MailDkimApply(payload)) => {
+                match execute_mail_dkim_apply(&payload).await {
+                    Ok(mut mail_outcome) => {
+                        extra_secrets.append(&mut mail_outcome.secrets);
+                        let result_val = serde_json::to_value(&mail_outcome.result)
+                            .unwrap_or(Value::Null);
+                        OperationOutcome::success_with_result(
+                            format!(
+                                "mail.dkim.apply completed for {} selector {} (rev {})",
+                                payload.domain, payload.selector, payload.revision
+                            ),
+                            result_val,
+                        )
+                    }
+                    Err(err) => {
+                        eprintln!(
+                            "mail.dkim.apply failed for {} (rev {}): {err}",
+                            payload.domain, payload.revision
+                        );
+                        OperationOutcome::failure("mail.dkim.apply failed")
+                    }
+                }
+            }
             Ok(operation) => {
                 if let TypedOperation::TlsApply {
                     source:
@@ -751,6 +848,9 @@ impl AgentWorker {
         }
         if let Some(ref key_secret) = extra_secret {
             secrets.push(key_secret.as_str());
+        }
+        for secret in &extra_secrets {
+            secrets.push(secret.as_str());
         }
         let log_text = sanitize_bounded(&outcome.log_text, &secrets);
         if !log_text.is_empty() {
@@ -912,6 +1012,13 @@ fn parse_operation(payload: &Value) -> Result<TypedOperation, OperationOutcome> 
         ProtocolOperation::CronApply(payload) => Ok(TypedOperation::CronApply(payload)),
         ProtocolOperation::CronDelete(payload) => Ok(TypedOperation::CronDelete(payload)),
         ProtocolOperation::CronRunNow(payload) => Ok(TypedOperation::CronRunNow(payload)),
+        ProtocolOperation::MailDomainApply(payload) => {
+            Ok(TypedOperation::MailDomainApply(Box::new(payload)))
+        }
+        ProtocolOperation::MailDomainDelete(payload) => {
+            Ok(TypedOperation::MailDomainDelete(payload))
+        }
+        ProtocolOperation::MailDkimApply(payload) => Ok(TypedOperation::MailDkimApply(payload)),
     }
 }
 
@@ -994,7 +1101,10 @@ fn execute_operation(
         | TypedOperation::DnsProbe(_)
         | TypedOperation::CronApply(_)
         | TypedOperation::CronDelete(_)
-        | TypedOperation::CronRunNow(_) => {
+        | TypedOperation::CronRunNow(_)
+        | TypedOperation::MailDomainApply(_)
+        | TypedOperation::MailDomainDelete(_)
+        | TypedOperation::MailDkimApply(_) => {
             OperationOutcome::failure("async operation requires async worker execution")
         }
     }
@@ -1487,5 +1597,61 @@ mod tests {
             Err(WorkerError::ApiStatus(500))
         );
         assert!(classify_status(StatusCode::NO_CONTENT).is_ok());
+    }
+
+    #[test]
+    fn mail_worker_redacts_mailbox_and_dkim_secrets_and_serializes_result() {
+        let domain_id = "00000000-0000-4000-8000-000000000010";
+        let tenant_id = "00000000-0000-4000-8000-000000000011";
+        let node_id = "00000000-0000-4000-8000-000000000012";
+        let mailbox_id = "00000000-0000-4000-8000-000000000013";
+
+        let op = parse_operation(&valid_job(
+            "mail.domain.apply",
+            json!({
+                "domain_id": domain_id,
+                "tenant_id": tenant_id,
+                "node_id": node_id,
+                "domain": "mail.example.test",
+                "revision": 1,
+                "active": true,
+                "mailboxes": [{
+                    "mailbox_id": mailbox_id,
+                    "address": "alice@mail.example.test",
+                    "local_part": "alice",
+                    "quota_bytes": 1048576,
+                    "active": true,
+                    "password_hash": "{ARGON2ID}super-secret-hash"
+                }],
+                "aliases": []
+            }),
+        ));
+        assert!(matches!(op, Ok(TypedOperation::MailDomainApply(_))));
+
+        let redacted = sanitize_bounded(
+            "failed with {ARGON2ID}super-secret-hash and PRIVATE_KEY_MATERIAL",
+            &["{ARGON2ID}super-secret-hash", "PRIVATE_KEY_MATERIAL"],
+        );
+        assert!(!redacted.contains("super-secret-hash"));
+        assert!(!redacted.contains("PRIVATE_KEY_MATERIAL"));
+        assert!(redacted.contains("[REDACTED]"));
+
+        let result_val = json!({
+            "domain_id": domain_id,
+            "revision": 1,
+            "dkim": {
+                "selector": "s2026",
+                "txt_record": "\"v=DKIM1; k=rsa; p=abc\""
+            }
+        });
+        let complete = serde_json::to_value(&CompleteRequest {
+            node_id,
+            state: "succeeded",
+            error_text: None,
+            result: Some(&result_val),
+        })
+        .expect("serialize complete");
+        assert_eq!(complete["result"]["revision"], 1);
+        assert_eq!(complete["result"]["dkim"]["selector"], "s2026");
     }
 }

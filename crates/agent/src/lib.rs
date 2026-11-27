@@ -9,6 +9,7 @@ pub mod dns_driver;
 pub mod executor;
 pub mod files;
 pub mod heartbeat;
+pub mod mail_driver;
 pub mod metrics;
 pub mod mode;
 pub mod nginx_helper_rpc;

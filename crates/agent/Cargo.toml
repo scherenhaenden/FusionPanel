@@ -10,6 +10,7 @@ license = "AGPL-3.0-only"
 fusionpanel-agent-protocol = { path = "../agent-protocol" }
 databases = { path = "../../modules/databases" }
 hosting = { path = "../../modules/hosting" }
+mail = { path = "../../modules/mail" }
 uuid = { version = "1.10.0", features = ["v4", "serde"] }
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = { version = "0.26", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
