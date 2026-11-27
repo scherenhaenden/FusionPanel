@@ -472,7 +472,10 @@ fn handle_request(bytes: &[u8], operations: &dyn ManagedSiteOperations) -> Respo
         | Operation::DnsProbe(_)
         | Operation::CronApply(_)
         | Operation::CronDelete(_)
-        | Operation::CronRunNow(_) => {
+        | Operation::CronRunNow(_)
+        | Operation::MailDomainApply(_)
+        | Operation::MailDomainDelete(_)
+        | Operation::MailDkimApply(_) => {
             return error_response(
                 request_id,
                 "unsupported_operation",
