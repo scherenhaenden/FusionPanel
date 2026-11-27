@@ -36,11 +36,17 @@ impl SaslSubmissionConfig {
         // Submission service (587)
         config.push_str(&format!("{} inet n - y - - smtpd\n", self.submission_port));
         config.push_str("  -o syslog_name=postfix/submission\n");
-        config.push_str(&format!("  -o smtpd_tls_security_level={}\n", self.smtpd_tls_security_level));
+        config.push_str(&format!(
+            "  -o smtpd_tls_security_level={}\n",
+            self.smtpd_tls_security_level
+        ));
         config.push_str("  -o smtpd_sasl_auth_enable=yes\n");
         config.push_str(&format!("  -o smtpd_sasl_type={}\n", self.smtpd_sasl_type));
         config.push_str(&format!("  -o smtpd_sasl_path={}\n", self.smtpd_sasl_path));
-        config.push_str(&format!("  -o smtpd_client_restrictions={}\n", client_restrictions));
+        config.push_str(&format!(
+            "  -o smtpd_client_restrictions={}\n",
+            client_restrictions
+        ));
         config.push_str("  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject\n");
         config.push_str("  -o milter_macro_daemon_name=ORIGINATING\n");
 
@@ -53,7 +59,10 @@ impl SaslSubmissionConfig {
         config.push_str("  -o smtpd_sasl_auth_enable=yes\n");
         config.push_str(&format!("  -o smtpd_sasl_type={}\n", self.smtpd_sasl_type));
         config.push_str(&format!("  -o smtpd_sasl_path={}\n", self.smtpd_sasl_path));
-        config.push_str(&format!("  -o smtpd_client_restrictions={}\n", client_restrictions));
+        config.push_str(&format!(
+            "  -o smtpd_client_restrictions={}\n",
+            client_restrictions
+        ));
         config.push_str("  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject\n");
         config.push_str("  -o milter_macro_daemon_name=ORIGINATING\n");
 

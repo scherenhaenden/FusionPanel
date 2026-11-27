@@ -646,8 +646,8 @@ impl ControlStore {
             None => Ok(None),
             Some(None) => Ok(Some(None)),
             Some(Some(tid)) => {
-                let parsed = Uuid::parse_str(&tid)
-                    .map_err(|error| StoreError::Parse(error.to_string()))?;
+                let parsed =
+                    Uuid::parse_str(&tid).map_err(|error| StoreError::Parse(error.to_string()))?;
                 Ok(Some(Some(parsed)))
             }
         }

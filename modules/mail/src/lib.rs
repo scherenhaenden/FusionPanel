@@ -17,10 +17,10 @@ pub mod dns_records;
 pub mod domain;
 pub mod error;
 pub mod fts_indexer;
-pub mod milter_rate_limit;
+pub mod lmtp_routing;
 pub mod maildir_flags;
 pub mod milter_headers;
-pub mod lmtp_routing;
+pub mod milter_rate_limit;
 pub mod models;
 
 pub use lmtp_routing::*;

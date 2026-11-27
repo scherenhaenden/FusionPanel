@@ -125,7 +125,9 @@ impl PostscreenConfigBuilder {
             greet_action: self.greet_action.unwrap_or(PostscreenAction::Enforce),
             hangup_action: self.hangup_action.unwrap_or(PostscreenAction::Enforce),
             pipelining_action: self.pipelining_action.unwrap_or(PostscreenAction::Enforce),
-            non_smtp_command_action: self.non_smtp_command_action.unwrap_or(PostscreenAction::Drop),
+            non_smtp_command_action: self
+                .non_smtp_command_action
+                .unwrap_or(PostscreenAction::Drop),
             bare_newline_action: self.bare_newline_action.unwrap_or(PostscreenAction::Ignore),
         })
     }
@@ -136,13 +138,26 @@ impl PostscreenConfig {
         let mut cf = String::new();
 
         let _ = writeln!(cf, "postscreen_greet_action = {}", self.greet_action);
-        let _ = writeln!(cf, "postscreen_bare_newline_action = {}", self.bare_newline_action);
-        let _ = writeln!(cf, "postscreen_non_smtp_command_action = {}", self.non_smtp_command_action);
-        let _ = writeln!(cf, "postscreen_pipelining_action = {}", self.pipelining_action);
+        let _ = writeln!(
+            cf,
+            "postscreen_bare_newline_action = {}",
+            self.bare_newline_action
+        );
+        let _ = writeln!(
+            cf,
+            "postscreen_non_smtp_command_action = {}",
+            self.non_smtp_command_action
+        );
+        let _ = writeln!(
+            cf,
+            "postscreen_pipelining_action = {}",
+            self.pipelining_action
+        );
         let _ = writeln!(cf, "postscreen_hangup_action = {}", self.hangup_action);
 
         if !self.dnsbl_sites.is_empty() {
-            let sites = self.dnsbl_sites
+            let sites = self
+                .dnsbl_sites
                 .iter()
                 .map(|site| format!("{}*{}", site.name, site.weight))
                 .collect::<Vec<_>>()
@@ -160,7 +175,8 @@ impl PostscreenConfig {
         "smtp      inet  n       -       y       -       1       postscreen\n\
 smtpd     pass  -       -       y       -       -       smtpd\n\
 tlsproxy  unix  -       -       y       -       0       tlsproxy\n\
-dnsblog   unix  -       -       y       -       0       dnsblog\n".to_string()
+dnsblog   unix  -       -       y       -       0       dnsblog\n"
+            .to_string()
     }
 
     pub fn calculate_score(&self, query_responses: &HashMap<String, Vec<String>>) -> i32 {

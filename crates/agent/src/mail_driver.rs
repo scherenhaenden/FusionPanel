@@ -336,8 +336,12 @@ pub async fn execute_mail_dkim_apply_with_config(
 
     let mut secrets = Vec::new();
     let (dkim_state, dkim_result) = if payload.enabled {
-        let (dkim_state, dkim_res, mut key_secrets) =
-            ensure_dkim_key(&config.root, &payload.domain, &payload.selector, payload.rotate)?;
+        let (dkim_state, dkim_res, mut key_secrets) = ensure_dkim_key(
+            &config.root,
+            &payload.domain,
+            &payload.selector,
+            payload.rotate,
+        )?;
         secrets.append(&mut key_secrets);
         (Some(dkim_state), Some(dkim_res))
     } else {
@@ -435,8 +439,12 @@ fn ensure_dkim_key(
 }
 
 fn verify_dkim_key_file(private_path: &Path) -> Result<(), String> {
-    let meta = fs::metadata(private_path)
-        .map_err(|e| format!("DKIM private key missing at {}: {e}", private_path.display()))?;
+    let meta = fs::metadata(private_path).map_err(|e| {
+        format!(
+            "DKIM private key missing at {}: {e}",
+            private_path.display()
+        )
+    })?;
     if meta.len() == 0 {
         return Err(format!(
             "DKIM private key is empty at {}",
@@ -612,12 +620,24 @@ async fn stage_validate_switch_reload(
     let stg_signing_table = staging_dir.join("dkim/SigningTable");
     let stg_state = staging_dir.join("state/domains.json");
 
-    write_file_with_mode(&stg_domains, rendered.virtual_mailbox_domains.as_bytes(), 0o644)?;
-    write_file_with_mode(&stg_mailboxes, rendered.virtual_mailbox_maps.as_bytes(), 0o644)?;
+    write_file_with_mode(
+        &stg_domains,
+        rendered.virtual_mailbox_domains.as_bytes(),
+        0o644,
+    )?;
+    write_file_with_mode(
+        &stg_mailboxes,
+        rendered.virtual_mailbox_maps.as_bytes(),
+        0o644,
+    )?;
     write_file_with_mode(&stg_aliases, rendered.virtual_alias_maps.as_bytes(), 0o644)?;
     write_file_with_mode(&stg_dovecot, rendered.dovecot_users.as_bytes(), 0o600)?;
     write_file_with_mode(&stg_key_table, rendered.dkim_key_table.as_bytes(), 0o644)?;
-    write_file_with_mode(&stg_signing_table, rendered.dkim_signing_table.as_bytes(), 0o644)?;
+    write_file_with_mode(
+        &stg_signing_table,
+        rendered.dkim_signing_table.as_bytes(),
+        0o644,
+    )?;
     write_file_with_mode(&stg_state, rendered.state_json.as_bytes(), 0o600)?;
 
     if let Err(err) = validate_staged(
@@ -632,8 +652,14 @@ async fn stage_validate_switch_reload(
     }
 
     let mut pairs: Vec<(PathBuf, PathBuf)> = vec![
-        (stg_domains.clone(), root.join("postfix/virtual_mailbox_domains")),
-        (stg_mailboxes.clone(), root.join("postfix/virtual_mailbox_maps")),
+        (
+            stg_domains.clone(),
+            root.join("postfix/virtual_mailbox_domains"),
+        ),
+        (
+            stg_mailboxes.clone(),
+            root.join("postfix/virtual_mailbox_maps"),
+        ),
         (stg_aliases.clone(), root.join("postfix/virtual_alias_maps")),
         (stg_dovecot, root.join("dovecot/users")),
         (stg_key_table, root.join("dkim/KeyTable")),
@@ -665,9 +691,14 @@ async fn validate_staged(
 ) -> Result<(), String> {
     if let Some(cmd) = &config.postmap_cmd {
         for map in postfix_maps {
-            run_service_cmd(cmd, &[map.to_string_lossy().as_ref()], &config.root, staging_dir)
-                .await
-                .map_err(|e| format!("postmap validation failed: {e}"))?;
+            run_service_cmd(
+                cmd,
+                &[map.to_string_lossy().as_ref()],
+                &config.root,
+                staging_dir,
+            )
+            .await
+            .map_err(|e| format!("postmap validation failed: {e}"))?;
         }
     }
     if let Some(cmd) = &config.postconf_cmd {
@@ -698,8 +729,7 @@ async fn switch_and_reload(
     backup_dir: &Path,
     pairs: &[(PathBuf, PathBuf)],
 ) -> Result<(), String> {
-    fs::create_dir_all(backup_dir)
-        .map_err(|e| format!("failed to create backup dir: {e}"))?;
+    fs::create_dir_all(backup_dir).map_err(|e| format!("failed to create backup dir: {e}"))?;
 
     let mut backups: Vec<(PathBuf, Option<PathBuf>)> = Vec::with_capacity(pairs.len());
 
@@ -850,9 +880,12 @@ fn validate_selector_segment(selector: &str) -> Result<(), String> {
 fn confined_join(root: &Path, relative: &str) -> Result<PathBuf, String> {
     let rel = Path::new(relative);
     if rel.is_absolute()
-        || rel
-            .components()
-            .any(|c| matches!(c, std::path::Component::ParentDir | std::path::Component::RootDir))
+        || rel.components().any(|c| {
+            matches!(
+                c,
+                std::path::Component::ParentDir | std::path::Component::RootDir
+            )
+        })
     {
         return Err(format!("path escapes managed mail root: {relative}"));
     }
@@ -936,7 +969,11 @@ mod tests {
             revision: 1,
             active: true,
             dns_zone_id: None,
-            mailboxes: vec![mailbox("carol", "alpha.example.test", "{SHA256}secret-carol")],
+            mailboxes: vec![mailbox(
+                "carol",
+                "alpha.example.test",
+                "{SHA256}secret-carol",
+            )],
             aliases: vec![MailAliasSpec {
                 alias_id: Uuid::new_v4(),
                 source: "abuse@alpha.example.test".to_string(),
@@ -1072,8 +1109,7 @@ mod tests {
             .expect_err("stale rev 1 must fail");
         assert!(err.contains("stale mail revision"));
 
-        let maps =
-            fs::read_to_string(root.join("postfix/virtual_mailbox_maps")).expect("maps");
+        let maps = fs::read_to_string(root.join("postfix/virtual_mailbox_maps")).expect("maps");
         assert!(maps.contains("first@rev.example.test"));
         assert!(!maps.contains("stale@rev.example.test"));
 
@@ -1112,8 +1148,7 @@ mod tests {
             .expect_err("validation failure");
         assert!(err.contains("validation failed"));
 
-        let maps =
-            fs::read_to_string(root.join("postfix/virtual_mailbox_maps")).expect("maps");
+        let maps = fs::read_to_string(root.join("postfix/virtual_mailbox_maps")).expect("maps");
         assert!(maps.contains("admin@keep.example.test"));
         assert!(!maps.contains("broken@keep.example.test"));
 
@@ -1156,8 +1191,7 @@ mod tests {
             .expect_err("reload failure");
         assert!(err.contains("reload failed"));
 
-        let maps =
-            fs::read_to_string(root.join("postfix/virtual_mailbox_maps")).expect("maps");
+        let maps = fs::read_to_string(root.join("postfix/virtual_mailbox_maps")).expect("maps");
         assert!(maps.contains("inbox@reload.example.test"));
         assert!(!maps.contains("inbox2@reload.example.test"));
         assert!(msg_path.exists());

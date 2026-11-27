@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-use std::collections::HashMap;
 use mail::milter_rate_limit::{PostscreenAction, PostscreenConfigBuilder, PostscreenError};
+use std::collections::HashMap;
 
 #[test]
 fn test_postscreen_config_builder() {
@@ -19,20 +19,22 @@ fn test_postscreen_config_builder() {
 
     let main_cf = config.generate_main_cf();
     assert!(main_cf.contains("postscreen_greet_action = enforce"));
-    assert!(main_cf.contains("postscreen_dnsbl_sites = zen.spamhaus.org*3, bl.spamcop.net*2, b.barracudacentral.org*1"));
+    assert!(main_cf.contains(
+        "postscreen_dnsbl_sites = zen.spamhaus.org*3, bl.spamcop.net*2, b.barracudacentral.org*1"
+    ));
     assert!(main_cf.contains("postscreen_dnsbl_threshold = 3"));
     assert!(main_cf.contains("postscreen_dnsbl_action = enforce"));
 
     let master_cf = config.generate_master_cf();
-    assert!(master_cf.contains("smtp      inet  n       -       y       -       1       postscreen"));
+    assert!(
+        master_cf.contains("smtp      inet  n       -       y       -       1       postscreen")
+    );
     assert!(master_cf.contains("smtpd     pass  -       -       y       -       -       smtpd"));
 }
 
 #[test]
 fn test_invalid_dnsbl_threshold() {
-    let result = PostscreenConfigBuilder::new()
-        .dnsbl_threshold(0)
-        .build();
+    let result = PostscreenConfigBuilder::new().dnsbl_threshold(0).build();
 
     assert!(matches!(result, Err(PostscreenError::InvalidThreshold)));
 }
@@ -69,7 +71,10 @@ fn test_score_calculation() {
     assert!(!config.is_rejected(&query_responses));
 
     // Listed on spamhaus (weight 3), so score jumps to 4
-    query_responses.insert("zen.spamhaus.org".to_string(), vec!["127.0.0.3".to_string()]);
+    query_responses.insert(
+        "zen.spamhaus.org".to_string(),
+        vec!["127.0.0.3".to_string()],
+    );
     assert_eq!(config.calculate_score(&query_responses), 4);
     assert!(config.is_rejected(&query_responses));
 }

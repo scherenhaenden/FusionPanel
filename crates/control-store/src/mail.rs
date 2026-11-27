@@ -438,15 +438,8 @@ impl ControlStore {
             ],
         )?;
 
-        let reservation = build_apply_reservation(
-            &tx,
-            domain_id,
-            request_id,
-            revision,
-            None,
-            None,
-            Vec::new(),
-        )?;
+        let reservation =
+            build_apply_reservation(&tx, domain_id, request_id, revision, None, None, Vec::new())?;
         insert_mail_operation(
             &tx,
             idempotency_key,
@@ -788,9 +781,8 @@ impl ControlStore {
         };
 
         // Prevent deleting a mailbox that is targeted by any alias owned by this tenant.
-        let mut stmt = tx.prepare(
-            "SELECT source, destinations_json FROM mail_aliases WHERE tenant_id = ?1",
-        )?;
+        let mut stmt =
+            tx.prepare("SELECT source, destinations_json FROM mail_aliases WHERE tenant_id = ?1")?;
         let alias_rows = stmt.query_map([tenant_id.to_string()], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?;
@@ -1176,15 +1168,8 @@ impl ControlStore {
             ],
         )?;
 
-        let reservation = build_apply_reservation(
-            &tx,
-            domain_id,
-            request_id,
-            revision,
-            None,
-            None,
-            Vec::new(),
-        )?;
+        let reservation =
+            build_apply_reservation(&tx, domain_id, request_id, revision, None, None, Vec::new())?;
         insert_mail_operation(
             &tx,
             idempotency_key,
@@ -1244,15 +1229,8 @@ impl ControlStore {
             ],
         )?;
 
-        let reservation = build_apply_reservation(
-            &tx,
-            domain_id,
-            request_id,
-            revision,
-            None,
-            None,
-            Vec::new(),
-        )?;
+        let reservation =
+            build_apply_reservation(&tx, domain_id, request_id, revision, None, None, Vec::new())?;
         insert_mail_operation(
             &tx,
             idempotency_key,

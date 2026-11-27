@@ -17,8 +17,12 @@ fn test_default_config_generation() {
 
 #[test]
 fn test_custom_config_generation() {
-    let config = FtsFlatcurveConfig::new(2, 128, vec!["normalizer-icu".to_string(), "snowball".to_string()])
-        .with_substring_search(false);
+    let config = FtsFlatcurveConfig::new(
+        2,
+        128,
+        vec!["normalizer-icu".to_string(), "snowball".to_string()],
+    )
+    .with_substring_search(false);
     let generated = config.generate_config();
     assert!(generated.contains("fts_flatcurve = substring_search=no"));
     assert!(generated.contains("fts_filters = normalizer-icu snowball"));
