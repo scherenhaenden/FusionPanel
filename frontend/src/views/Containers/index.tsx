@@ -30,6 +30,7 @@ const LOG_LIMIT_OPTIONS = [50, 100, 200, 500];
 
 const TRANSITIONAL_STATES = new Set<ContainerState>([
   'creating',
+  'provisioning' as ContainerState,
   'starting',
   'stopping',
   'restarting',
@@ -798,7 +799,11 @@ export default function ContainersView() {
                 </button>
                 <button
                   type="submit"
-                  disabled={deployBusy || catalogLoading || catalog.length === 0 || isReadOnly}
+                  disabled={
+                    deployBusy ||
+                    (!customImage.trim() && (catalogLoading || catalog.length === 0)) ||
+                    isReadOnly
+                  }
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {deployBusy ? 'Deploying...' : 'Deploy Container'}

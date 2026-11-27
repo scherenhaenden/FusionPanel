@@ -98,6 +98,7 @@ services:
       dockerfile: Dockerfile
     init: true
     read_only: true
+    network_mode: "service:api"
     depends_on:
       api:
         condition: service_healthy
@@ -114,7 +115,7 @@ services:
       - /run:rw,noexec,nosuid,nodev,size=8m
     environment:
       FUSIONPANEL_AGENT_MODE: http
-      FUSIONPANEL_API_URL: http://api:8080
+      FUSIONPANEL_API_URL: http://127.0.0.1:8080
       FUSIONPANEL_ADMIN_TOKEN: "${FUSIONPANEL_E2E_ADMIN_TOKEN}"
       FUSIONPANEL_NODE_NAME: "sprint13-${FUSIONPANEL_S13_SUFFIX:?set suffix}"
       FUSIONPANEL_AGENT_STATE_DIR: /var/lib/fusionpanel-agent

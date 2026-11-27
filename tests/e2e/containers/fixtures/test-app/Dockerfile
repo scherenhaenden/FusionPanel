@@ -12,5 +12,6 @@ COPY index.html /srv/www/index.html
 RUN chmod 0444 /srv/www/index.html
 
 EXPOSE 8080
+STOPSIGNAL SIGKILL
 
 CMD ["busybox", "httpd", "-f", "-p", "0.0.0.0:8080", "-h", "/srv/www"]

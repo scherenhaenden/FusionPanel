@@ -1149,7 +1149,17 @@ async fn execute_container_apply(
         network: None,
         env: payload.env.clone(),
         command: payload.command.clone(),
-        restart_policy: Some(payload.restart_policy.as_str().to_string()),
+        restart_policy: Some(
+            match payload.restart_policy {
+                fusionpanel_agent_protocol::ContainerRestartPolicy::No => "no",
+                fusionpanel_agent_protocol::ContainerRestartPolicy::Always => "always",
+                fusionpanel_agent_protocol::ContainerRestartPolicy::OnFailure => "on-failure",
+                fusionpanel_agent_protocol::ContainerRestartPolicy::UnlessStopped => {
+                    "unless-stopped"
+                }
+            }
+            .to_string(),
+        ),
         desired_running: true,
     };
     let outcome = driver.apply(&driver_payload).await?;

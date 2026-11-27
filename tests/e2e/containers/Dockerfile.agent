@@ -6,6 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
       ca-certificates \
+      docker.io \
       libgcc-s1 \
     && rm -rf /var/lib/apt/lists/*
 

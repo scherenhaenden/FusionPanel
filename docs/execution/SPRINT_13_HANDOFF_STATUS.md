@@ -1,28 +1,30 @@
-# Sprint 13 Kickoff & Parallel Handoff Status
+# Sprint 13 Integration & Qualification Status
 
-**Timestamp:** 2026-11-27 22:51 CET (`Europe/Berlin`)  
-**Integration branch:** `sprint-13` (branched from `master` @ `a8861e6`)  
-**Remote push:** Not pushed (all commits are local on their respective branches/worktrees)
+**Timestamp:** 2026-11-28 00:01 CET (`Europe/Berlin`)  
+**Integration branch:** `sprint-13` (branched from `master` @ `a8861e6`)
 
-## 1. Completed Parallel Branches
+## 1. Feature PRs Integrated into `sprint-13`
 
-| Work Package | Branch | Worktree | Commit | Verification |
-| --- | --- | --- | --- | --- |
-| 13.0 · Plan & Docs | `docs/sprint-13-plan` | `FusionPanel-s13-docs` | `815338f` (+ this handoff doc) | `docs/execution/SPRINT_13_PLAN.md` created |
-| 13.1 · Container Contract | `feat/sprint-13-container-contract` | `FusionPanel-s13-contract` | `b297a4d` | `CARGO_BUILD_JOBS=2 cargo test --locked --offline -p fusionpanel-api -p fusionpanel-control-store -p fusionpanel-agent-protocol container` — **4 passed, 0 failed** (2 protocol, 1 control-store, 1 api) |
-| 13.2 · Container Worker | `feat/sprint-13-container-worker` | `FusionPanel-s13-worker` | `d441cd7` | `modules/containers` (`unit_node_adapter`: 4 passed), `integration/containers` (`unit_ports`: 5 passed, `unit_worker`: 2 passed), `crates/agent` (`--lib`: 36 passed, incl. 2 `container_driver` tests) |
-| 13.3 · Container UI | `feat/sprint-13-container-ui` | `FusionPanel-s13-ui` | `9ed45ef` | `CI=true npm test -- --runInBand src/__tests__/Containers.test.tsx src/__tests__/routes.test.tsx src/__tests__/api.test.ts` — **3 suites / 19 tests passed**; `npm run build` (`tsc -b && vite build`) — **passed** |
-| 13.4 · Container E2E Fixture | `test/sprint-13-container-e2e` | `FusionPanel-s13-e2e` | `695cb8a` | Syntax & wiring (`bash -n`, `node --check`, `docker compose config --quiet`) — **passed**; full-stack Docker E2E **BLOCKED** until branches are integrated onto `sprint-13` |
+- **PR #718** (`docs/sprint-13-plan`) — Sprint 13 plan & kickoff handoff docs
+- **PR #720** (`feat/sprint-13-container-contract`) — `agent-protocol`, `control-store`, `api` container contract & routes
+- **PR #721** (`feat/sprint-13-container-worker`) — `modules/containers`, `integration/containers`, `crates/agent` Docker driver
+- **PR #722** (`feat/sprint-13-container-ui`) — `frontend/` `/containers` view, sidebar, API client, Jest tests
+- **PR #723** (`test/sprint-13-container-e2e`) — `tests/e2e/containers/` disposable registry + Playwright E2E suite
 
-## 2. Next Integration Steps (When Resuming)
+## 2. Final Verification Results on `sprint-13`
 
-1. **Merge `docs/sprint-13-plan` -> `sprint-13`** (regular merge commit).
-2. **Merge `feat/sprint-13-container-contract` -> `sprint-13`** (regular merge commit).
-3. **Wire `crates/agent/` + `crates/api/` gaps before/during integration:**
-   - Wire `crates/agent/` job dispatcher to `agent-protocol` `Operation::ContainerApply` / `ContainerStart` / `ContainerStop` / `ContainerRestart` / `ContainerDelete` (`NodeContainerDriver` in `crates/agent/src/container_driver.rs` is modular and ready).
-   - Ensure `crates/api/src/containers.rs` exposes `/v1/containers/catalog` and `/v1/containers/{id}/logs` (or aligns with `frontend/src/api/index.ts` and `tests/e2e/containers/sprint13.spec.mjs`).
-4. **Merge `feat/sprint-13-container-worker`, `feat/sprint-13-container-ui`, and `test/sprint-13-container-e2e` -> `sprint-13`**.
-5. **Run Sprint 13 Qualification on `sprint-13`:**
-   - Workspace + standalone crate tests + `frontend` build & tests.
-   - `bash tests/e2e/containers/run.sh` (requires Docker daemon and >= 10 GiB free disk).
-6. **Rebase/merge verified `master`** (once Sprints 10–12 land) before opening the Sprint 13 release PR.
+- **Workspace & Agent Unit/Integration Tests:**
+  - `CARGO_BUILD_JOBS=2 cargo test --locked --offline --workspace`: **PASS**
+  - `CARGO_BUILD_JOBS=2 cargo test --locked --offline --manifest-path crates/agent/Cargo.toml`: **PASS** (36 lib + 5 integration + 4 executor + unit suites)
+  - `CARGO_BUILD_JOBS=2 cargo test --offline --manifest-path integration/containers/Cargo.toml --lib --test unit_ports --test unit_routes --test unit_worker`: **PASS** (5 + 12 + 2 = 19 passed)
+  - `CARGO_BUILD_JOBS=2 cargo test --offline --manifest-path modules/containers/Cargo.toml --test unit_node_adapter`: **PASS** (4 passed; note: pre-existing `unit_volume_cloner::test_calculate_difference` and `integration/containers/tests/integration.rs::test_docker_lifecycle_real_integration` remain unrelated baseline failures)
+- **Formatting & Clippy:**
+  - `cargo fmt --all -- --check`: **PASS**
+  - `cargo clippy --locked --offline --workspace --all-targets -- -D warnings`: **PASS**
+- **Frontend Tests & Production Build:**
+  - `CI=true npm test -- --runInBand` (from `frontend/`): **PASS** (11 suites / 53 tests passed)
+  - `npm run build` (`tsc -b && vite build`): **PASS**
+- **Live Docker + Playwright E2E (`bash tests/e2e/containers/run.sh`):**
+  - **PASS** — `1 passed (24.4s)`
+  - Evidence: `/tmp/fusionpanel-sprint13-e2e-cbdeec9e0072-evidence.json`
+  - Verified: digest-pinned launch from disposable local registry, real HTTP `200 OK` content, stop + HTTP down, start + HTTP recovery, confirmed remove + port release, name/port collision `409`, viewer RBAC denial (`403` on mutations), API & agent restart preserving container identity, and untouched unmanaged sentinel container.

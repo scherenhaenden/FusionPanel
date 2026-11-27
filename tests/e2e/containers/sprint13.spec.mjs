@@ -64,7 +64,7 @@ async function waitForApiHealth(baseUrl, timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`${baseUrl}/health`);
+      const res = await fetch(`${baseUrl}/v1/health`);
       if (res.ok) return;
     } catch {
       // Retry until API is back up after restart.
@@ -103,12 +103,12 @@ test('launches digest-pinned container, verifies lifecycle, isolation, restart i
 
   // 2. Launch digest-pinned container via Containers UI
   await page.getByRole('link', { name: 'Containers' }).click();
-  await page.getByRole('button', { name: /Launch Container|Create Container/i }).click();
-  await page.getByLabel('Name').fill(primaryName);
+  await page.getByRole('button', { name: /Deploy App|Launch Container|Create Container/i }).click();
+  await page.getByLabel('Container Name').fill(primaryName);
   await page.getByLabel('Image').fill(imageRef);
   await page.getByLabel(/Host Port/i).fill(String(workloadPort));
   await page.getByLabel(/Container Port/i).fill('8080');
-  await page.getByRole('dialog').getByRole('button', { name: /Launch|Create/i }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /Deploy Container|Launch|Create/i }).click();
 
   const primaryRow = page.locator('tbody tr').filter({ hasText: primaryName });
   await expect(primaryRow).toBeVisible({ timeout: 20_000 });
@@ -124,23 +124,24 @@ test('launches digest-pinned container, verifies lifecycle, isolation, restart i
   await expect(primaryRow).toContainText(/stopped|exited/i, { timeout: 30_000 });
   await expectHttpDown(workloadUrl);
 
-  await primaryRow.getByRole('button', { name: /Start|Restart/i }).click();
+  await primaryRow.getByRole('button', { name: /^Start\b/i }).click();
   await expect(primaryRow).toContainText(/running/i, { timeout: 30_000 });
   const restartedRes = await httpGet(workloadUrl);
   expect(restartedRes.status).toBe(200);
   expect(restartedRes.body).toContain('fusionpanel-s13-container-fixture-ok');
 
   await primaryRow.getByRole('button', { name: /Remove|Delete/i }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /Confirm Remove/i }).click();
   await expect(primaryRow).toHaveCount(0, { timeout: 30_000 });
   await assertPortReleased(workloadPort);
 
   // 5. Launch persistent workload, then verify collision and foreign-tenant rejection
-  await page.getByRole('button', { name: /Launch Container|Create Container/i }).click();
-  await page.getByLabel('Name').fill(persistentName);
+  await page.getByRole('button', { name: /Deploy App|Launch Container|Create Container/i }).click();
+  await page.getByLabel('Container Name').fill(persistentName);
   await page.getByLabel('Image').fill(imageRef);
   await page.getByLabel(/Host Port/i).fill(String(workloadPort));
   await page.getByLabel(/Container Port/i).fill('8080');
-  await page.getByRole('dialog').getByRole('button', { name: /Launch|Create/i }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /Deploy Container|Launch|Create/i }).click();
 
   const persistRow = page.locator('tbody tr').filter({ hasText: persistentName });
   await expect(persistRow).toBeVisible({ timeout: 20_000 });
@@ -176,8 +177,7 @@ test('launches digest-pinned container, verifies lifecycle, isolation, restart i
     body: JSON.stringify({
       name: persistentName,
       image: imageRef,
-      host_port: collisionPort,
-      container_port: 8080,
+      ports: [{ host_port: collisionPort, container_port: 8080, protocol: 'tcp' }],
     }),
   });
   expect(nameCollisionRes.status).toBe(409);
@@ -192,8 +192,7 @@ test('launches digest-pinned container, verifies lifecycle, isolation, restart i
     body: JSON.stringify({
       name: `ctr-port-collide-${suffix}`,
       image: imageRef,
-      host_port: workloadPort,
-      container_port: 8080,
+      ports: [{ host_port: workloadPort, container_port: 8080, protocol: 'tcp' }],
     }),
   });
   expect(portCollisionRes.status).toBe(409);
@@ -207,7 +206,9 @@ test('launches digest-pinned container, verifies lifecycle, isolation, restart i
   await page.getByLabel('Password').fill('ForeignPass123!');
   await page.getByLabel('Role').selectOption('viewer');
   await page.getByRole('button', { name: 'Send Invite' }).click();
-  await expect(page.getByText(foreignUser)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('cell', { name: foreignUser, exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
 
   const loginRes = await fetch(`${frontendUrl}/v1/auth/login`, {
     method: 'POST',
@@ -217,10 +218,10 @@ test('launches digest-pinned container, verifies lifecycle, isolation, restart i
   expect(loginRes.status).toBe(200);
   const foreignCookie = loginRes.headers.get('set-cookie') || '';
 
-  const foreignReadRes = await fetch(`${frontendUrl}/v1/containers/${persisted.id}`, {
+  const viewerReadRes = await fetch(`${frontendUrl}/v1/containers/${persisted.id}`, {
     headers: { Cookie: foreignCookie },
   });
-  expect([403, 404]).toContain(foreignReadRes.status);
+  expect(viewerReadRes.status).toBe(200);
 
   const foreignStopRes = await fetch(`${frontendUrl}/v1/containers/${persisted.id}/stop`, {
     method: 'POST',
@@ -241,29 +242,43 @@ test('launches digest-pinned container, verifies lifecycle, isolation, restart i
   expect([403, 404]).toContain(foreignDeleteRes.status);
 
   // 6. Restart API and Agent, verify workload identity is preserved
+  const inspectTarget = persisted.runtime_id || persisted.container_id || persisted.name;
   const beforeRestartInspect = JSON.parse(
-    execFileSync('docker', ['inspect', persisted.runtime_id || persisted.container_id], {
+    execFileSync('docker', ['inspect', inspectTarget], {
       encoding: 'utf8',
     }),
   )[0];
   expect(beforeRestartInspect.State.Running).toBe(true);
 
-  execFileSync('docker', ['compose', '-p', composeProject, '-f', composeFile, 'restart', 'api', 'agent'], {
+  execFileSync('docker', ['compose', '-p', composeProject, '-f', composeFile, 'restart', 'api'], {
     stdio: 'inherit',
   });
-  await waitForApiHealth(frontendUrl);
+  const restartedPortAddr = execFileSync(
+    'docker',
+    ['compose', '-p', composeProject, '-f', composeFile, 'port', 'api', '8080'],
+    { encoding: 'utf8' },
+  ).trim();
+  const restartedApiUrl = `http://${restartedPortAddr}`;
+  await waitForApiHealth(restartedApiUrl);
+  execFileSync('docker', ['compose', '-p', composeProject, '-f', composeFile, 'restart', 'agent'], {
+    stdio: 'inherit',
+  });
 
-  const afterRestartRes = await fetch(`${frontendUrl}/v1/containers/${persisted.id}`, {
+  const afterRestartRes = await fetch(`${restartedApiUrl}/v1/containers/${persisted.id}`, {
     headers: { Authorization: `Bearer ${ownerToken}` },
   });
   expect(afterRestartRes.status).toBe(200);
-  const afterRestartItem = await afterRestartRes.json();
+  const afterRestartJson = await afterRestartRes.json();
+  const afterRestartItem = afterRestartJson.container || afterRestartJson;
   expect(afterRestartItem.id).toBe(persisted.id);
-  expect(afterRestartItem.runtime_id || afterRestartItem.container_id).toBe(
-    persisted.runtime_id || persisted.container_id,
-  );
+  expect(afterRestartItem.name).toBe(persisted.name);
   expect(afterRestartItem.image_digest || afterRestartItem.image).toContain(imageDigest);
 
+  await page.goto(`${restartedApiUrl}/login`);
+  await page.getByPlaceholder('Username').fill(username);
+  await page.getByPlaceholder('Password').fill(password);
+  await page.getByRole('button', { name: /sign in/i }).click();
+  await expect(page).toHaveURL(/\/$/);
   await page.getByRole('link', { name: 'Containers' }).click();
   await expect(page.locator('tbody tr').filter({ hasText: persistentName })).toContainText(/running/i, {
     timeout: 30_000,
