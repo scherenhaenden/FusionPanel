@@ -1,0 +1,16 @@
+Package: fusionpanel
+Version: @VERSION@
+Architecture: amd64
+Maintainer: FusionPanel Maintainers <maintainers@fusionpanel.org>
+Section: admin
+Priority: optional
+Depends: ca-certificates, libc6 (>= 2.36), openssl, passwd, systemd
+Recommends: nginx
+Installed-Size: @INSTALLED_SIZE@
+Homepage: https://github.com/scherenhaenden/FusionPanel
+X-FusionPanel-Source-Commit: @SOURCE_SHA@
+X-FusionPanel-Build-Timestamp: @SOURCE_DATE_EPOCH@
+Description: FusionPanel control plane, node agent, CLI, and web UI
+ FusionPanel provides the control-plane API, node agent, operator CLI,
+ privileged Nginx configuration helper, bundled web UI, and systemd units
+ for Debian Bookworm (amd64).

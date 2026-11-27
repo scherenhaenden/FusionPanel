@@ -1,0 +1,211 @@
+#!/bin/sh
+set -e
+
+SYSCONFDIR="/etc/fusionpanel"
+STATE_DIR="/var/lib/fusionpanel"
+LOG_DIR="/var/log/fusionpanel"
+FRONTEND_DIR="/usr/share/fusionpanel/frontend/dist"
+NGINX_INCLUDE_SCRIPT="/usr/share/fusionpanel/packaging/nginx-include.sh"
+
+normalize_node_name() {
+    node_name=$(printf '%s' "$1" | LC_ALL=C tr -c 'A-Za-z0-9._-' '-')
+    node_name=$(printf '%s' "$node_name" | sed 's/^[.-]*//; s/[.-]*$//')
+    if [ -z "$node_name" ]; then
+        node_name="fusionpanel-node"
+    fi
+    printf '%s' "$node_name"
+}
+
+ensure_fusionpanel_account() {
+    if ! getent group fusionpanel >/dev/null 2>&1; then
+        groupadd --system fusionpanel
+    fi
+    if ! id fusionpanel >/dev/null 2>&1; then
+        useradd --system -g fusionpanel -s /usr/sbin/nologin \
+            -d "$STATE_DIR" -c "FusionPanel Service User" fusionpanel
+    fi
+}
+
+validate_nginx_helper_group() {
+    group_entry=$(getent group fusionpanel-nginx 2>/dev/null) || {
+        echo "Error: Could not verify the private Nginx helper group." >&2
+        return 1
+    }
+    group_members=$(printf '%s\n' "$group_entry" | awk -F: 'NF >= 4 { print $4 }')
+    group_gid=$(printf '%s\n' "$group_entry" | awk -F: 'NF >= 3 { print $3 }')
+    case "$group_gid" in
+        ""|*[!0-9]*)
+            echo "Error: Could not resolve the private Nginx helper group GID." >&2
+            return 1
+            ;;
+    esac
+    if [ -n "$group_members" ]; then
+        echo "Error: fusionpanel-nginx already has supplementary members; refusing to grant helper access." >&2
+        return 1
+    fi
+    passwd_entries=$(getent passwd 2>/dev/null) || {
+        echo "Error: Could not verify primary-group users for fusionpanel-nginx." >&2
+        return 1
+    }
+    primary_users=$(printf '%s\n' "$passwd_entries" | awk -F: -v gid="$group_gid" '$4 == gid { print $1 }')
+    if [ -n "$primary_users" ]; then
+        echo "Error: fusionpanel-nginx is a primary group for existing accounts; refusing to grant helper access." >&2
+        return 1
+    fi
+}
+
+ensure_nginx_helper_group() {
+    if ! getent group fusionpanel-nginx >/dev/null 2>&1; then
+        groupadd --system fusionpanel-nginx
+    fi
+    validate_nginx_helper_group
+}
+
+ensure_private_dir() {
+    dir_path=$1
+    owner_user=$2
+    owner_group=$3
+
+    if [ -L "$dir_path" ] || { [ -e "$dir_path" ] && [ ! -d "$dir_path" ]; }; then
+        echo "Error: Refusing a symlink or non-directory at $dir_path." >&2
+        return 1
+    fi
+    target_uid=$(id -u "$owner_user")
+    target_gid=$(getent group "$owner_group" | awk -F: 'NF >= 3 { print $3 }')
+    if [ ! -e "$dir_path" ]; then
+        mkdir -m 0700 -- "$dir_path"
+        chown -- "$owner_user:$owner_group" "$dir_path"
+        chmod 0700 -- "$dir_path"
+    fi
+    meta=$(stat -c '%u %g %a' -- "$dir_path")
+    set -- $meta
+    if [ "$1" != "$target_uid" ] || [ "$2" != "$target_gid" ] || [ "$3" != "700" ]; then
+        echo "Error: Existing directory $dir_path must be owned by $owner_user:$owner_group with mode 0700; it was left unchanged." >&2
+        return 1
+    fi
+}
+
+set_frontend_dir_env() {
+    env_file=$1
+    frontend_dir=$2
+    tmp_file="${env_file}.dpkg-tmp.$$"
+
+    if [ -L "$env_file" ] || { [ -e "$env_file" ] && [ ! -f "$env_file" ]; }; then
+        echo "Error: Refusing to modify non-regular environment file: $env_file" >&2
+        return 1
+    fi
+    umask 077
+    if [ -f "$env_file" ]; then
+        sed '/^FUSIONPANEL_FRONTEND_DIR=/d' "$env_file" > "$tmp_file"
+    else
+        : > "$tmp_file"
+    fi
+    printf 'FUSIONPANEL_FRONTEND_DIR=%s\n' "$frontend_dir" >> "$tmp_file"
+    chown root:root "$tmp_file"
+    chmod 0600 "$tmp_file"
+    mv -f "$tmp_file" "$env_file"
+}
+
+configure_env_files() {
+    ensure_private_dir "$SYSCONFDIR" root root
+
+    api_env="$SYSCONFDIR/fusionpanel.env"
+    agent_env="$SYSCONFDIR/fusionpanel-agent.env"
+    creds_file="$SYSCONFDIR/initial-credentials.txt"
+
+    if [ -L "$api_env" ] || { [ -e "$api_env" ] && [ ! -f "$api_env" ]; }; then
+        echo "Error: Refusing non-regular API environment file: $api_env" >&2
+        return 1
+    fi
+    if [ -L "$agent_env" ] || { [ -e "$agent_env" ] && [ ! -f "$agent_env" ]; }; then
+        echo "Error: Refusing non-regular agent environment file: $agent_env" >&2
+        return 1
+    fi
+    if [ -L "$creds_file" ] || { [ -e "$creds_file" ] && [ ! -f "$creds_file" ]; }; then
+        echo "Error: Refusing non-regular credentials file: $creds_file" >&2
+        return 1
+    fi
+
+    admin_token=""
+    if [ -f "$api_env" ]; then
+        admin_token=$(grep '^FUSIONPANEL_ADMIN_TOKEN=' "$api_env" | head -n 1 | cut -d= -f2- || true)
+        set_frontend_dir_env "$api_env" "$FRONTEND_DIR"
+    else
+        admin_token=$(openssl rand -hex 32)
+        (
+            umask 077
+            printf 'FUSIONPANEL_LISTEN=127.0.0.1:8080\n'
+            printf 'FUSIONPANEL_DATABASE_URL=%s/fusionpanel.db\n' "$STATE_DIR"
+            printf 'FUSIONPANEL_ADMIN_TOKEN=%s\n' "$admin_token"
+            printf 'FUSIONPANEL_FRONTEND_DIR=%s\n' "$FRONTEND_DIR"
+        ) > "$api_env"
+        chown root:root "$api_env"
+        chmod 0600 "$api_env"
+    fi
+
+    if [ ! -e "$creds_file" ] && [ -n "$admin_token" ]; then
+        (
+            umask 077
+            printf 'ADMIN_TOKEN=%s\n' "$admin_token"
+        ) > "$creds_file"
+        chown root:root "$creds_file"
+        chmod 0600 "$creds_file"
+    fi
+
+    if [ -f "$agent_env" ]; then
+        chown root:root "$agent_env"
+        chmod 0600 "$agent_env"
+    else
+        node_name=$(normalize_node_name "$(uname -n 2>/dev/null || true)")
+        if [ -z "$admin_token" ]; then
+            admin_token=$(openssl rand -hex 32)
+        fi
+        (
+            umask 077
+            printf 'FUSIONPANEL_AGENT_MODE=http\n'
+            printf 'FUSIONPANEL_API_URL=http://127.0.0.1:8080\n'
+            printf 'FUSIONPANEL_ADMIN_TOKEN=%s\n' "$admin_token"
+            printf 'FUSIONPANEL_NODE_NAME=%s\n' "$node_name"
+        ) > "$agent_env"
+        chown root:root "$agent_env"
+        chmod 0600 "$agent_env"
+    fi
+}
+
+case "$1" in
+    configure)
+        ensure_fusionpanel_account
+        ensure_nginx_helper_group
+        ensure_private_dir "$STATE_DIR" fusionpanel fusionpanel
+        ensure_private_dir "$LOG_DIR" fusionpanel fusionpanel
+        configure_env_files
+
+        if [ -x "$NGINX_INCLUDE_SCRIPT" ]; then
+            if ! "$NGINX_INCLUDE_SCRIPT"; then
+                echo "Warning: Nginx include was not installed; website operations will fail closed until a compatible include is configured." >&2
+            fi
+        fi
+
+        if command -v systemctl >/dev/null 2>&1; then
+            if [ -d /run/systemd/system ]; then
+                systemctl daemon-reload
+            fi
+            systemctl enable fusionpanel-nginx-helper.service fusionpanel.service fusionpanel-agent.service >/dev/null 2>&1 || true
+            if [ -d /run/systemd/system ]; then
+                if [ -n "${2:-}" ]; then
+                    systemctl try-restart fusionpanel-nginx-helper.service fusionpanel.service fusionpanel-agent.service
+                else
+                    systemctl start fusionpanel-nginx-helper.service fusionpanel.service fusionpanel-agent.service
+                fi
+            fi
+        fi
+        ;;
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+    *)
+        echo "postinst called with unknown argument '$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0
