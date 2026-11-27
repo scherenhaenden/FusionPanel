@@ -10,7 +10,10 @@ fn test_default_config() {
     assert_eq!(config.smtpd_sasl_type, "dovecot");
     assert_eq!(config.smtpd_sasl_path, "private/auth");
     assert_eq!(config.smtpd_tls_security_level, "encrypt");
-    assert_eq!(config.smtpd_client_restrictions, vec!["permit_sasl_authenticated", "reject"]);
+    assert_eq!(
+        config.smtpd_client_restrictions,
+        vec!["permit_sasl_authenticated", "reject"]
+    );
 }
 
 #[test]

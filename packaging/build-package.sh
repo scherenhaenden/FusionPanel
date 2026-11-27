@@ -71,5 +71,18 @@ archive="fusionpanel-${label}-debian-x86_64.tar.gz"
 chmod 0755 "$staging"
 tar -C "$staging" -czf "$output_dir/$archive" .
 cp "$output_dir/$archive" "$output_dir/fusionpanel-debian-x86_64.tar.gz"
-(cd "$output_dir" && sha256sum "$archive" fusionpanel-debian-x86_64.tar.gz > SHA256SUMS)
+
+sum_targets=("$archive" "fusionpanel-debian-x86_64.tar.gz")
+build_deb=${FUSIONPANEL_BUILD_DEB:-auto}
+if [[ "$build_deb" == "1" ]] || { [[ "$build_deb" == "auto" ]] && command -v dpkg-deb >/dev/null 2>&1; }; then
+    deb_created=$("$root/packaging/build-deb.sh" --payload-dir "$staging" --output-dir "$output_dir")
+    printf '%s\n' "$deb_created"
+    deb_file=${deb_created#Created }
+    sum_targets+=("$(basename -- "$deb_file")")
+elif [[ "$build_deb" != "0" && "$build_deb" != "auto" ]]; then
+    echo "Invalid FUSIONPANEL_BUILD_DEB value: $build_deb (expected auto, 0, or 1)" >&2
+    exit 1
+fi
+
+(cd "$output_dir" && sha256sum "${sum_targets[@]}" > SHA256SUMS)
 printf 'Created %s\n' "$output_dir/$archive"

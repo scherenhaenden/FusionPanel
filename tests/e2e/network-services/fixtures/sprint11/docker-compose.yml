@@ -1,0 +1,145 @@
+x-sprint11-logging: &sprint11-logging
+  driver: local
+  options:
+    max-size: "2m"
+    max-file: "2"
+
+services:
+  bind9:
+    image: ubuntu/bind9:9.18-22.04_beta
+    mem_limit: 192m
+    memswap_limit: 192m
+    cpus: 0.50
+    pids_limit: 128
+    ports:
+      - "127.0.0.1::53/udp"
+      - "127.0.0.1::53/tcp"
+    volumes:
+      - "${FUSIONPANEL_S11_DNS_DIR:?set dns dir}:/etc/bind/fusionpanel:ro"
+      - ./named.conf:/etc/bind/named.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "rndc -s 127.0.0.1 -p 953 -k /etc/bind/named.conf status >/dev/null 2>&1 || pgrep -x named >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 3s
+    logging: *sprint11-logging
+
+  mail:
+    image: "${FUSIONPANEL_S11_MAIL_IMAGE:?set mail image}"
+    build:
+      context: "${FUSIONPANEL_S11_MAIL_BUILD_CONTEXT:?set mail context}"
+      dockerfile: Dockerfile
+    init: true
+    mem_limit: 384m
+    memswap_limit: 384m
+    cpus: 0.50
+    pids_limit: 256
+    ports:
+      - "127.0.0.1::25/tcp"
+      - "127.0.0.1::143/tcp"
+      - "127.0.0.1::587/tcp"
+    environment:
+      FUSIONPANEL_MAIL_ROOT: /var/lib/fusionpanel/mail
+    volumes:
+      - "${FUSIONPANEL_S11_MAIL_DIR:?set mail dir}:/var/lib/fusionpanel/mail:rw"
+    healthcheck:
+      test: ["CMD-SHELL", "postfix status >/dev/null 2>&1 && pgrep -x dovecot >/dev/null && pgrep -x opendkim >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    logging: *sprint11-logging
+
+  api:
+    image: "${FUSIONPANEL_S11_API_IMAGE:?set API image}"
+    build:
+      context: "${FUSIONPANEL_S11_API_BUILD_CONTEXT:?set API context}"
+      dockerfile: Dockerfile
+    init: true
+    read_only: true
+    user: "${FUSIONPANEL_S11_UID:?set UID}:${FUSIONPANEL_S11_GID:?set GID}"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 384m
+    memswap_limit: 384m
+    cpus: 0.50
+    pids_limit: 128
+    ports:
+      - "127.0.0.1::8080/tcp"
+    environment:
+      FUSIONPANEL_ADMIN_TOKEN: "${FUSIONPANEL_E2E_ADMIN_TOKEN:?set admin token}"
+      FUSIONPANEL_DATABASE_URL: /state/fusionpanel.db
+      FUSIONPANEL_E2E_USERNAME: "${FUSIONPANEL_E2E_USERNAME:-e2e-admin}"
+      FUSIONPANEL_E2E_PASSWORD: "${FUSIONPANEL_E2E_PASSWORD:?set password}"
+      FUSIONPANEL_FRONTEND_DIR: /app/frontend
+      FUSIONPANEL_LISTEN: 0.0.0.0:8080
+    volumes:
+      - "${FUSIONPANEL_S11_API_STATE_DIR:?set api state dir}:/state:rw"
+      - "${FUSIONPANEL_S11_REPO_ROOT}/target/debug/fusionpanel-api:/usr/local/bin/fusionpanel-api:ro"
+      - "${FUSIONPANEL_S11_REPO_ROOT}/target/debug/fusionpanel-cli:/usr/local/bin/fusionpanel-cli:ro"
+      - "${FUSIONPANEL_S11_REPO_ROOT}/frontend/dist:/app/frontend:ro"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/fusionpanel-cli", "--server", "http://127.0.0.1:8080", "health"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+    logging: *sprint11-logging
+
+  node:
+    image: "${FUSIONPANEL_S11_NODE_IMAGE:?set node image}"
+    build:
+      context: "${FUSIONPANEL_S11_NODE_BUILD_CONTEXT:?set node context}"
+      dockerfile: Dockerfile
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.50
+    pids_limit: 128
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    depends_on:
+      bind9:
+        condition: service_healthy
+      mail:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      FUSIONPANEL_AGENT_MODE: http
+      FUSIONPANEL_API_URL: http://api:8080
+      FUSIONPANEL_ADMIN_TOKEN: "${FUSIONPANEL_E2E_ADMIN_TOKEN}"
+      FUSIONPANEL_NODE_NAME: "sprint11-${FUSIONPANEL_S11_SUFFIX:?set suffix}"
+      FUSIONPANEL_DNS_ZONES_DIR: /etc/bind/fusionpanel/zones
+      FUSIONPANEL_DNS_CONF_PATH: /etc/bind/fusionpanel/named.conf.fusionpanel
+      FUSIONPANEL_DNS_RELOAD_CMD: "rndc -s bind9 -p 953 -k /etc/bind/rndc.key reload"
+      FUSIONPANEL_DNS_PROBE_ADDR: "bind9:53"
+      FUSIONPANEL_MAIL_ROOT: /var/lib/fusionpanel/mail
+      FUSIONPANEL_MAIL_VALIDATE_CMD: "/usr/local/bin/mail-control.sh validate"
+      FUSIONPANEL_MAIL_RELOAD_CMD: "/usr/local/bin/mail-control.sh reload"
+    volumes:
+      - "${FUSIONPANEL_S11_REPO_ROOT}/crates/agent/target/debug/fusionpanel-agent:/usr/local/bin/fusionpanel-agent:ro"
+      - "${FUSIONPANEL_S11_DNS_DIR:?set dns dir}:/etc/bind/fusionpanel:rw"
+      - "${FUSIONPANEL_S11_MAIL_DIR:?set mail dir}:/var/lib/fusionpanel/mail:rw"
+      - "${FUSIONPANEL_S11_RNDC_KEY:?set rndc key}:/etc/bind/rndc.key:ro"
+      - ./mail-control.sh:/usr/local/bin/mail-control.sh:ro
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        for _ in $$(seq 1 120); do
+          curl -fsS http://api:8080/v1/health >/dev/null 2>&1 && break
+          sleep 0.5
+        done
+        exec /usr/local/bin/fusionpanel-agent
+    logging: *sprint11-logging

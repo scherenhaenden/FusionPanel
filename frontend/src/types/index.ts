@@ -126,3 +126,140 @@ export interface JobLogEntry {
   text: string;
   created_at: string;
 }
+
+export type MailResourceState = 'provisioning' | 'ready' | 'failed' | 'deleting';
+
+export interface MailDomainRecord {
+  id: string;
+  tenant_id: string;
+  node_id: string;
+  domain: string;
+  dns_zone_id: string | null;
+  active: boolean;
+  state: MailResourceState;
+  desired_revision: number;
+  queued_revision: number | null;
+  applied_revision: number | null;
+  failed_revision: number | null;
+  pending_job_id: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MailboxRecord {
+  id: string;
+  domain_id: string;
+  tenant_id: string;
+  address: string;
+  local_part: string;
+  quota_bytes: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MailAliasRecord {
+  id: string;
+  domain_id: string;
+  tenant_id: string;
+  source: string;
+  destinations: string[];
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MailDkimRecord {
+  domain_id: string;
+  tenant_id: string;
+  selector: string;
+  enabled: boolean;
+  dns_zone_id: string | null;
+  txt_record: string | null;
+  public_key_pem: string | null;
+  state: MailResourceState;
+  queued_revision: number | null;
+  applied_revision: number | null;
+  failed_revision: number | null;
+  pending_job_id: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MailDomainDetailsResponse {
+  domain: MailDomainRecord;
+  mailboxes: MailboxRecord[];
+  aliases: MailAliasRecord[];
+  dkim: MailDkimRecord | null;
+}
+
+export interface CreateMailDomainRequest {
+  domain: string;
+  node_id: string;
+  dns_zone_id?: string | null;
+  active?: boolean;
+}
+
+export interface UpdateMailDomainRequest {
+  node_id?: string;
+  dns_zone_id?: string | null;
+  active?: boolean;
+}
+
+export interface CreateMailboxRequest {
+  address?: string;
+  local_part?: string;
+  password: string;
+  quota_bytes?: number;
+  active?: boolean;
+}
+
+export interface UpdateMailboxRequest {
+  password?: string;
+  quota_bytes?: number;
+  active?: boolean;
+}
+
+export interface CreateMailAliasRequest {
+  source?: string;
+  local_part?: string;
+  destinations: string[];
+  active?: boolean;
+}
+
+export interface UpdateMailAliasRequest {
+  destinations?: string[];
+  active?: boolean;
+}
+
+export interface UpsertMailDkimRequest {
+  selector: string;
+  enabled?: boolean;
+  dns_zone_id?: string | null;
+  rotate?: boolean;
+}
+
+export interface MailDomainOperationResponse {
+  domain: MailDomainRecord;
+  job: JobRecord;
+}
+
+export interface MailboxOperationResponse {
+  mailbox?: MailboxRecord | null;
+  domain: MailDomainRecord;
+  job: JobRecord;
+}
+
+export interface MailAliasOperationResponse {
+  alias?: MailAliasRecord | null;
+  domain: MailDomainRecord;
+  job: JobRecord;
+}
+
+export interface MailDkimOperationResponse {
+  dkim: MailDkimRecord | null;
+  domain: MailDomainRecord;
+  job: JobRecord;
+}

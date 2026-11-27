@@ -141,6 +141,7 @@ async fn test_agent_child_process_handshake() {
 
     let (stream, _) = listener.accept().await.unwrap();
 
+    #[allow(clippy::result_large_err)]
     let callback = |req: &Request, mut response: Response| {
         let _sig = req.headers().get("x-hmac-signature").unwrap();
         let ts = req.headers().get("x-timestamp").unwrap();

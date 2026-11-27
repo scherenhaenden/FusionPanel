@@ -39,7 +39,10 @@ fn test_invalid_sequence_missing_aar() {
         ("ARC-Seal", "i=1; a=rsa-sha256; t=12345; cv=none; d=example.com; s=selector; b=..."),
     ];
 
-    assert_eq!(validator.validate(&headers), Ok(ArcValidationResult::InvalidSequence));
+    assert_eq!(
+        validator.validate(&headers),
+        Ok(ArcValidationResult::InvalidSequence)
+    );
 }
 
 #[test]
@@ -56,7 +59,10 @@ fn test_invalid_sequence_non_consecutive() {
         ("ARC-Seal", "i=1; a=rsa-sha256; t=12345; cv=none; d=example.com; s=selector; b=..."),
     ];
 
-    assert_eq!(validator.validate(&headers), Ok(ArcValidationResult::InvalidSequence));
+    assert_eq!(
+        validator.validate(&headers),
+        Ok(ArcValidationResult::InvalidSequence)
+    );
 }
 
 #[test]
@@ -91,9 +97,7 @@ fn test_broken_cv_second_hop() {
 #[test]
 fn test_missing_instance_number() {
     let validator = ArcChainValidator::new();
-    let headers = vec![
-        ("ARC-Authentication-Results", "mx.google.com; dkim=pass"),
-    ];
+    let headers = vec![("ARC-Authentication-Results", "mx.google.com; dkim=pass")];
 
     assert_eq!(validator.validate(&headers), Err(ArcError::MissingInstance));
 }
@@ -101,9 +105,10 @@ fn test_missing_instance_number() {
 #[test]
 fn test_invalid_instance_number() {
     let validator = ArcChainValidator::new();
-    let headers = vec![
-        ("ARC-Authentication-Results", "i=abc; mx.google.com; dkim=pass"),
-    ];
+    let headers = vec![(
+        "ARC-Authentication-Results",
+        "i=abc; mx.google.com; dkim=pass",
+    )];
 
     assert_eq!(validator.validate(&headers), Err(ArcError::InvalidInstance));
 }
@@ -111,9 +116,10 @@ fn test_invalid_instance_number() {
 #[test]
 fn test_zero_instance_number() {
     let validator = ArcChainValidator::new();
-    let headers = vec![
-        ("ARC-Authentication-Results", "i=0; mx.google.com; dkim=pass"),
-    ];
+    let headers = vec![(
+        "ARC-Authentication-Results",
+        "i=0; mx.google.com; dkim=pass",
+    )];
 
     assert_eq!(validator.validate(&headers), Err(ArcError::InvalidInstance));
 }
@@ -121,9 +127,7 @@ fn test_zero_instance_number() {
 #[test]
 fn test_no_arc_headers() {
     let validator = ArcChainValidator::new();
-    let headers = vec![
-        ("From", "user@example.com"),
-    ];
+    let headers = vec![("From", "user@example.com")];
 
     assert_eq!(validator.validate(&headers), Ok(ArcValidationResult::Pass));
 }

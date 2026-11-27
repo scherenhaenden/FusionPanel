@@ -10,12 +10,17 @@ mod backups;
 mod cron;
 mod databases;
 mod dns;
+mod mail;
 mod security;
 mod tls;
 mod websites;
 
 pub use backups::{BackupOperation, BackupOperationReservation, BackupRecord, BackupState};
 pub use cron::{CronJobRecord, CronJobState, CronOperation, CronOperationReservation};
+pub use mail::{
+    MailAliasRecord, MailDkimRecord, MailDomainDetails, MailDomainRecord, MailOperation,
+    MailOperationReservation, MailResourceState, MailboxRecord,
+};
 pub use security::{ApiTokenRecord, AuditLogEntry, SecurityRuleRecord, UserMfaRecord};
 
 pub use databases::{
@@ -83,6 +88,10 @@ pub enum StoreError {
     DatabaseConflict(String),
     #[error("Database operation is still in progress")]
     DatabaseOperationInProgress,
+    #[error("Mail request conflicts with existing state: {0}")]
+    MailConflict(String),
+    #[error("Mail operation is still in progress")]
+    MailOperationInProgress,
 }
 
 pub struct ControlStore {
@@ -444,6 +453,109 @@ impl ControlStore {
             tx.pragma_update(None, "user_version", 10)?;
         }
 
+        if user_version < 11 {
+            let has_nodes_table: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'nodes')",
+                [],
+                |row| row.get(0),
+            )?;
+            if has_nodes_table {
+                let has_nodes_tenant_id: bool = tx.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM pragma_table_info('nodes') WHERE name = 'tenant_id')",
+                    [],
+                    |row| row.get(0),
+                )?;
+                if !has_nodes_tenant_id {
+                    tx.execute("ALTER TABLE nodes ADD COLUMN tenant_id TEXT", [])?;
+                }
+            }
+            tx.execute_batch(
+                r#"
+                CREATE TABLE mail_domains (
+                    domain_id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    node_id TEXT NOT NULL,
+                    domain TEXT NOT NULL UNIQUE,
+                    dns_zone_id TEXT,
+                    active INTEGER NOT NULL DEFAULT 1,
+                    state TEXT NOT NULL CHECK (state IN ('provisioning', 'ready', 'failed', 'deleting')),
+                    desired_revision INTEGER NOT NULL DEFAULT 1,
+                    queued_revision INTEGER,
+                    applied_revision INTEGER,
+                    failed_revision INTEGER,
+                    pending_job_id TEXT,
+                    last_error TEXT,
+                    operation_request_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX idx_mail_domains_tenant_id ON mail_domains (tenant_id);
+                CREATE INDEX idx_mail_domains_node_id ON mail_domains (node_id);
+
+                CREATE TABLE mail_mailboxes (
+                    mailbox_id TEXT PRIMARY KEY,
+                    domain_id TEXT NOT NULL,
+                    tenant_id TEXT NOT NULL,
+                    address TEXT NOT NULL UNIQUE,
+                    local_part TEXT NOT NULL,
+                    quota_bytes INTEGER NOT NULL,
+                    active INTEGER NOT NULL DEFAULT 1,
+                    password_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX idx_mail_mailboxes_domain_id ON mail_mailboxes (domain_id);
+                CREATE INDEX idx_mail_mailboxes_tenant_id ON mail_mailboxes (tenant_id);
+
+                CREATE TABLE mail_aliases (
+                    alias_id TEXT PRIMARY KEY,
+                    domain_id TEXT NOT NULL,
+                    tenant_id TEXT NOT NULL,
+                    source TEXT NOT NULL UNIQUE,
+                    destinations_json TEXT NOT NULL,
+                    active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX idx_mail_aliases_domain_id ON mail_aliases (domain_id);
+                CREATE INDEX idx_mail_aliases_tenant_id ON mail_aliases (tenant_id);
+
+                CREATE TABLE mail_dkim_keys (
+                    domain_id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    selector TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    dns_zone_id TEXT,
+                    public_key_pem TEXT,
+                    txt_record TEXT,
+                    state TEXT NOT NULL CHECK (state IN ('provisioning', 'ready', 'failed', 'deleting')),
+                    queued_revision INTEGER,
+                    applied_revision INTEGER,
+                    failed_revision INTEGER,
+                    pending_job_id TEXT,
+                    last_error TEXT,
+                    operation_request_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX idx_mail_dkim_keys_tenant_id ON mail_dkim_keys (tenant_id);
+
+                CREATE TABLE mail_operations (
+                    idempotency_key TEXT PRIMARY KEY,
+                    fingerprint TEXT NOT NULL,
+                    operation TEXT NOT NULL CHECK (operation IN ('mail.domain.apply', 'mail.domain.delete', 'mail.dkim.apply')),
+                    domain_id TEXT NOT NULL,
+                    request_id TEXT NOT NULL,
+                    revision INTEGER NOT NULL,
+                    snapshot TEXT NOT NULL,
+                    job_id TEXT
+                );
+                CREATE INDEX idx_mail_operations_request_id ON mail_operations (request_id);
+                "#,
+            )?;
+            tx.pragma_update(None, "user_version", 11)?;
+        }
+
         tx.commit()?;
         Ok(())
     }
@@ -529,6 +641,40 @@ impl ControlStore {
         let changed = self.conn.execute(
             "UPDATE nodes SET last_heartbeat = ?1 WHERE node_id = ?2",
             params![now, node_id.to_string()],
+        )?;
+        Ok(changed == 1)
+    }
+
+    /// Returns `None` if the node does not exist, `Some(None)` if global/shared,
+    /// or `Some(Some(tenant_id))` if bound to a specific tenant.
+    pub fn get_node_tenant(&self, node_id: Uuid) -> Result<Option<Option<Uuid>>, StoreError> {
+        let row: Option<Option<String>> = self
+            .conn
+            .query_row(
+                "SELECT tenant_id FROM nodes WHERE node_id = ?1",
+                [node_id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+        match row {
+            None => Ok(None),
+            Some(None) => Ok(Some(None)),
+            Some(Some(tid)) => {
+                let parsed =
+                    Uuid::parse_str(&tid).map_err(|error| StoreError::Parse(error.to_string()))?;
+                Ok(Some(Some(parsed)))
+            }
+        }
+    }
+
+    pub fn set_node_tenant(
+        &mut self,
+        node_id: Uuid,
+        tenant_id: Option<Uuid>,
+    ) -> Result<bool, StoreError> {
+        let changed = self.conn.execute(
+            "UPDATE nodes SET tenant_id = ?1 WHERE node_id = ?2",
+            params![tenant_id.map(|t| t.to_string()), node_id.to_string()],
         )?;
         Ok(changed == 1)
     }
@@ -1073,7 +1219,7 @@ mod tests {
             let user_version: u32 = conn
                 .query_row("PRAGMA user_version", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(user_version, 10);
+            assert_eq!(user_version, 11);
             let website_tables: u32 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('websites', 'website_operations')",
@@ -1133,7 +1279,7 @@ mod tests {
         let user_version: u32 = conn
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(user_version, 10);
+        assert_eq!(user_version, 11);
         let has_tenant_id: bool = conn
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM pragma_table_info('websites') WHERE name = 'tenant_id')",

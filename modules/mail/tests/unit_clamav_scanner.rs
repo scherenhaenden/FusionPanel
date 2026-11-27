@@ -114,13 +114,18 @@ fn test_scan_infected() {
 
         stream.read_exact(&mut size_buf).unwrap();
 
-        stream.write_all(b"stream: Eicar-Test-Signature FOUND\0").unwrap();
+        stream
+            .write_all(b"stream: Eicar-Test-Signature FOUND\0")
+            .unwrap();
     });
 
     let client = ClamAVClient::new(addr);
     let data = b"eicar_test_string";
     let result = client.scan_stream(&data[..]).unwrap();
-    assert_eq!(result, ScanResult::Infected("Eicar-Test-Signature".to_string()));
+    assert_eq!(
+        result,
+        ScanResult::Infected("Eicar-Test-Signature".to_string())
+    );
 }
 
 #[test]
@@ -137,11 +142,15 @@ fn test_scan_error() {
 
         stream.read_exact(&mut size_buf).unwrap();
 
-        stream.write_all(b"stream: Size limit reached ERROR\0").unwrap();
+        stream
+            .write_all(b"stream: Size limit reached ERROR\0")
+            .unwrap();
     });
 
     let client = ClamAVClient::new(addr);
     let data = b"too_large_data";
     let result = client.scan_stream(&data[..]);
-    assert!(matches!(result, Err(ClamAVError::ScanError(msg)) if msg == "stream: Size limit reached"));
+    assert!(
+        matches!(result, Err(ClamAVError::ScanError(msg)) if msg == "stream: Size limit reached")
+    );
 }

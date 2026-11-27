@@ -73,7 +73,10 @@ fn test_resolve_alias_multiple() {
     );
     router.add_alias(
         "list@example.com".to_string(),
-        vec!["user1@example.com".to_string(), "user2@example.com".to_string()],
+        vec![
+            "user1@example.com".to_string(),
+            "user2@example.com".to_string(),
+        ],
     );
 
     let mut result = router.resolve("list@example.com").unwrap();

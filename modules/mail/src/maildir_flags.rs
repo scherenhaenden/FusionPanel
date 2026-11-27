@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use std::collections::{HashMap, HashSet, BTreeMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::Path;
@@ -49,7 +49,7 @@ impl MaildirFlags {
                     return Ok(flags);
                 }
             } else if !filename.contains(':') {
-                 return Ok(flags); // No flags yet
+                return Ok(flags); // No flags yet
             }
 
             // It could be something else entirely, but typically we either have :2,flags or just the filename
@@ -77,7 +77,9 @@ impl MaildirFlags {
                 'T' => flags.trashed = true,
                 'D' => flags.draft = true,
                 'F' => flags.flagged = true,
-                'a'..='z' => { flags.custom_keywords.insert(c); },
+                'a'..='z' => {
+                    flags.custom_keywords.insert(c);
+                }
                 _ => {} // Ignore unknown flags
             }
         }
@@ -88,12 +90,24 @@ impl MaildirFlags {
     /// Custom keywords (a-z) follow alphabetically.
     pub fn serialize(&self) -> String {
         let mut s = String::new();
-        if self.draft { s.push('D'); }
-        if self.flagged { s.push('F'); }
-        if self.passed { s.push('P'); }
-        if self.replied { s.push('R'); }
-        if self.seen { s.push('S'); }
-        if self.trashed { s.push('T'); }
+        if self.draft {
+            s.push('D');
+        }
+        if self.flagged {
+            s.push('F');
+        }
+        if self.passed {
+            s.push('P');
+        }
+        if self.replied {
+            s.push('R');
+        }
+        if self.seen {
+            s.push('S');
+        }
+        if self.trashed {
+            s.push('T');
+        }
 
         let mut custom: Vec<char> = self.custom_keywords.iter().cloned().collect();
         custom.sort_unstable();
@@ -154,7 +168,9 @@ impl DovecotKeywords {
                 return Err(MaildirError::InvalidKeywordsFormat);
             }
 
-            let index = parts[0].parse::<u8>().map_err(|_| MaildirError::InvalidKeywordsFormat)?;
+            let index = parts[0]
+                .parse::<u8>()
+                .map_err(|_| MaildirError::InvalidKeywordsFormat)?;
             if index > 25 {
                 return Err(MaildirError::InvalidKeywordsFormat);
             }
@@ -194,8 +210,10 @@ impl DovecotKeywords {
             return Err(MaildirError::KeywordLimitExceeded);
         }
 
-        self.index_to_keyword.insert(next_index, keyword.to_string());
-        self.keyword_to_index.insert(keyword.to_string(), next_index);
+        self.index_to_keyword
+            .insert(next_index, keyword.to_string());
+        self.keyword_to_index
+            .insert(keyword.to_string(), next_index);
 
         Ok((b'a' + next_index) as char)
     }

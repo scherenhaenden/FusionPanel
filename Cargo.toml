@@ -4,6 +4,6 @@ members = ["crates/domain", "crates/api", "crates/agent-protocol", "crates/jobs"
 exclude = ["modules/observability", "modules/secrets"]
 
 [workspace.package]
-version = "0.11.0-dev.1"
+version = "0.12.0-dev.1"
 edition = "2021"
 license = "AGPL-3.0-only"

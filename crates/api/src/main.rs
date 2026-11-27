@@ -8,6 +8,7 @@ mod cron;
 mod databases;
 mod dns;
 mod files;
+mod mail;
 mod metrics;
 mod node_jobs;
 mod websites;
@@ -276,6 +277,7 @@ fn app(state: AppState) -> Router {
         .merge(databases::routes())
         .merge(backups::routes())
         .merge(dns::routes())
+        .merge(mail::routes())
         .merge(files::routes())
         .merge(metrics::routes())
         .merge(cron::routes())

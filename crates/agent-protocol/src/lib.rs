@@ -51,6 +51,12 @@ pub enum Operation {
     CronDelete(CronDeletePayload),
     #[serde(rename = "cron.run_now")]
     CronRunNow(CronRunNowPayload),
+    #[serde(rename = "mail.domain.apply")]
+    MailDomainApply(MailDomainApplyPayload),
+    #[serde(rename = "mail.domain.delete")]
+    MailDomainDelete(MailDomainDeletePayload),
+    #[serde(rename = "mail.dkim.apply")]
+    MailDkimApply(MailDkimApplyPayload),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -303,6 +309,117 @@ pub struct CronRunNowPayload {
     pub command: String,
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MailMailboxSpec {
+    pub mailbox_id: Uuid,
+    pub address: String,
+    pub local_part: String,
+    pub quota_bytes: u64,
+    pub active: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password_hash: Option<String>,
+}
+
+impl std::fmt::Debug for MailMailboxSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MailMailboxSpec")
+            .field("mailbox_id", &self.mailbox_id)
+            .field("address", &self.address)
+            .field("local_part", &self.local_part)
+            .field("quota_bytes", &self.quota_bytes)
+            .field("active", &self.active)
+            .field(
+                "password_hash",
+                &self.password_hash.as_ref().map(|_| "[REDACTED]"),
+            )
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MailAliasSpec {
+    pub alias_id: Uuid,
+    pub source: String,
+    pub destinations: Vec<String>,
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MailDkimSpec {
+    pub selector: String,
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dns_zone_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub txt_record: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MailDomainApplyPayload {
+    pub domain_id: Uuid,
+    pub tenant_id: Uuid,
+    pub node_id: Uuid,
+    pub domain: String,
+    pub revision: u64,
+    pub active: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dns_zone_id: Option<Uuid>,
+    #[serde(default)]
+    pub mailboxes: Vec<MailMailboxSpec>,
+    #[serde(default)]
+    pub aliases: Vec<MailAliasSpec>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dkim: Option<MailDkimSpec>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MailDomainDeletePayload {
+    pub domain_id: Uuid,
+    pub tenant_id: Uuid,
+    pub node_id: Uuid,
+    pub domain: String,
+    pub revision: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MailDkimApplyPayload {
+    pub domain_id: Uuid,
+    pub tenant_id: Uuid,
+    pub node_id: Uuid,
+    pub domain: String,
+    pub revision: u64,
+    pub selector: String,
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dns_zone_id: Option<Uuid>,
+    #[serde(default)]
+    pub rotate: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MailDkimResult {
+    pub selector: String,
+    pub txt_record: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public_key_pem: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MailOperationResult {
+    pub domain_id: Uuid,
+    pub revision: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dkim: Option<MailDkimResult>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Response {
@@ -350,6 +467,13 @@ pub enum ValidationError {
     InvalidCronJobId,
     InvalidCronSchedule,
     InvalidCronCommand,
+    InvalidMailDomainId,
+    InvalidMailNodeId,
+    InvalidMailRevision,
+    InvalidMailAddress,
+    InvalidMailAlias,
+    InvalidDkimSelector,
+    InvalidDkimRecord,
 }
 
 impl Request {
@@ -375,6 +499,9 @@ impl Request {
             Operation::CronApply(payload) => payload.validate(),
             Operation::CronDelete(payload) => payload.validate(),
             Operation::CronRunNow(payload) => payload.validate(),
+            Operation::MailDomainApply(payload) => payload.validate(),
+            Operation::MailDomainDelete(payload) => payload.validate(),
+            Operation::MailDkimApply(payload) => payload.validate(),
         }
     }
 }
@@ -897,6 +1024,225 @@ impl CronRunNowPayload {
         }
         if !valid_cron_command(&self.command) {
             return Err(ValidationError::InvalidCronCommand);
+        }
+        Ok(())
+    }
+}
+
+pub fn valid_mail_domain(domain: &str) -> bool {
+    if domain.is_empty()
+        || domain.len() > 253
+        || domain.ends_with('.')
+        || !domain.is_ascii()
+        || domain != domain.to_ascii_lowercase()
+        || domain.parse::<std::net::IpAddr>().is_ok()
+    {
+        return false;
+    }
+    let labels: Vec<&str> = domain.split('.').collect();
+    if labels.len() < 2 {
+        return false;
+    }
+    labels.iter().all(|label| {
+        !label.is_empty()
+            && label.len() <= 63
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && label
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    })
+}
+
+pub fn valid_mail_local_part(local_part: &str) -> bool {
+    if local_part.is_empty()
+        || local_part.len() > 64
+        || !local_part.is_ascii()
+        || local_part.starts_with('.')
+        || local_part.ends_with('.')
+        || local_part.contains("..")
+    {
+        return false;
+    }
+    local_part.bytes().all(|b| {
+        b.is_ascii_alphanumeric()
+            || matches!(
+                b,
+                b'.' | b'-'
+                    | b'_'
+                    | b'+'
+                    | b'='
+                    | b'!'
+                    | b'#'
+                    | b'$'
+                    | b'%'
+                    | b'&'
+                    | b'\''
+                    | b'*'
+                    | b'?'
+                    | b'^'
+                    | b'`'
+                    | b'{'
+                    | b'|'
+                    | b'}'
+                    | b'~'
+            )
+    })
+}
+
+pub fn valid_mail_address(address: &str) -> bool {
+    let Some((local_part, domain)) = address.split_once('@') else {
+        return false;
+    };
+    if domain.contains('@') {
+        return false;
+    }
+    if address != address.to_ascii_lowercase() {
+        return false;
+    }
+    valid_mail_local_part(local_part) && valid_mail_domain(domain)
+}
+
+pub fn valid_dkim_selector(selector: &str) -> bool {
+    !selector.is_empty()
+        && selector.len() <= 63
+        && selector == selector.to_ascii_lowercase()
+        && !selector.starts_with('-')
+        && !selector.ends_with('-')
+        && selector
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
+pub fn valid_dkim_txt_record(txt: &str) -> bool {
+    !txt.is_empty()
+        && txt.len() <= 2048
+        && !txt
+            .bytes()
+            .any(|b| b < 0x20 || b == 0x7f || b == b'\r' || b == b'\n')
+        && txt.contains("v=DKIM1")
+}
+
+impl MailMailboxSpec {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.mailbox_id.is_nil()
+            || !valid_mail_address(&self.address)
+            || !valid_mail_local_part(&self.local_part)
+        {
+            return Err(ValidationError::InvalidMailAddress);
+        }
+        if let Some((local, _)) = self.address.split_once('@') {
+            if local != self.local_part {
+                return Err(ValidationError::InvalidMailAddress);
+            }
+        }
+        if let Some(hash) = &self.password_hash {
+            if hash.is_empty() || hash.bytes().any(|b| b == 0 || b == b'\r' || b == b'\n') {
+                return Err(ValidationError::InvalidMailAddress);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl MailAliasSpec {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.alias_id.is_nil() || !valid_mail_address(&self.source) {
+            return Err(ValidationError::InvalidMailAlias);
+        }
+        if self.destinations.is_empty()
+            || self
+                .destinations
+                .iter()
+                .any(|dest| !valid_mail_address(dest) || dest == &self.source)
+        {
+            return Err(ValidationError::InvalidMailAlias);
+        }
+        Ok(())
+    }
+}
+
+impl MailDkimSpec {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if !valid_dkim_selector(&self.selector) {
+            return Err(ValidationError::InvalidDkimSelector);
+        }
+        if let Some(txt) = &self.txt_record {
+            if !valid_dkim_txt_record(txt) {
+                return Err(ValidationError::InvalidDkimRecord);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl MailDomainApplyPayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.domain_id.is_nil() || self.tenant_id.is_nil() {
+            return Err(ValidationError::InvalidMailDomainId);
+        }
+        if self.node_id.is_nil() {
+            return Err(ValidationError::InvalidMailNodeId);
+        }
+        if self.revision == 0 {
+            return Err(ValidationError::InvalidMailRevision);
+        }
+        if !valid_mail_domain(&self.domain) {
+            return Err(ValidationError::InvalidDomain);
+        }
+        for mailbox in &self.mailboxes {
+            mailbox.validate()?;
+            if mailbox.address.split_once('@').map(|(_, d)| d) != Some(self.domain.as_str()) {
+                return Err(ValidationError::InvalidMailAddress);
+            }
+        }
+        for alias in &self.aliases {
+            alias.validate()?;
+            if alias.source.split_once('@').map(|(_, d)| d) != Some(self.domain.as_str()) {
+                return Err(ValidationError::InvalidMailAlias);
+            }
+        }
+        if let Some(dkim) = &self.dkim {
+            dkim.validate()?;
+        }
+        Ok(())
+    }
+}
+
+impl MailDomainDeletePayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.domain_id.is_nil() || self.tenant_id.is_nil() {
+            return Err(ValidationError::InvalidMailDomainId);
+        }
+        if self.node_id.is_nil() {
+            return Err(ValidationError::InvalidMailNodeId);
+        }
+        if self.revision == 0 {
+            return Err(ValidationError::InvalidMailRevision);
+        }
+        if !valid_mail_domain(&self.domain) {
+            return Err(ValidationError::InvalidDomain);
+        }
+        Ok(())
+    }
+}
+
+impl MailDkimApplyPayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.domain_id.is_nil() || self.tenant_id.is_nil() {
+            return Err(ValidationError::InvalidMailDomainId);
+        }
+        if self.node_id.is_nil() {
+            return Err(ValidationError::InvalidMailNodeId);
+        }
+        if self.revision == 0 {
+            return Err(ValidationError::InvalidMailRevision);
+        }
+        if !valid_mail_domain(&self.domain) {
+            return Err(ValidationError::InvalidDomain);
+        }
+        if !valid_dkim_selector(&self.selector) {
+            return Err(ValidationError::InvalidDkimSelector);
         }
         Ok(())
     }
@@ -1867,6 +2213,104 @@ mod tests {
         assert_eq!(
             bad_sched.validate(),
             Err(ValidationError::InvalidCronSchedule)
+        );
+    }
+
+    #[test]
+    fn test_mail_payload_validation_and_secret_redaction() {
+        let domain_id = Uuid::new_v4();
+        let tenant_id = Uuid::new_v4();
+        let node_id = Uuid::new_v4();
+        let mailbox_id = Uuid::new_v4();
+        let alias_id = Uuid::new_v4();
+
+        let valid = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::MailDomainApply(MailDomainApplyPayload {
+                domain_id,
+                tenant_id,
+                node_id,
+                domain: "example.com".to_string(),
+                revision: 1,
+                active: true,
+                dns_zone_id: None,
+                mailboxes: vec![MailMailboxSpec {
+                    mailbox_id,
+                    address: "alice@example.com".to_string(),
+                    local_part: "alice".to_string(),
+                    quota_bytes: 1024 * 1024 * 1024,
+                    active: true,
+                    password_hash: Some("$argon2id$v=19$m=19456,t=2,p=1$salt$hash".to_string()),
+                }],
+                aliases: vec![MailAliasSpec {
+                    alias_id,
+                    source: "support@example.com".to_string(),
+                    destinations: vec!["alice@example.com".to_string()],
+                    active: true,
+                }],
+                dkim: Some(MailDkimSpec {
+                    selector: "default".to_string(),
+                    enabled: true,
+                    dns_zone_id: None,
+                    txt_record: Some(
+                        "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A".to_string(),
+                    ),
+                }),
+            }),
+        };
+        assert!(valid.validate().is_ok());
+
+        let debug_str = format!("{:?}", valid);
+        assert!(!debug_str.contains("salt$hash"));
+        assert!(debug_str.contains("[REDACTED]"));
+
+        let bad_addr = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::MailDomainApply(MailDomainApplyPayload {
+                domain_id,
+                tenant_id,
+                node_id,
+                domain: "example.com".to_string(),
+                revision: 1,
+                active: true,
+                dns_zone_id: None,
+                mailboxes: vec![MailMailboxSpec {
+                    mailbox_id,
+                    address: "../bad@example.com".to_string(),
+                    local_part: "../bad".to_string(),
+                    quota_bytes: 0,
+                    active: true,
+                    password_hash: None,
+                }],
+                aliases: vec![],
+                dkim: None,
+            }),
+        };
+        assert_eq!(
+            bad_addr.validate(),
+            Err(ValidationError::InvalidMailAddress)
+        );
+
+        let bad_selector = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::MailDkimApply(MailDkimApplyPayload {
+                domain_id,
+                tenant_id,
+                node_id,
+                domain: "example.com".to_string(),
+                revision: 1,
+                selector: "bad.selector!".to_string(),
+                enabled: true,
+                dns_zone_id: None,
+                rotate: false,
+            }),
+        };
+        assert_eq!(
+            bad_selector.validate(),
+            Err(ValidationError::InvalidDkimSelector)
         );
     }
 }
