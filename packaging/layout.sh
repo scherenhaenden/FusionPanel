@@ -488,3 +488,102 @@ fusionpanel_set_frontend_env() {
     chmod 0600 "$temp_file"
     mv -f "$temp_file" "$env_file"
 }
+
+fusionpanel_parse_semver_major_minor() {
+    printf '%s\n' "$1" | awk '
+        {
+            v = $0
+            sub(/^[vV]/, "", v)
+            if (v ~ /^[0-9]+\.[0-9]+(\.[0-9]+)?([+-].*)?$/) {
+                split(v, parts, /[.+-]/)
+                printf "%d %d\n", parts[1] + 0, parts[2] + 0
+                exit 0
+            }
+            exit 1
+        }
+    '
+}
+
+fusionpanel_check_adjacent_release() {
+    fusionpanel_cur_ver=$1
+    fusionpanel_tgt_ver=$2
+    fusionpanel_allow_non_adj=${3:-0}
+
+    if [ "$fusionpanel_tgt_ver" = "latest" ]; then
+        return 0
+    fi
+    if [ -z "$fusionpanel_cur_ver" ]; then
+        return 0
+    fi
+    case "$fusionpanel_cur_ver" in
+        *[!a-zA-Z0-9.+_-]*|'')
+            echo "Error: Invalid version in state file: $fusionpanel_cur_ver" >&2
+            return 1
+            ;;
+    esac
+
+    if ! fusionpanel_cur_mm=$(fusionpanel_parse_semver_major_minor "$fusionpanel_cur_ver"); then
+        return 0
+    fi
+    if ! fusionpanel_tgt_mm=$(fusionpanel_parse_semver_major_minor "$fusionpanel_tgt_ver"); then
+        return 0
+    fi
+
+    set -- $fusionpanel_cur_mm
+    fusionpanel_cur_maj=$1
+    fusionpanel_cur_min=$2
+    set -- $fusionpanel_tgt_mm
+    fusionpanel_tgt_maj=$1
+    fusionpanel_tgt_min=$2
+
+    if [ "$fusionpanel_tgt_maj" -eq "$fusionpanel_cur_maj" ] \
+        && { [ "$fusionpanel_tgt_min" -eq "$fusionpanel_cur_min" ] \
+            || [ "$fusionpanel_tgt_min" -eq $((fusionpanel_cur_min + 1)) ]; }; then
+        return 0
+    fi
+    if [ "$fusionpanel_tgt_maj" -eq $((fusionpanel_cur_maj + 1)) ] \
+        && [ "$fusionpanel_tgt_min" -eq 0 ]; then
+        return 0
+    fi
+
+    if [ "$fusionpanel_allow_non_adj" = "1" ]; then
+        echo "Warning: Allowing non-adjacent release transition from $fusionpanel_cur_ver to $fusionpanel_tgt_ver." >&2
+        return 0
+    fi
+
+    echo "Error: Non-adjacent or downgrade release transition from $fusionpanel_cur_ver to $fusionpanel_tgt_ver is blocked (set FUSIONPANEL_ALLOW_NON_ADJACENT_UPGRADE=1 to override)." >&2
+    return 1
+}
+
+fusionpanel_check_min_free_kb() {
+    fusionpanel_disk_target=$1
+    fusionpanel_min_kb=${2:-}
+    if [ -z "$fusionpanel_min_kb" ]; then
+        return 0
+    fi
+    case "$fusionpanel_min_kb" in
+        *[!0-9]*)
+            echo "Error: Invalid FUSIONPANEL_MIN_FREE_KB value: $fusionpanel_min_kb" >&2
+            return 1
+            ;;
+    esac
+    fusionpanel_check_dir="$fusionpanel_disk_target"
+    while [ ! -d "$fusionpanel_check_dir" ] && [ "$fusionpanel_check_dir" != "/" ]; do
+        fusionpanel_parent_dir=${fusionpanel_check_dir%/*}
+        fusionpanel_check_dir=${fusionpanel_parent_dir:-/}
+    done
+    fusionpanel_avail_kb=$(df -Pk "$fusionpanel_check_dir" 2>/dev/null | awk 'NR == 2 { print $4 }') || {
+        echo "Error: Could not determine free disk space for $fusionpanel_check_dir." >&2
+        return 1
+    }
+    case "$fusionpanel_avail_kb" in
+        ''|*[!0-9]*)
+            echo "Error: Unexpected df output for $fusionpanel_check_dir: $fusionpanel_avail_kb" >&2
+            return 1
+            ;;
+    esac
+    if [ "$fusionpanel_avail_kb" -lt "$fusionpanel_min_kb" ]; then
+        echo "Error: Insufficient free disk space on $fusionpanel_check_dir (${fusionpanel_avail_kb} KB available, ${fusionpanel_min_kb} KB required)." >&2
+        return 1
+    fi
+}

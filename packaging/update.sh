@@ -15,7 +15,11 @@ VERSION_LIB_DIR="/usr/local/lib/fusionpanel/versions"
 STATE_DIR="/var/lib/fusionpanel"
 SYSTEMD_DIR="/etc/systemd/system"
 HEALTH_URL="${FUSIONPANEL_HEALTH_URL:-}"
-HEALTH_TIMEOUT=30
+AGENT_HEALTH_URL="${FUSIONPANEL_AGENT_HEALTH_URL:-}"
+HEALTH_TIMEOUT="${FUSIONPANEL_HEALTH_TIMEOUT:-30}"
+MIN_FREE_KB="${FUSIONPANEL_MIN_FREE_KB:-}"
+INCOMPATIBLE_SCHEMA_MIGRATION="${FUSIONPANEL_INCOMPATIBLE_SCHEMA_MIGRATION:-0}"
+ALLOW_NON_ADJACENT_UPGRADE="${FUSIONPANEL_ALLOW_NON_ADJACENT_UPGRADE:-0}"
 TEST_MODE=0
 if fusionpanel_is_source_checkout "$SCRIPT_DIR"; then
     TEST_MODE=1
@@ -162,6 +166,36 @@ for unit in fusionpanel.service fusionpanel-agent.service fusionpanel-nginx-help
 done
 resolve_health_url
 
+# Preflight checks before modifying backups or stopping services.
+CURRENT_STATE_VERSION=""
+if [ -L "$STATE_DIR/.version" ] || { [ -e "$STATE_DIR/.version" ] && [ ! -f "$STATE_DIR/.version" ]; }; then
+    echo "Error: Refusing to update with a non-regular state version file: $STATE_DIR/.version" >&2
+    exit 1
+fi
+if [ -f "$STATE_DIR/.version" ]; then
+    CURRENT_STATE_VERSION=$(sed -n '1p' "$STATE_DIR/.version" | tr -d '\r')
+fi
+if ! fusionpanel_check_adjacent_release "$CURRENT_STATE_VERSION" "$VERSION" "$ALLOW_NON_ADJACENT_UPGRADE"; then
+    exit 1
+fi
+ADJACENT_CHECK_RESULT="passed"
+if [ "$VERSION" = "latest" ]; then
+    ADJACENT_CHECK_RESULT="symbolic"
+elif [ -z "$CURRENT_STATE_VERSION" ]; then
+    ADJACENT_CHECK_RESULT="fresh"
+elif [ "$ALLOW_NON_ADJACENT_UPGRADE" = "1" ]; then
+    ADJACENT_CHECK_RESULT="overridden"
+fi
+if ! fusionpanel_check_min_free_kb "$VERSION_LIB_DIR" "$MIN_FREE_KB"; then
+    exit 1
+fi
+if ! fusionpanel_check_min_free_kb "$BACKUP_DIR" "$MIN_FREE_KB"; then
+    exit 1
+fi
+if [ "$INCOMPATIBLE_SCHEMA_MIGRATION" = "1" ]; then
+    echo "Notice: FUSIONPANEL_INCOMPATIBLE_SCHEMA_MIGRATION=1; automatic rollback/rewind will be blocked unless explicitly overridden." >&2
+fi
+
 # Preserve the active state before any service or symlink is changed.
 rm -rf "$BACKUP_DIR"
 (umask 077; mkdir "$BACKUP_DIR") || {
@@ -186,6 +220,23 @@ done
 if [ -d "$CONFIG_DIR" ] && [ ! -L "$CONFIG_DIR" ]; then cp -a "$CONFIG_DIR/." "$BACKUP_DIR/config/"; fi
 if [ -f "$STATE_DIR/.version" ] && [ ! -L "$STATE_DIR/.version" ]; then
     cp -a "$STATE_DIR/.version" "$BACKUP_DIR/previous-version"
+fi
+(
+    umask 077
+    printf 'format=1\n'
+    printf 'previous_version=%s\n' "${CURRENT_STATE_VERSION:-none}"
+    printf 'target_version=%s\n' "$VERSION"
+    printf 'adjacent_check=%s\n' "$ADJACENT_CHECK_RESULT"
+    printf 'incompatible_schema_migration=%s\n' "$INCOMPATIBLE_SCHEMA_MIGRATION"
+    printf 'recorded_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+) > "$BACKUP_DIR/state-compatibility"
+if [ "$INCOMPATIBLE_SCHEMA_MIGRATION" = "1" ]; then
+    (
+        umask 077
+        printf 'target_version=%s\n' "$VERSION"
+        printf 'previous_version=%s\n' "${CURRENT_STATE_VERSION:-none}"
+        printf 'reason=FUSIONPANEL_INCOMPATIBLE_SCHEMA_MIGRATION\n'
+    ) > "$BACKUP_DIR/incompatible-migration"
 fi
 mkdir -p "$VERSION_LIB_DIR"
 record_previous_release
@@ -342,11 +393,37 @@ done
 echo "Performing health check..."
 START_TIME=$(date +%s)
 HEALTH_PASS=0
+LAST_HEALTH_FAILURE="unknown"
 while true; do
+    api_ok=0
+    agent_unit_ok=0
+    agent_http_ok=1
     if curl -sSLf "$HEALTH_URL" > /dev/null 2>&1; then
+        api_ok=1
+    fi
+    if systemctl is-active --quiet fusionpanel-agent.service; then
+        agent_unit_ok=1
+    fi
+    if [ -n "$AGENT_HEALTH_URL" ]; then
+        agent_http_ok=0
+        if curl -sSLf "$AGENT_HEALTH_URL" > /dev/null 2>&1; then
+            agent_http_ok=1
+        fi
+    fi
+
+    if [ "$api_ok" -eq 1 ] && [ "$agent_unit_ok" -eq 1 ] && [ "$agent_http_ok" -eq 1 ]; then
         HEALTH_PASS=1
         break
     fi
+
+    if [ "$api_ok" -ne 1 ]; then
+        LAST_HEALTH_FAILURE="API health check ($HEALTH_URL)"
+    elif [ "$agent_unit_ok" -ne 1 ]; then
+        LAST_HEALTH_FAILURE="agent service active check (fusionpanel-agent.service)"
+    else
+        LAST_HEALTH_FAILURE="agent health check ($AGENT_HEALTH_URL)"
+    fi
+
     CURRENT_TIME=$(date +%s)
     ELAPSED=$((CURRENT_TIME - START_TIME))
     if [ "$ELAPSED" -ge "$HEALTH_TIMEOUT" ]; then break; fi
@@ -357,7 +434,7 @@ if [ "$HEALTH_PASS" -eq 1 ]; then
     UPDATE_SUCCEEDED=1
     echo "Update successful."
 else
-    echo "Health check failed after $HEALTH_TIMEOUT seconds. Rolling back." >&2
+    echo "Health check failed ($LAST_HEALTH_FAILURE) after $HEALTH_TIMEOUT seconds. Rolling back." >&2
     ROLLBACK_ATTEMPTED=1
     "$SCRIPT_DIR/rollback.sh"
     exit 1

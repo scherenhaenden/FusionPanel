@@ -91,6 +91,11 @@ if [ -n "$output" ]; then
 fi
 printf '%s\n' "$*" >> "$FUSIONPANEL_TEST_CURL_LOG"
 if [ "${FUSIONPANEL_TEST_FAIL_HEALTH:-0}" = 1 ]; then exit 22; fi
+if [ -n "${FUSIONPANEL_TEST_FAIL_URL:-}" ]; then
+    for arg in "$@"; do
+        if [ "$arg" = "$FUSIONPANEL_TEST_FAIL_URL" ]; then exit 22; fi
+    done
+fi
 exit 0
 SH
 cat > "$TEST_DIR/mock-bin/systemctl" <<'SH'
@@ -162,6 +167,9 @@ grep -Fxq 'FUSIONPANEL_API_URL=https://control.example.test' "$TEST_DIR/config/f
 grep -Fxq 'FUSIONPANEL_NODE_TOKEN=remote-node-secret' "$TEST_DIR/config/fusionpanel-agent.env"
 ! grep -q '^FUSIONPANEL_ADMIN_TOKEN=' "$TEST_DIR/config/fusionpanel-agent.env"
 [[ "$(cat "$TEST_DIR/state/.version")" == '0.2.0-test' ]]
+grep -Fxq 'previous_version=0.1.0' "$TEST_DIR/backup/state-compatibility"
+grep -Fxq 'target_version=0.2.0-test' "$TEST_DIR/backup/state-compatibility"
+grep -Fxq 'incompatible_schema_migration=0' "$TEST_DIR/backup/state-compatibility"
 [[ "$(stat -c '%a' "$TEST_DIR/config/fusionpanel.env")" == '600' ]]
 grep -Fxq "root:root $TEST_DIR/config/fusionpanel.env" "$TEST_DIR/logs/chown.log"
 grep -Fxq "root:root $TEST_DIR/config/fusionpanel-agent.env" "$TEST_DIR/logs/chown.log"
@@ -239,8 +247,8 @@ fi
 
 # Upgrade the exact legacy local-agent file emitted by the prior installer.
 printf 'FUSIONPANEL_AGENT_ENDPOINT=http://127.0.0.1:9090\n' > "$TEST_DIR/config/fusionpanel-agent.env"
-sh "$ROOT_DIR/packaging/update.sh" 0.3.0-legacy-test
-[[ "$(readlink "$TEST_DIR/versions/current")" == '0.3.0-legacy-test' ]]
+sh "$ROOT_DIR/packaging/update.sh" 0.2.0-legacy-test
+[[ "$(readlink "$TEST_DIR/versions/current")" == '0.2.0-legacy-test' ]]
 grep -Fxq 'FUSIONPANEL_AGENT_MODE=http' "$TEST_DIR/config/fusionpanel-agent.env"
 grep -Fxq 'FUSIONPANEL_API_URL=http://127.0.0.1:9090' "$TEST_DIR/config/fusionpanel-agent.env"
 grep -Fxq 'FUSIONPANEL_ADMIN_TOKEN=old-admin-secret' "$TEST_DIR/config/fusionpanel-agent.env"
@@ -266,8 +274,94 @@ case "$migration_output" in
         exit 1
         ;;
 esac
-[[ "$(readlink "$TEST_DIR/versions/current")" == '0.3.0-legacy-test' ]]
+[[ "$(readlink "$TEST_DIR/versions/current")" == '0.2.0-legacy-test' ]]
 grep -Fxq 'FUSIONPANEL_AGENT_ENDPOINT=http://127.0.0.1:9191' "$TEST_DIR/config/fusionpanel-agent.env"
 ! grep -q '^stop fusionpanel.service fusionpanel-agent.service$' "$TEST_DIR/logs/systemctl.log"
+
+# Restore valid agent config for remaining tests.
+printf 'FUSIONPANEL_AGENT_MODE=http\nFUSIONPANEL_API_URL=http://127.0.0.1:9090\nFUSIONPANEL_ADMIN_TOKEN=old-admin-secret\nFUSIONPANEL_NODE_NAME=test-node\n' > "$TEST_DIR/config/fusionpanel-agent.env"
+
+# Preflight: non-adjacent release transition must fail before stopping services.
+: > "$TEST_DIR/logs/systemctl.log"
+set +e
+nonadj_output=$(sh "$ROOT_DIR/packaging/update.sh" 0.4.0-nonadj 2>&1)
+nonadj_status=$?
+set -e
+if [[ "$nonadj_status" -eq 0 ]]; then
+    echo 'FAIL: non-adjacent release transition was accepted' >&2
+    exit 1
+fi
+[[ "$(readlink "$TEST_DIR/versions/current")" == '0.2.0-legacy-test' ]]
+! grep -q '^stop ' "$TEST_DIR/logs/systemctl.log"
+
+# Preflight: FUSIONPANEL_MIN_FREE_KB disk space guard must fail before stopping services.
+: > "$TEST_DIR/logs/systemctl.log"
+set +e
+disk_output=$(FUSIONPANEL_MIN_FREE_KB=999999999999 sh "$ROOT_DIR/packaging/update.sh" 0.3.0-diskcheck 2>&1)
+disk_status=$?
+set -e
+if [[ "$disk_status" -eq 0 ]]; then
+    echo 'FAIL: update proceeded despite insufficient free disk space' >&2
+    exit 1
+fi
+[[ "$(readlink "$TEST_DIR/versions/current")" == '0.2.0-legacy-test' ]]
+! grep -q '^stop ' "$TEST_DIR/logs/systemctl.log"
+
+# Simulated agent health failure must trigger automatic rollback.
+: > "$TEST_DIR/logs/curl.log"
+set +e
+agent_fail_output=$(FUSIONPANEL_HEALTH_TIMEOUT=1 \
+    FUSIONPANEL_AGENT_HEALTH_URL=http://127.0.0.1:9192/health \
+    FUSIONPANEL_TEST_FAIL_URL=http://127.0.0.1:9192/health \
+    sh "$ROOT_DIR/packaging/update.sh" 0.3.0-agent-fail 2>&1)
+agent_fail_status=$?
+set -e
+if [[ "$agent_fail_status" -eq 0 ]]; then
+    echo 'FAIL: updater succeeded despite agent health failure' >&2
+    exit 1
+fi
+[[ "$(readlink "$TEST_DIR/versions/current")" == '0.2.0-legacy-test' ]]
+[[ "$(cat "$TEST_DIR/state/.version")" == '0.2.0-legacy-test' ]]
+grep -Fxq -- '-sSLf http://127.0.0.1:9192/health' "$TEST_DIR/logs/curl.log"
+
+# Repeat rollback must be idempotent and preserve credentials, config, and durable state.
+printf 'important-db-state\n' > "$TEST_DIR/state/durable.db"
+sh "$ROOT_DIR/packaging/update.sh" 0.3.0-repeat-test
+[[ "$(readlink "$TEST_DIR/versions/current")" == '0.3.0-repeat-test' ]]
+sh "$ROOT_DIR/packaging/rollback.sh"
+sh "$ROOT_DIR/packaging/rollback.sh"
+[[ "$(readlink "$TEST_DIR/versions/current")" == '0.2.0-legacy-test' ]]
+[[ "$(cat "$TEST_DIR/state/.version")" == '0.2.0-legacy-test' ]]
+grep -Fxq 'FUSIONPANEL_ADMIN_TOKEN=old-admin-secret' "$TEST_DIR/config/fusionpanel.env"
+grep -Fxq 'FUSIONPANEL_ADMIN_TOKEN=old-admin-secret' "$TEST_DIR/config/fusionpanel-agent.env"
+[[ "$(cat "$TEST_DIR/state/durable.db")" == 'important-db-state' ]]
+
+# Incompatible schema migration must block automatic rewind unless explicitly overridden.
+set +e
+incompat_output=$(FUSIONPANEL_INCOMPATIBLE_SCHEMA_MIGRATION=1 \
+    FUSIONPANEL_HEALTH_TIMEOUT=1 \
+    FUSIONPANEL_TEST_FAIL_HEALTH=1 \
+    sh "$ROOT_DIR/packaging/update.sh" 0.3.0-incompat 2>&1)
+incompat_status=$?
+set -e
+if [[ "$incompat_status" -eq 0 ]]; then
+    echo 'FAIL: updater succeeded despite health failure on incompatible migration' >&2
+    exit 1
+fi
+[[ -f "$TEST_DIR/backup/incompatible-migration" ]]
+grep -Fxq 'incompatible_schema_migration=1' "$TEST_DIR/backup/state-compatibility"
+[[ "$(readlink "$TEST_DIR/versions/current")" == '0.3.0-incompat' ]]
+set +e
+manual_rewind_output=$(sh "$ROOT_DIR/packaging/rollback.sh" 2>&1)
+manual_rewind_status=$?
+set -e
+if [[ "$manual_rewind_status" -eq 0 ]]; then
+    echo 'FAIL: rollback.sh allowed rewind across incompatible migration without override' >&2
+    exit 1
+fi
+[[ "$(readlink "$TEST_DIR/versions/current")" == '0.3.0-incompat' ]]
+sh "$ROOT_DIR/packaging/rollback.sh" --force-rewind
+[[ "$(readlink "$TEST_DIR/versions/current")" == '0.2.0-legacy-test' ]]
+[[ "$(cat "$TEST_DIR/state/.version")" == '0.2.0-legacy-test' ]]
 
 echo 'Updater package-layout and rollback tests passed.'
