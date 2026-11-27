@@ -27,7 +27,8 @@ impl WebhookSigner {
     }
 
     pub fn sign(&self, payload: &str, timestamp: u64) -> String {
-        let mut mac = HmacSha256::new_from_slice(&self.secret).expect("HMAC can take key of any size");
+        let mut mac =
+            HmacSha256::new_from_slice(&self.secret).expect("HMAC can take key of any size");
         let to_sign = format!("{}.{}", timestamp, payload);
         mac.update(to_sign.as_bytes());
         let result = mac.finalize();
@@ -35,7 +36,12 @@ impl WebhookSigner {
         format!("t={},v1={}", timestamp, hex_sig)
     }
 
-    pub fn verify(&self, payload: &str, signature_header: &str, current_timestamp: u64) -> Result<(), WebhookVerificationError> {
+    pub fn verify(
+        &self,
+        payload: &str,
+        signature_header: &str,
+        current_timestamp: u64,
+    ) -> Result<(), WebhookVerificationError> {
         let parts: Vec<&str> = signature_header.split(',').collect();
         let mut timestamp_str = None;
         let mut signature_hex = None;
@@ -51,7 +57,9 @@ impl WebhookSigner {
         let timestamp_str = timestamp_str.ok_or(WebhookVerificationError::InvalidFormat)?;
         let signature_hex = signature_hex.ok_or(WebhookVerificationError::InvalidFormat)?;
 
-        let timestamp: u64 = timestamp_str.parse().map_err(|_| WebhookVerificationError::InvalidFormat)?;
+        let timestamp: u64 = timestamp_str
+            .parse()
+            .map_err(|_| WebhookVerificationError::InvalidFormat)?;
 
         if timestamp > current_timestamp {
             return Err(WebhookVerificationError::FutureTimestamp);
@@ -62,10 +70,12 @@ impl WebhookSigner {
         }
 
         let to_sign = format!("{}.{}", timestamp, payload);
-        let actual_bytes = hex::decode(signature_hex).map_err(|_| WebhookVerificationError::InvalidFormat)?;
+        let actual_bytes =
+            hex::decode(signature_hex).map_err(|_| WebhookVerificationError::InvalidFormat)?;
 
         // Constant time comparison is recommended for MACs, `hmac::Mac::verify_slice` does this.
-        let mut verify_mac = HmacSha256::new_from_slice(&self.secret).expect("HMAC can take key of any size");
+        let mut verify_mac =
+            HmacSha256::new_from_slice(&self.secret).expect("HMAC can take key of any size");
         verify_mac.update(to_sign.as_bytes());
         if verify_mac.verify_slice(&actual_bytes).is_err() {
             return Err(WebhookVerificationError::InvalidSignature);

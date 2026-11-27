@@ -203,23 +203,38 @@ fn test_flapping_suppression_and_alerting() {
     };
 
     // 1st failure
-    assert_eq!(prober.evaluate_outcome(&failure_outcome), AlertState::Normal);
+    assert_eq!(
+        prober.evaluate_outcome(&failure_outcome),
+        AlertState::Normal
+    );
     assert_eq!(prober.consecutive_failures(), 1);
 
     // 2nd failure
-    assert_eq!(prober.evaluate_outcome(&failure_outcome), AlertState::Normal);
+    assert_eq!(
+        prober.evaluate_outcome(&failure_outcome),
+        AlertState::Normal
+    );
     assert_eq!(prober.consecutive_failures(), 2);
 
     // 1 success clears the flapping
-    assert_eq!(prober.evaluate_outcome(&success_outcome), AlertState::Normal);
+    assert_eq!(
+        prober.evaluate_outcome(&success_outcome),
+        AlertState::Normal
+    );
     assert_eq!(prober.consecutive_failures(), 0);
 
     // 1st failure again
-    assert_eq!(prober.evaluate_outcome(&failure_outcome), AlertState::Normal);
+    assert_eq!(
+        prober.evaluate_outcome(&failure_outcome),
+        AlertState::Normal
+    );
     assert_eq!(prober.consecutive_failures(), 1);
 
     // 2nd failure
-    assert_eq!(prober.evaluate_outcome(&failure_outcome), AlertState::Normal);
+    assert_eq!(
+        prober.evaluate_outcome(&failure_outcome),
+        AlertState::Normal
+    );
     assert_eq!(prober.consecutive_failures(), 2);
 
     // 3rd failure triggers alert
@@ -237,6 +252,9 @@ fn test_flapping_suppression_and_alerting() {
     assert_eq!(prober.consecutive_failures(), 4);
 
     // 1 success clears the alert and flapping
-    assert_eq!(prober.evaluate_outcome(&success_outcome), AlertState::Normal);
+    assert_eq!(
+        prober.evaluate_outcome(&success_outcome),
+        AlertState::Normal
+    );
     assert_eq!(prober.consecutive_failures(), 0);
 }

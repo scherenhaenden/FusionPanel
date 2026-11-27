@@ -47,14 +47,17 @@ impl std::fmt::Debug for DerivedKey {
 }
 
 /// Derive a Key Encryption Key (KEK) from a passphrase and a configuration.
-pub fn derive_kek(passphrase: &[u8], config: &KekDerivationConfig) -> Result<DerivedKey, &'static str> {
+pub fn derive_kek(
+    passphrase: &[u8],
+    config: &KekDerivationConfig,
+) -> Result<DerivedKey, &'static str> {
     if config.output_len != 32 {
         return Err("Only 256-bit (32 bytes) output length is supported.");
     }
-    
+
     let mut key = [0u8; 32];
     pbkdf2_hmac::<Sha256>(passphrase, &config.salt, config.iterations, &mut key);
-    
+
     Ok(DerivedKey(key))
 }
 
@@ -63,7 +66,7 @@ pub fn generate_fingerprint(key_id: &str, salt: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(key_id.as_bytes());
     hasher.update(salt);
-    
+
     let mut out = [0u8; 32];
     out.copy_from_slice(&hasher.finalize());
     out
