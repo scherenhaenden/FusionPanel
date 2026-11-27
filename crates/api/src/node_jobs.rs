@@ -69,6 +69,8 @@ struct CompleteJobRequest {
     state: JobState,
     #[serde(default)]
     error_text: Option<String>,
+    #[serde(default)]
+    result: Option<Value>,
 }
 
 pub(super) fn routes() -> Router<AppState> {
@@ -226,6 +228,17 @@ async fn enqueue_job(
             },
         });
     }
+    if matches!(
+        body.operation.as_str(),
+        "mail.domain.apply" | "mail.domain.delete" | "mail.dkim.apply"
+    ) {
+        return Err(ErrorResponse {
+            error: ErrorDetail {
+                code: "bad_request",
+                message: "Use the Mail API for mail operations",
+            },
+        });
+    }
     let key = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
@@ -332,6 +345,33 @@ pub(super) fn sanitize_job_for_operator(mut job: Job) -> Job {
                 );
             }
         }
+        if let Some(mailboxes) = payload_obj
+            .get_mut("mailboxes")
+            .and_then(Value::as_array_mut)
+        {
+            for mailbox in mailboxes {
+                if let Some(mb_obj) = mailbox.as_object_mut() {
+                    if mb_obj.contains_key("password_hash") {
+                        mb_obj.insert(
+                            "password_hash".to_string(),
+                            Value::String("[REDACTED]".to_string()),
+                        );
+                    }
+                    if mb_obj.contains_key("password") {
+                        mb_obj.insert(
+                            "password".to_string(),
+                            Value::String("[REDACTED]".to_string()),
+                        );
+                    }
+                }
+            }
+        }
+        if payload_obj.contains_key("private_key_pem") {
+            payload_obj.insert(
+                "private_key_pem".to_string(),
+                Value::String("[REDACTED]".to_string()),
+            );
+        }
     }
     job
 }
@@ -433,6 +473,7 @@ async fn complete_job(
     super::backups::record_completion(&state, &completed).await?;
     super::dns::record_completion(&state, &completed).await?;
     super::cron::record_completion(&state, &completed).await?;
+    super::mail::record_completion(&state, &completed, request.result.as_ref()).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -501,12 +542,36 @@ fn parse_uuid(value: &str) -> Result<Uuid, ErrorResponse> {
 }
 
 fn redact_known_secrets(value: &str, secrets: &[&str]) -> String {
-    secrets
+    let mut out = secrets
         .iter()
         .filter(|secret| !secret.is_empty())
         .fold(value.to_string(), |text, secret| {
             text.replace(secret, "[REDACTED]")
-        })
+        });
+    // Redact PEM private key blocks if present in logs or error text.
+    while let Some(start) = out.find("-----BEGIN ") {
+        if let Some(hdr_end) = out[start..].find("PRIVATE KEY-----") {
+            let search_from = start + hdr_end;
+            if let Some(end_rel) = out[search_from..].find("-----END ") {
+                let end_pos = search_from + end_rel;
+                if let Some(tail) = out[end_pos..].find("-----") {
+                    let close_pos = end_pos + tail + 5;
+                    out.replace_range(start..close_pos, "[REDACTED_PRIVATE_KEY]");
+                    continue;
+                }
+            }
+        }
+        break;
+    }
+    // Redact Argon2id PHC hashes if present.
+    while let Some(idx) = out.find("$argon2") {
+        let end = out[idx..]
+            .find(|c: char| c.is_whitespace() || c == '"' || c == '\'')
+            .map(|offset| idx + offset)
+            .unwrap_or(out.len());
+        out.replace_range(idx..end, "[REDACTED_HASH]");
+    }
+    out
 }
 
 pub(super) fn map_job_error(error: fusionpanel_jobs::JobStoreError) -> ErrorResponse {
