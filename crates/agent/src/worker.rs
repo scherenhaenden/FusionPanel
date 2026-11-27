@@ -190,6 +190,18 @@ impl ApiClient {
         ensure_success(&response)
     }
 
+    async fn publish_metrics(
+        &self,
+        node: &NodeCredentials,
+        metrics: &SystemMetrics,
+    ) -> Result<(), WorkerError> {
+        let path = format!("v1/nodes/{}/metrics", node.node_id);
+        let response = self
+            .send_json(Method::POST, &path, &node.token, metrics)
+            .await?;
+        ensure_success(&response)
+    }
+
     async fn claim(&self, node: &NodeCredentials) -> Result<Option<ClaimedJob>, WorkerError> {
         let response = self
             .send_json(
@@ -433,6 +445,7 @@ pub struct AgentWorker {
     node_name: Option<String>,
     node: Option<NodeCredentials>,
     metrics: MetricsCollector,
+    telemetry_metrics: MetricsCollector,
     site_operations: Box<dyn ManagedSiteOperations>,
     poll_interval: Duration,
     heartbeat_interval: Duration,
@@ -498,6 +511,7 @@ impl AgentWorker {
             node_name,
             node,
             metrics: MetricsCollector::default(),
+            telemetry_metrics: MetricsCollector::default(),
             site_operations,
             poll_interval: POLL_INTERVAL,
             heartbeat_interval: HEARTBEAT_INTERVAL,
@@ -527,6 +541,21 @@ impl AgentWorker {
             .as_ref()
             .ok_or(WorkerError::InvalidConfiguration)?;
         self.api.heartbeat(node).await
+    }
+
+    async fn report_metrics(&mut self) -> Result<(), WorkerError> {
+        let sample = match self.telemetry_metrics.collect() {
+            Ok(sample) => sample,
+            Err(_) => {
+                eprintln!("Agent metrics collection failed; retrying");
+                return Ok(());
+            }
+        };
+        let node = self
+            .node
+            .as_ref()
+            .ok_or(WorkerError::InvalidConfiguration)?;
+        self.api.publish_metrics(node, &sample).await
     }
 
     pub async fn run_once(&mut self) -> Result<bool, WorkerError> {
@@ -821,6 +850,9 @@ impl AgentWorker {
 
     pub async fn run(&mut self) -> Result<(), WorkerError> {
         self.register().await?;
+        // Prime the CPU counters so the first published value is measured over
+        // an interval instead of reporting the collector's initial zero.
+        let _ = self.telemetry_metrics.collect();
         let mut last_heartbeat = Instant::now();
         let mut heartbeat_due = true;
         let mut shutdown = Box::pin(tokio::signal::ctrl_c());
@@ -838,6 +870,13 @@ impl AgentWorker {
                     Ok(()) => {
                         last_heartbeat = Instant::now();
                         heartbeat_due = false;
+                        match self.report_metrics().await {
+                            Ok(()) => {}
+                            Err(WorkerError::Unauthorized) => {
+                                return Err(WorkerError::Unauthorized)
+                            }
+                            Err(_) => eprintln!("Agent metrics report failed; retrying"),
+                        }
                     }
                     Err(WorkerError::Unauthorized) => return Err(WorkerError::Unauthorized),
                     Err(_) => eprintln!("Agent heartbeat failed; retrying"),
@@ -1447,6 +1486,49 @@ mod tests {
         assert!(!WorkerError::Unauthorized
             .safe_message()
             .contains("admin-secret"));
+    }
+
+    #[test]
+    fn metrics_report_uses_node_scoped_endpoint_and_bounded_sample_fields() {
+        let api = ApiClient::new("https://control.example.test").unwrap();
+        let node = NodeCredentials {
+            node_id: "00000000-0000-4000-8000-000000000001".to_string(),
+            token: "node-secret".to_string(),
+        };
+        let metrics = SystemMetrics {
+            cpu_usage_percent: 42.5,
+            memory_used_kb: 2048,
+            memory_available_kb: 4096,
+            disk_io_ops: 12,
+        };
+        let request = api
+            .json_request(
+                Method::POST,
+                &format!("v1/nodes/{}/metrics", node.node_id),
+                &node.token,
+                &metrics,
+            )
+            .unwrap();
+
+        assert_eq!(request.method(), Method::POST);
+        assert_eq!(
+            request.url().path(),
+            "/v1/nodes/00000000-0000-4000-8000-000000000001/metrics"
+        );
+        assert_eq!(
+            request
+                .headers()
+                .get(reqwest::header::AUTHORIZATION)
+                .unwrap(),
+            "Bearer node-secret"
+        );
+        let body: Value =
+            serde_json::from_slice(request.body().and_then(reqwest::Body::as_bytes).unwrap())
+                .unwrap();
+        assert_eq!(body["cpu_usage_percent"], 42.5);
+        assert_eq!(body["memory_used_kb"], 2048);
+        assert_eq!(body["memory_available_kb"], 4096);
+        assert_eq!(body["disk_io_ops"], 12);
     }
 
     #[test]

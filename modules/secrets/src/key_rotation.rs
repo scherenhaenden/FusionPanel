@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use crate::envelope_encryption::{EnvelopeKeyManager, Kek, WrappedDek, Error as EnvelopeError};
+use crate::envelope_encryption::{EnvelopeKeyManager, Error as EnvelopeError, Kek, WrappedDek};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RotationStatus {
@@ -24,7 +24,9 @@ impl std::fmt::Display for RotationError {
         match self {
             RotationError::InvalidState(msg) => write!(f, "Invalid state: {}", msg),
             RotationError::CryptoError(e) => write!(f, "Crypto error: {}", e),
-            RotationError::RetirementGateFailed(msg) => write!(f, "Retirement gate failed: {}", msg),
+            RotationError::RetirementGateFailed(msg) => {
+                write!(f, "Retirement gate failed: {}", msg)
+            }
         }
     }
 }
@@ -46,7 +48,9 @@ impl KeyRotationPlanner {
 
     pub fn begin_rotation(&mut self) -> Result<(), RotationError> {
         if self.status != RotationStatus::Pending {
-            return Err(RotationError::InvalidState("Rotation can only begin from Pending state"));
+            return Err(RotationError::InvalidState(
+                "Rotation can only begin from Pending state",
+            ));
         }
         self.status = RotationStatus::InProgress;
         Ok(())
@@ -59,7 +63,9 @@ impl KeyRotationPlanner {
         wrapped_dek: &WrappedDek,
     ) -> Result<WrappedDek, RotationError> {
         if self.status != RotationStatus::InProgress {
-            return Err(RotationError::InvalidState("Rotation must be InProgress to re-encrypt DEKs"));
+            return Err(RotationError::InvalidState(
+                "Rotation must be InProgress to re-encrypt DEKs",
+            ));
         }
         EnvelopeKeyManager::rotate_kek(old_kek, new_kek, wrapped_dek)
             .map_err(RotationError::CryptoError)
@@ -67,7 +73,9 @@ impl KeyRotationPlanner {
 
     pub fn mark_completed(&mut self) -> Result<(), RotationError> {
         if self.status != RotationStatus::InProgress {
-            return Err(RotationError::InvalidState("Only InProgress rotations can be completed"));
+            return Err(RotationError::InvalidState(
+                "Only InProgress rotations can be completed",
+            ));
         }
         self.status = RotationStatus::Completed;
         Ok(())

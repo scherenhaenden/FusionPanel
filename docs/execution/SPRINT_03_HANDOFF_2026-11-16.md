@@ -1,5 +1,7 @@
 # Sprint 3 End-of-day Handoff — 16 November 2026
 
+> **Historical checkpoint superseded:** this handoff records the failed 16 November E2E attempt. Sprint 3 was subsequently completed and merged by [PR #640](https://github.com/scherenhaenden/FusionPanel/pull/640), which reports the full Nginx/Playwright gate passing; issue #45 was then closed. Do not use the blocker below as the current Sprint 3 state. Preserve this file as the forensic checkpoint for that run.
+
 ## Current state
 
 - Integration branch: `sprint-3` at `a92f889a9a9c9afa2a2f722b9d7d59cfad9c87d3`, synchronized with `origin/sprint-3` when this checkpoint was prepared.

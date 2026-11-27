@@ -452,7 +452,7 @@ async fn complete_job(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn authenticate_node(
+pub(super) async fn authenticate_node(
     state: &AppState,
     node_id: Uuid,
     token: &str,
@@ -492,6 +492,42 @@ pub(super) async fn authorized_operator(state: &AppState, headers: &HeaderMap) -
     }
 }
 
+// Node telemetry and observability records are global and have no tenant ownership.
+// Limit access to principals with system-wide administrative authority.
+pub(super) async fn require_global_observability_admin(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<(), ErrorResponse> {
+    if authorized_admin(state, headers) {
+        return Ok(());
+    }
+    let context = super::websites::website_authorization_context(state, headers).await?;
+    let scopes_allow = context.token_scopes.as_ref().is_none_or(|scopes| {
+        scopes
+            .iter()
+            .any(|scope| scope == "*" || scope == "system:admin")
+    });
+    let authorized = context.user_id.is_some_and(|user_id| {
+        identity::AccessControl::evaluate_principal(
+            user_id,
+            &context.role_bindings,
+            identity::Permission::SystemAdmin,
+            &identity::Scope::Global,
+        )
+        .is_ok()
+    });
+    if scopes_allow && authorized {
+        Ok(())
+    } else {
+        Err(ErrorResponse {
+            error: ErrorDetail {
+                code: "forbidden",
+                message: "Global observability access requires system administration permission",
+            },
+        })
+    }
+}
+
 pub(super) fn authorized_admin(state: &AppState, headers: &HeaderMap) -> bool {
     let Some(token) = bearer_token(headers) else {
         return false;
@@ -500,7 +536,7 @@ pub(super) fn authorized_admin(state: &AppState, headers: &HeaderMap) -> bool {
         && bool::from(token.as_bytes().ct_eq(state.admin_token.as_bytes()))
 }
 
-fn bearer_token(headers: &HeaderMap) -> Option<&str> {
+pub(super) fn bearer_token(headers: &HeaderMap) -> Option<&str> {
     headers
         .get(AUTHORIZATION)
         .and_then(|header| header.to_str().ok())
@@ -596,6 +632,8 @@ mod tests {
             )),
             jobs_store: Arc::new(Mutex::new(fusionpanel_jobs::JobStore::in_memory().unwrap())),
             frontend_dir: None,
+            metrics_store: crate::metrics::shared_store(),
+            alerts_store: crate::alerts::test_store(),
         }
     }
 
