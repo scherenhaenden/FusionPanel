@@ -60,7 +60,11 @@ fn test_invalid_signature() {
     signature_header.replace_range(signature_header.len() - 5.., "abcde");
 
     let result = signer.verify(payload, &signature_header, timestamp);
-    assert!(matches!(result, Err(WebhookVerificationError::InvalidFormat) | Err(WebhookVerificationError::InvalidSignature)));
+    assert!(matches!(
+        result,
+        Err(WebhookVerificationError::InvalidFormat)
+            | Err(WebhookVerificationError::InvalidSignature)
+    ));
 }
 
 #[test]
@@ -83,7 +87,6 @@ fn test_invalid_signature_hex() {
     assert_eq!(result, Err(WebhookVerificationError::InvalidSignature));
 }
 
-
 #[test]
 fn test_invalid_format() {
     let secret = b"my_super_secret_key";
@@ -93,13 +96,22 @@ fn test_invalid_format() {
     let current_timestamp = 1620000000;
 
     let bad_header_1 = "v1=abcdef, t=123";
-    assert_eq!(signer.verify(payload, bad_header_1, current_timestamp), Err(WebhookVerificationError::InvalidFormat));
+    assert_eq!(
+        signer.verify(payload, bad_header_1, current_timestamp),
+        Err(WebhookVerificationError::InvalidFormat)
+    );
 
     let bad_header_2 = "t=notanumber,v1=abcdef";
-    assert_eq!(signer.verify(payload, bad_header_2, current_timestamp), Err(WebhookVerificationError::InvalidFormat));
+    assert_eq!(
+        signer.verify(payload, bad_header_2, current_timestamp),
+        Err(WebhookVerificationError::InvalidFormat)
+    );
 
     let bad_header_3 = "t=1620000000";
-    assert_eq!(signer.verify(payload, bad_header_3, current_timestamp), Err(WebhookVerificationError::InvalidFormat));
+    assert_eq!(
+        signer.verify(payload, bad_header_3, current_timestamp),
+        Err(WebhookVerificationError::InvalidFormat)
+    );
 }
 
 #[test]

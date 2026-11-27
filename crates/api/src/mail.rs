@@ -1713,6 +1713,8 @@ mod tests {
                 fusionpanel_jobs::JobStore::new(&db_path).unwrap(),
             )),
             frontend_dir: None,
+            metrics_store: crate::metrics::shared_store(),
+            alerts_store: crate::alerts::test_store(),
         };
         let router = super::super::app(state.clone());
         (router, state, dir, tenant_a, tenant_b)

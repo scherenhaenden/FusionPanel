@@ -26,12 +26,12 @@ fn test_kek_derivation_salt_too_short() {
 fn test_generate_fingerprint() {
     let key_id = "my-key-id";
     let salt = b"some_random_salt_data";
-    
+
     let fingerprint1 = generate_fingerprint(key_id, salt);
     let fingerprint2 = generate_fingerprint(key_id, salt);
-    
+
     assert_eq!(fingerprint1, fingerprint2);
-    
+
     let fingerprint3 = generate_fingerprint("other-key-id", salt);
     assert_ne!(fingerprint1, fingerprint3);
 }
@@ -41,7 +41,7 @@ fn test_derived_key_debug_redacted() {
     let salt = b"this_is_a_16_byte_salt_123456789".to_vec();
     let config = KekDerivationConfig::new(salt, 1000).unwrap();
     let key = derive_kek(b"password", &config).unwrap();
-    
+
     let debug_str = format!("{:?}", key);
     assert_eq!(debug_str, "[REDACTED]");
 }
@@ -72,24 +72,25 @@ fn test_kek_derivation_known_test_vector() {
     let salt = b"salt_must_be_16b".to_vec();
     let config = KekDerivationConfig::new(salt, 1).unwrap();
     let passphrase = b"password";
-    
+
     let key = derive_kek(passphrase, &config).unwrap();
-    
+
     // Calculated externally: pbkdf2_hmac_sha256("password", "salt_must_be_16b", 1, 32)
     // Echoing python: hashlib.pbkdf2_hmac('sha256', b'password', b'salt_must_be_16b', 1)
-    let expected = hex::decode("67e290159082eb8d0ce4ecf99f9b36207f2a1f542e3b06ae423953430cc5753d").unwrap();
-    
+    let expected =
+        hex::decode("67e290159082eb8d0ce4ecf99f9b36207f2a1f542e3b06ae423953430cc5753d").unwrap();
+
     assert_eq!(key.as_bytes(), expected.as_slice());
 }
 
 #[test]
 fn test_zeroization() {
     use zeroize::Zeroize;
-    
+
     let mut key = secrets::kek_derivation::DerivedKey([0xAA; 32]);
     assert_eq!(key.0, [0xAA; 32]);
-    
+
     key.zeroize();
-    
+
     assert_eq!(key.0, [0x00; 32]);
 }

@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod alert_store;
 pub mod alerts;
 pub mod incidents;
 pub mod metrics;
