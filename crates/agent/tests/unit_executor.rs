@@ -19,7 +19,7 @@ async fn test_execute_success() {
     let result = CommandExecutor::execute(&req).await.unwrap();
     assert_eq!(result.exit_code, Some(0));
     assert_eq!(String::from_utf8_lossy(&result.stdout).trim(), "hello");
-    assert_eq!(result.timeout, false);
+    assert!(!result.timeout);
 }
 
 #[tokio::test]
@@ -32,7 +32,7 @@ async fn test_execute_timeout() {
     };
 
     let result = CommandExecutor::execute(&req).await.unwrap();
-    assert_eq!(result.timeout, true);
+    assert!(result.timeout);
     assert_eq!(result.exit_code, None);
 }
 
