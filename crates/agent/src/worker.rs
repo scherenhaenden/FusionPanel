@@ -760,8 +760,8 @@ impl AgentWorker {
                 match execute_mail_domain_apply(&payload).await {
                     Ok(mut mail_outcome) => {
                         extra_secrets.append(&mut mail_outcome.secrets);
-                        let result_val = serde_json::to_value(&mail_outcome.result)
-                            .unwrap_or(Value::Null);
+                        let result_val =
+                            serde_json::to_value(&mail_outcome.result).unwrap_or(Value::Null);
                         OperationOutcome::success_with_result(
                             format!(
                                 "mail.domain.apply completed for {} (rev {})",
@@ -784,8 +784,8 @@ impl AgentWorker {
             Ok(TypedOperation::MailDomainDelete(payload)) => {
                 match execute_mail_domain_delete(&payload).await {
                     Ok(mail_outcome) => {
-                        let result_val = serde_json::to_value(&mail_outcome.result)
-                            .unwrap_or(Value::Null);
+                        let result_val =
+                            serde_json::to_value(&mail_outcome.result).unwrap_or(Value::Null);
                         OperationOutcome::success_with_result(
                             format!(
                                 "mail.domain.delete completed for {} (rev {})",
@@ -807,8 +807,8 @@ impl AgentWorker {
                 match execute_mail_dkim_apply(&payload).await {
                     Ok(mut mail_outcome) => {
                         extra_secrets.append(&mut mail_outcome.secrets);
-                        let result_val = serde_json::to_value(&mail_outcome.result)
-                            .unwrap_or(Value::Null);
+                        let result_val =
+                            serde_json::to_value(&mail_outcome.result).unwrap_or(Value::Null);
                         OperationOutcome::success_with_result(
                             format!(
                                 "mail.dkim.apply completed for {} selector {} (rev {})",

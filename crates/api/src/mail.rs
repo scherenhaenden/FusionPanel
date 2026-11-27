@@ -2,7 +2,9 @@
 
 use super::{
     node_jobs,
-    websites::{require_website_permission, website_authorization_context, WebsiteAuthorizationContext},
+    websites::{
+        require_website_permission, website_authorization_context, WebsiteAuthorizationContext,
+    },
     AppState, ErrorDetail, ErrorResponse,
 };
 use axum::{
@@ -17,9 +19,7 @@ use fusionpanel_agent_protocol::{
     MailAliasSpec, MailDkimApplyPayload, MailDkimSpec, MailDomainApplyPayload,
     MailDomainDeletePayload, MailMailboxSpec, MailOperationResult, Operation, Request,
 };
-use fusionpanel_control_store::{
-    MailOperation, MailOperationReservation, StoreError,
-};
+use fusionpanel_control_store::{MailOperation, MailOperationReservation, StoreError};
 use fusionpanel_jobs::{Job, JobState};
 use identity::{PasswordManager, Permission};
 use serde::Deserialize;
@@ -149,15 +149,11 @@ pub(super) fn routes() -> Router<AppState> {
         )
         .route(
             "/v1/mail/domains/{id}/mailboxes/{mailbox_id}",
-            get(get_mailbox)
-                .put(update_mailbox)
-                .delete(delete_mailbox),
+            get(get_mailbox).put(update_mailbox).delete(delete_mailbox),
         )
         .route(
             "/api/v1/mail/domains/{id}/mailboxes/{mailbox_id}",
-            get(get_mailbox)
-                .put(update_mailbox)
-                .delete(delete_mailbox),
+            get(get_mailbox).put(update_mailbox).delete(delete_mailbox),
         )
         .route(
             "/v1/mail/domains/{id}/aliases",
@@ -276,7 +272,10 @@ async fn create_domain(
         "mail.domain.create",
         "mail_domain",
         &reservation.domain.id.to_string(),
-        Some(&format!("domain={} rev={}", reservation.domain.domain, reservation.revision)),
+        Some(&format!(
+            "domain={} rev={}",
+            reservation.domain.domain, reservation.revision
+        )),
     )
     .await;
 
@@ -316,7 +315,9 @@ async fn update_domain(
 
     if let Some(ref requested_domain) = body.domain {
         if requested_domain.trim().to_ascii_lowercase() != existing.domain.domain {
-            return Err(conflict("Mail domain name is immutable and cannot be renamed"));
+            return Err(conflict(
+                "Mail domain name is immutable and cannot be renamed",
+            ));
         }
     }
 
@@ -354,7 +355,10 @@ async fn update_domain(
         "mail.domain.update",
         "mail_domain",
         &domain_id.to_string(),
-        Some(&format!("domain={} rev={}", reservation.domain.domain, reservation.revision)),
+        Some(&format!(
+            "domain={} rev={}",
+            reservation.domain.domain, reservation.revision
+        )),
     )
     .await;
 
@@ -418,7 +422,14 @@ async fn delete_domain(
                 revision: reservation.revision,
             }),
         };
-        enqueue_mail_job(&state, &scoped_key, reservation.domain.id, MailOperation::DomainDelete, req).await?
+        enqueue_mail_job(
+            &state,
+            &scoped_key,
+            reservation.domain.id,
+            MailOperation::DomainDelete,
+            req,
+        )
+        .await?
     };
 
     record_mail_audit(
@@ -427,7 +438,10 @@ async fn delete_domain(
         "mail.domain.delete",
         "mail_domain",
         &domain_id.to_string(),
-        Some(&format!("domain={} rev={}", reservation.domain.domain, reservation.revision)),
+        Some(&format!(
+            "domain={} rev={}",
+            reservation.domain.domain, reservation.revision
+        )),
     )
     .await;
 
@@ -509,7 +523,12 @@ async fn create_mailbox(
         &domain_details.domain.domain,
     )?;
 
-    if body.password.len() < 8 || body.password.chars().any(|c| c == '\0' || c == '\r' || c == '\n') {
+    if body.password.len() < 8
+        || body
+            .password
+            .chars()
+            .any(|c| c == '\0' || c == '\r' || c == '\n')
+    {
         return Err(bad_request(
             "Mailbox password must be at least 8 characters without control characters",
         ));
@@ -554,7 +573,10 @@ async fn create_mailbox(
             "mail.mailbox.create",
             "mail_mailbox",
             &mb.id.to_string(),
-            Some(&format!("address={} rev={}", mb.address, reservation.revision)),
+            Some(&format!(
+                "address={} rev={}",
+                mb.address, reservation.revision
+            )),
         )
         .await;
     }
@@ -606,7 +628,9 @@ async fn update_mailbox(
 
     if let Some(ref addr) = body.address {
         if addr.trim().to_ascii_lowercase() != existing_mb.address {
-            return Err(conflict("Mailbox address is immutable and cannot be renamed"));
+            return Err(conflict(
+                "Mailbox address is immutable and cannot be renamed",
+            ));
         }
     }
 
@@ -656,7 +680,10 @@ async fn update_mailbox(
         "mail.mailbox.update",
         "mail_mailbox",
         &mailbox_id.to_string(),
-        Some(&format!("address={} rev={}", existing_mb.address, reservation.revision)),
+        Some(&format!(
+            "address={} rev={}",
+            existing_mb.address, reservation.revision
+        )),
     )
     .await;
 
@@ -704,7 +731,14 @@ async fn delete_mailbox(
         .control_store
         .lock()
         .await
-        .reserve_mail_mailbox_delete(&scoped_key, &fingerprint, domain_id, mailbox_id, tenant_id, &now)
+        .reserve_mail_mailbox_delete(
+            &scoped_key,
+            &fingerprint,
+            domain_id,
+            mailbox_id,
+            tenant_id,
+            &now,
+        )
         .map_err(map_store_error)?
         .ok_or_else(not_found)?;
 
@@ -716,7 +750,10 @@ async fn delete_mailbox(
             "mail.mailbox.delete",
             "mail_mailbox",
             &mailbox_id.to_string(),
-            Some(&format!("address={} rev={}", mb.address, reservation.revision)),
+            Some(&format!(
+                "address={} rev={}",
+                mb.address, reservation.revision
+            )),
         )
         .await;
     }
@@ -832,7 +869,10 @@ async fn create_alias(
             "mail.alias.create",
             "mail_alias",
             &al.id.to_string(),
-            Some(&format!("source={} rev={}", al.source, reservation.revision)),
+            Some(&format!(
+                "source={} rev={}",
+                al.source, reservation.revision
+            )),
         )
         .await;
     }
@@ -884,12 +924,17 @@ async fn update_alias(
 
     if let Some(ref src) = body.source {
         if src.trim().to_ascii_lowercase() != existing_alias.source {
-            return Err(conflict("Alias source address is immutable and cannot be renamed"));
+            return Err(conflict(
+                "Alias source address is immutable and cannot be renamed",
+            ));
         }
     }
 
     let destinations = match body.destinations.as_ref() {
-        Some(dests) => Some(canonicalize_alias_destinations(&existing_alias.source, dests)?),
+        Some(dests) => Some(canonicalize_alias_destinations(
+            &existing_alias.source,
+            dests,
+        )?),
         None => None,
     };
 
@@ -924,7 +969,10 @@ async fn update_alias(
         "mail.alias.update",
         "mail_alias",
         &alias_id.to_string(),
-        Some(&format!("source={} rev={}", existing_alias.source, reservation.revision)),
+        Some(&format!(
+            "source={} rev={}",
+            existing_alias.source, reservation.revision
+        )),
     )
     .await;
 
@@ -972,7 +1020,14 @@ async fn delete_alias(
         .control_store
         .lock()
         .await
-        .reserve_mail_alias_delete(&scoped_key, &fingerprint, domain_id, alias_id, tenant_id, &now)
+        .reserve_mail_alias_delete(
+            &scoped_key,
+            &fingerprint,
+            domain_id,
+            alias_id,
+            tenant_id,
+            &now,
+        )
         .map_err(map_store_error)?
         .ok_or_else(not_found)?;
 
@@ -984,7 +1039,10 @@ async fn delete_alias(
             "mail.alias.delete",
             "mail_alias",
             &alias_id.to_string(),
-            Some(&format!("source={} rev={}", al.source, reservation.revision)),
+            Some(&format!(
+                "source={} rev={}",
+                al.source, reservation.revision
+            )),
         )
         .await;
     }
@@ -1077,7 +1135,10 @@ async fn upsert_dkim(
     let job = if reservation.idempotent_replay {
         load_existing_job(&state, reservation.job_id).await?
     } else {
-        let dkim_rec = reservation.dkim.as_ref().ok_or_else(node_jobs::internal_error)?;
+        let dkim_rec = reservation
+            .dkim
+            .as_ref()
+            .ok_or_else(node_jobs::internal_error)?;
         let req = Request {
             version: 1,
             request_id: reservation.request_id,
@@ -1093,7 +1154,14 @@ async fn upsert_dkim(
                 rotate: body.rotate,
             }),
         };
-        enqueue_mail_job(&state, &scoped_key, reservation.domain.id, MailOperation::DkimApply, req).await?
+        enqueue_mail_job(
+            &state,
+            &scoped_key,
+            reservation.domain.id,
+            MailOperation::DkimApply,
+            req,
+        )
+        .await?
     };
 
     record_mail_audit(
@@ -1102,7 +1170,10 @@ async fn upsert_dkim(
         "mail.dkim.upsert",
         "mail_dkim",
         &domain_id.to_string(),
-        Some(&format!("selector={} rev={}", selector, reservation.revision)),
+        Some(&format!(
+            "selector={} rev={}",
+            selector, reservation.revision
+        )),
     )
     .await;
 
@@ -1162,7 +1233,10 @@ async fn delete_dkim(
     let job = if reservation.idempotent_replay {
         load_existing_job(&state, reservation.job_id).await?
     } else {
-        let dkim_rec = reservation.dkim.as_ref().ok_or_else(node_jobs::internal_error)?;
+        let dkim_rec = reservation
+            .dkim
+            .as_ref()
+            .ok_or_else(node_jobs::internal_error)?;
         let req = Request {
             version: 1,
             request_id: reservation.request_id,
@@ -1178,7 +1252,14 @@ async fn delete_dkim(
                 rotate: false,
             }),
         };
-        enqueue_mail_job(&state, &scoped_key, reservation.domain.id, MailOperation::DkimApply, req).await?
+        enqueue_mail_job(
+            &state,
+            &scoped_key,
+            reservation.domain.id,
+            MailOperation::DkimApply,
+            req,
+        )
+        .await?
     };
 
     record_mail_audit(
@@ -1404,7 +1485,9 @@ async fn ensure_manageable_node(
                 .iter()
                 .any(|s| s == "*" || s == "node:*" || s == &expected);
             if !allowed {
-                return Err(forbidden("API token scope does not allow managing this node"));
+                return Err(forbidden(
+                    "API token scope does not allow managing this node",
+                ));
             }
         }
     }
@@ -1446,7 +1529,9 @@ fn resolve_domain_scoped_address(
                 .split_once('@')
                 .ok_or_else(|| bad_request("Invalid mail address"))?;
             if addr_domain != domain {
-                return Err(bad_request("Mail address domain does not match hosted domain"));
+                return Err(bad_request(
+                    "Mail address domain does not match hosted domain",
+                ));
             }
             if let Some(lp_given) = lp_opt {
                 if lp_given.trim().to_ascii_lowercase() != lp {
@@ -1575,10 +1660,12 @@ fn not_found() -> ErrorResponse {
 fn map_store_error(err: StoreError) -> ErrorResponse {
     match err {
         StoreError::NotFound(_) => not_found(),
-        StoreError::IdempotencyConflict => conflict("Idempotency key was reused for a different request"),
-        StoreError::MailConflict(_) | StoreError::MailOperationInProgress | StoreError::Conflict { .. } => {
-            conflict("Mail request conflicts with existing state")
+        StoreError::IdempotencyConflict => {
+            conflict("Idempotency key was reused for a different request")
         }
+        StoreError::MailConflict(_)
+        | StoreError::MailOperationInProgress
+        | StoreError::Conflict { .. } => conflict("Mail request conflicts with existing state"),
         _ => node_jobs::internal_error(),
     }
 }
@@ -1622,7 +1709,9 @@ mod tests {
             admin_token: Arc::new(ADMIN_TOKEN.to_string()),
             identity_store,
             control_store: Arc::new(Mutex::new(control_store)),
-            jobs_store: Arc::new(Mutex::new(fusionpanel_jobs::JobStore::new(&db_path).unwrap())),
+            jobs_store: Arc::new(Mutex::new(
+                fusionpanel_jobs::JobStore::new(&db_path).unwrap(),
+            )),
             frontend_dir: None,
         };
         let router = super::super::app(state.clone());
@@ -1718,7 +1807,11 @@ mod tests {
         } else {
             Body::empty()
         };
-        let resp = app.clone().oneshot(builder.body(req_body).unwrap()).await.unwrap();
+        let resp = app
+            .clone()
+            .oneshot(builder.body(req_body).unwrap())
+            .await
+            .unwrap();
         let status = resp.status();
         let bytes = resp.into_body().collect().await.unwrap().to_bytes();
         let val = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
@@ -1743,8 +1836,15 @@ mod tests {
             vec!["*".to_string()],
         )
         .await;
-        let (status, _) =
-            req_json(&app, "GET", "/v1/mail/domains", Some(&no_perm_tok), None, None).await;
+        let (status, _) = req_json(
+            &app,
+            "GET",
+            "/v1/mail/domains",
+            Some(&no_perm_tok),
+            None,
+            None,
+        )
+        .await;
         assert_eq!(status, StatusCode::FORBIDDEN);
 
         // TenantAdmin role but token scope lacks mail:manage

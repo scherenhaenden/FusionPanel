@@ -1137,11 +1137,7 @@ impl MailMailboxSpec {
             }
         }
         if let Some(hash) = &self.password_hash {
-            if hash.is_empty()
-                || hash
-                    .bytes()
-                    .any(|b| b == 0 || b == b'\r' || b == b'\n')
-            {
+            if hash.is_empty() || hash.bytes().any(|b| b == 0 || b == b'\r' || b == b'\n') {
                 return Err(ValidationError::InvalidMailAddress);
             }
         }
@@ -2257,7 +2253,9 @@ mod tests {
                     selector: "default".to_string(),
                     enabled: true,
                     dns_zone_id: None,
-                    txt_record: Some("v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A".to_string()),
+                    txt_record: Some(
+                        "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A".to_string(),
+                    ),
                 }),
             }),
         };
@@ -2290,7 +2288,10 @@ mod tests {
                 dkim: None,
             }),
         };
-        assert_eq!(bad_addr.validate(), Err(ValidationError::InvalidMailAddress));
+        assert_eq!(
+            bad_addr.validate(),
+            Err(ValidationError::InvalidMailAddress)
+        );
 
         let bad_selector = Request {
             version: 1,

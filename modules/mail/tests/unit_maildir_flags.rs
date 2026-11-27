@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use mail::maildir_flags::{DovecotKeywords, MaildirFlags, MaildirError};
+use mail::maildir_flags::{DovecotKeywords, MaildirError, MaildirFlags};
 use std::collections::HashSet;
 use tempfile::NamedTempFile;
 
@@ -83,7 +83,10 @@ fn test_apply_to_filename() {
     let mut flags = MaildirFlags::new();
     flags.seen = true;
 
-    assert_eq!(flags.apply_to_filename(filename), "12345.M6789P123.host:2,S");
+    assert_eq!(
+        flags.apply_to_filename(filename),
+        "12345.M6789P123.host:2,S"
+    );
 }
 
 #[test]
@@ -93,7 +96,10 @@ fn test_apply_to_filename_existing() {
     flags.seen = true;
     flags.replied = true;
 
-    assert_eq!(flags.apply_to_filename(filename), "12345.M6789P123.host:2,RS");
+    assert_eq!(
+        flags.apply_to_filename(filename),
+        "12345.M6789P123.host:2,RS"
+    );
 }
 
 #[test]

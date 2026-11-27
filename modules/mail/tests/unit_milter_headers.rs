@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use mail::milter_headers::{AuthenticationResults, AuthResult, AuthProperty};
+use mail::milter_headers::{AuthProperty, AuthResult, AuthenticationResults};
 use std::str::FromStr;
 
 #[test]
@@ -25,25 +25,21 @@ fn test_format_authentication_results_dkim_spf() {
                 method: "dkim".to_string(),
                 result: "pass".to_string(),
                 reason: None,
-                properties: vec![
-                    AuthProperty {
-                        ptype: "header".to_string(),
-                        property: "d".to_string(),
-                        value: "example.net".to_string(),
-                    },
-                ],
+                properties: vec![AuthProperty {
+                    ptype: "header".to_string(),
+                    property: "d".to_string(),
+                    value: "example.net".to_string(),
+                }],
             },
             AuthResult {
                 method: "spf".to_string(),
                 result: "fail".to_string(),
                 reason: Some("No valid SPF record found".to_string()),
-                properties: vec![
-                    AuthProperty {
-                        ptype: "smtp".to_string(),
-                        property: "mailfrom".to_string(),
-                        value: "sender@example.net".to_string(),
-                    },
-                ],
+                properties: vec![AuthProperty {
+                    ptype: "smtp".to_string(),
+                    property: "mailfrom".to_string(),
+                    value: "sender@example.net".to_string(),
+                }],
             },
         ],
     };

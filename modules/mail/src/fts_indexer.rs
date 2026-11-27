@@ -13,14 +13,22 @@ impl Default for FtsFlatcurveConfig {
         Self {
             min_token_length: 3,
             max_token_length: 255,
-            tokenization_filters: vec!["normalizer-icu".to_string(), "snowball".to_string(), "stopwords".to_string()],
+            tokenization_filters: vec![
+                "normalizer-icu".to_string(),
+                "snowball".to_string(),
+                "stopwords".to_string(),
+            ],
             substring_search: true,
         }
     }
 }
 
 impl FtsFlatcurveConfig {
-    pub fn new(min_token_length: usize, max_token_length: usize, tokenization_filters: Vec<String>) -> Self {
+    pub fn new(
+        min_token_length: usize,
+        max_token_length: usize,
+        tokenization_filters: Vec<String>,
+    ) -> Self {
         Self {
             min_token_length,
             max_token_length,
@@ -70,7 +78,11 @@ pub struct MailboxIndexFootprint {
 }
 
 impl MailboxIndexFootprint {
-    pub fn new(total_size_bytes: u64, stale_tokens_size_bytes: u64, stale_tokens_count: u64) -> Self {
+    pub fn new(
+        total_size_bytes: u64,
+        stale_tokens_size_bytes: u64,
+        stale_tokens_count: u64,
+    ) -> Self {
         Self {
             total_size_bytes,
             stale_tokens_size_bytes,
@@ -109,11 +121,16 @@ impl FtsOptimizer {
 
     pub fn plan_optimization(&self, footprint: &MailboxIndexFootprint) -> FtsOptimizerPlan {
         let ratio = footprint.optimization_ratio();
-        let should_optimize = ratio >= self.ratio_threshold && footprint.stale_tokens_size_bytes >= self.min_stale_bytes;
+        let should_optimize = ratio >= self.ratio_threshold
+            && footprint.stale_tokens_size_bytes >= self.min_stale_bytes;
 
         FtsOptimizerPlan {
             should_optimize,
-            estimated_freed_bytes: if should_optimize { footprint.stale_tokens_size_bytes } else { 0 },
+            estimated_freed_bytes: if should_optimize {
+                footprint.stale_tokens_size_bytes
+            } else {
+                0
+            },
             prune_stale_tokens: should_optimize,
         }
     }
