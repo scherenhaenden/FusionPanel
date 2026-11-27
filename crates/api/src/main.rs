@@ -3,6 +3,7 @@
 mod admin;
 mod audit_mfa;
 mod backups;
+mod containers;
 mod cron;
 mod databases;
 mod dns;
@@ -273,6 +274,7 @@ fn app(state: AppState) -> Router {
         .merge(dns::routes())
         .merge(files::routes())
         .merge(cron::routes())
+        .merge(containers::routes())
         .merge(admin::routes())
         .merge(audit_mfa::routes())
         .fallback(fallback_handler)

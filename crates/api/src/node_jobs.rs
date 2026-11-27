@@ -226,6 +226,21 @@ async fn enqueue_job(
             },
         });
     }
+    if matches!(
+        body.operation.as_str(),
+        "container.apply"
+            | "container.start"
+            | "container.stop"
+            | "container.restart"
+            | "container.delete"
+    ) {
+        return Err(ErrorResponse {
+            error: ErrorDetail {
+                code: "bad_request",
+                message: "Use the Containers API for container operations",
+            },
+        });
+    }
     let key = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
@@ -433,6 +448,7 @@ async fn complete_job(
     super::backups::record_completion(&state, &completed).await?;
     super::dns::record_completion(&state, &completed).await?;
     super::cron::record_completion(&state, &completed).await?;
+    super::containers::record_completion(&state, &completed).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

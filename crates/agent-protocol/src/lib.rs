@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use uuid::Uuid;
 
@@ -51,6 +52,16 @@ pub enum Operation {
     CronDelete(CronDeletePayload),
     #[serde(rename = "cron.run_now")]
     CronRunNow(CronRunNowPayload),
+    #[serde(rename = "container.apply")]
+    ContainerApply(ContainerApplyPayload),
+    #[serde(rename = "container.start")]
+    ContainerStart(ContainerLifecyclePayload),
+    #[serde(rename = "container.stop")]
+    ContainerStop(ContainerLifecyclePayload),
+    #[serde(rename = "container.restart")]
+    ContainerRestart(ContainerLifecyclePayload),
+    #[serde(rename = "container.delete")]
+    ContainerDelete(ContainerDeletePayload),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -303,6 +314,146 @@ pub struct CronRunNowPayload {
     pub command: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ContainerPortProtocol {
+    #[default]
+    Tcp,
+    Udp,
+}
+
+impl ContainerPortProtocol {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Tcp => "tcp",
+            Self::Udp => "udp",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(deny_unknown_fields)]
+pub struct ContainerPortMapping {
+    pub host_port: u16,
+    pub container_port: u16,
+    #[serde(default)]
+    pub protocol: ContainerPortProtocol,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ContainerResourceLimits {
+    pub cpu_millicores: u32,
+    pub memory_bytes: u64,
+    #[serde(default)]
+    pub pids_limit: Option<u32>,
+}
+
+impl ContainerResourceLimits {
+    pub const MIN_CPU_MILLICORES: u32 = 50;
+    pub const MAX_CPU_MILLICORES: u32 = 64_000;
+    pub const MIN_MEMORY_BYTES: u64 = 4 * 1024 * 1024; // 4 MiB
+    pub const MAX_MEMORY_BYTES: u64 = 256 * 1024 * 1024 * 1024; // 256 GiB
+    pub const MAX_PIDS_LIMIT: u32 = 32_768;
+
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.cpu_millicores < Self::MIN_CPU_MILLICORES
+            || self.cpu_millicores > Self::MAX_CPU_MILLICORES
+        {
+            return Err(ValidationError::InvalidContainerResources);
+        }
+        if self.memory_bytes < Self::MIN_MEMORY_BYTES
+            || self.memory_bytes > Self::MAX_MEMORY_BYTES
+        {
+            return Err(ValidationError::InvalidContainerResources);
+        }
+        if let Some(pids) = self.pids_limit {
+            if pids == 0 || pids > Self::MAX_PIDS_LIMIT {
+                return Err(ValidationError::InvalidContainerResources);
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ContainerRestartPolicy {
+    No,
+    Always,
+    OnFailure,
+    #[default]
+    UnlessStopped,
+}
+
+impl ContainerRestartPolicy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::No => "no",
+            Self::Always => "always",
+            Self::OnFailure => "on_failure",
+            Self::UnlessStopped => "unless_stopped",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "no" => Some(Self::No),
+            "always" => Some(Self::Always),
+            "on_failure" => Some(Self::OnFailure),
+            "unless_stopped" => Some(Self::UnlessStopped),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ContainerApplyPayload {
+    pub container_id: Uuid,
+    pub tenant_id: Uuid,
+    pub name: String,
+    pub image: String,
+    #[serde(default)]
+    pub ports: Vec<ContainerPortMapping>,
+    pub resources: ContainerResourceLimits,
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
+    #[serde(default)]
+    pub command: Vec<String>,
+    #[serde(default)]
+    pub restart_policy: ContainerRestartPolicy,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ContainerLifecyclePayload {
+    pub container_id: Uuid,
+    pub tenant_id: Uuid,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ContainerDeletePayload {
+    pub container_id: Uuid,
+    pub tenant_id: Uuid,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ContainerOperationResult {
+    pub container_id: Uuid,
+    #[serde(default)]
+    pub runtime_id: Option<String>,
+    pub state: String,
+    #[serde(default)]
+    pub image_digest: Option<String>,
+    #[serde(default)]
+    pub ports: Vec<ContainerPortMapping>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Response {
@@ -350,6 +501,14 @@ pub enum ValidationError {
     InvalidCronJobId,
     InvalidCronSchedule,
     InvalidCronCommand,
+    InvalidContainerId,
+    InvalidTenantId,
+    InvalidContainerName,
+    InvalidContainerImage,
+    InvalidContainerPorts,
+    InvalidContainerResources,
+    InvalidContainerEnv,
+    InvalidContainerCommand,
 }
 
 impl Request {
@@ -375,6 +534,11 @@ impl Request {
             Operation::CronApply(payload) => payload.validate(),
             Operation::CronDelete(payload) => payload.validate(),
             Operation::CronRunNow(payload) => payload.validate(),
+            Operation::ContainerApply(payload) => payload.validate(),
+            Operation::ContainerStart(payload)
+            | Operation::ContainerStop(payload)
+            | Operation::ContainerRestart(payload) => payload.validate(),
+            Operation::ContainerDelete(payload) => payload.validate(),
         }
     }
 }
@@ -1108,6 +1272,218 @@ fn valid_domain(domain: &str) -> bool {
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
     })
+}
+
+pub const MAX_CONTAINER_PORTS: usize = 32;
+pub const MAX_CONTAINER_ENV_VARS: usize = 64;
+pub const MAX_CONTAINER_COMMAND_ARGS: usize = 64;
+
+pub fn valid_container_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 63 || !name.is_ascii() {
+        return false;
+    }
+    let bytes = name.as_bytes();
+    if !(bytes[0].is_ascii_lowercase() || bytes[0].is_ascii_digit()) {
+        return false;
+    }
+    if !(bytes[bytes.len() - 1].is_ascii_lowercase() || bytes[bytes.len() - 1].is_ascii_digit()) {
+        return false;
+    }
+    bytes
+        .iter()
+        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
+}
+
+pub fn valid_pinned_image_ref(image: &str) -> bool {
+    if image.is_empty()
+        || image.len() > 512
+        || !image.is_ascii()
+        || image.bytes().any(|b| b.is_ascii_whitespace() || b.is_ascii_control())
+        || image.contains("..")
+        || image.contains("//")
+    {
+        return false;
+    }
+
+    let Some((repo_and_tag, digest)) = image.split_once("@sha256:") else {
+        return false;
+    };
+    if digest.len() != 64 || !digest.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+        return false;
+    }
+    if repo_and_tag.is_empty() || repo_and_tag.contains('@') {
+        return false;
+    }
+
+    let mut segments = repo_and_tag.split('/');
+    let Some(first) = segments.next() else {
+        return false;
+    };
+    if first.is_empty() {
+        return false;
+    }
+
+    // Validate all path segments; only the first segment may carry a registry :port,
+    // and only the last segment may carry a :tag.
+    let all_segments: Vec<&str> = std::iter::once(first).chain(segments).collect();
+    for (idx, seg) in all_segments.iter().enumerate() {
+        if seg.is_empty() {
+            return false;
+        }
+        let is_first = idx == 0;
+        let is_last = idx + 1 == all_segments.len();
+        if let Some((left, right)) = seg.split_once(':') {
+            if left.is_empty() || right.is_empty() || right.contains(':') {
+                return false;
+            }
+            if !valid_image_name_segment(left) {
+                return false;
+            }
+            if is_last && !is_first {
+                if !valid_image_tag(right) {
+                    return false;
+                }
+            } else if is_first && !is_last {
+                // Registry port (digits) or tag if single-segment
+                if !right.bytes().all(|b| b.is_ascii_digit()) {
+                    return false;
+                }
+            } else if is_first && is_last {
+                if !valid_image_tag(right) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        } else if !valid_image_name_segment(seg) {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn valid_image_name_segment(seg: &str) -> bool {
+    !seg.is_empty()
+        && !seg.starts_with('.')
+        && !seg.starts_with('-')
+        && !seg.ends_with('.')
+        && !seg.ends_with('-')
+        && seg
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'.' | b'_' | b'-'))
+}
+
+fn valid_image_tag(tag: &str) -> bool {
+    !tag.is_empty()
+        && tag.len() <= 128
+        && !tag.starts_with('.')
+        && !tag.starts_with('-')
+        && tag
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+}
+
+pub fn normalize_container_ports(
+    ports: &[ContainerPortMapping],
+) -> Result<Vec<ContainerPortMapping>, ValidationError> {
+    if ports.len() > MAX_CONTAINER_PORTS {
+        return Err(ValidationError::InvalidContainerPorts);
+    }
+    let mut seen_host_bindings = BTreeSet::new();
+    let mut normalized = Vec::with_capacity(ports.len());
+    for port in ports {
+        if port.host_port == 0 || port.container_port == 0 {
+            return Err(ValidationError::InvalidContainerPorts);
+        }
+        if !seen_host_bindings.insert((port.host_port, port.protocol)) {
+            return Err(ValidationError::InvalidContainerPorts);
+        }
+        normalized.push(*port);
+    }
+    normalized.sort();
+    Ok(normalized)
+}
+
+impl ContainerApplyPayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.container_id.is_nil() {
+            return Err(ValidationError::InvalidContainerId);
+        }
+        if self.tenant_id.is_nil() {
+            return Err(ValidationError::InvalidTenantId);
+        }
+        if !valid_container_name(&self.name) {
+            return Err(ValidationError::InvalidContainerName);
+        }
+        if !valid_pinned_image_ref(&self.image) {
+            return Err(ValidationError::InvalidContainerImage);
+        }
+        normalize_container_ports(&self.ports)?;
+        self.resources.validate()?;
+        if self.env.len() > MAX_CONTAINER_ENV_VARS {
+            return Err(ValidationError::InvalidContainerEnv);
+        }
+        for (k, v) in &self.env {
+            if k.is_empty()
+                || k.len() > 128
+                || !k.is_ascii()
+                || k.bytes().any(|b| b == b'\0' || b == b'\n' || b == b'\r' || b == b'=')
+                || v.len() > 4096
+                || v.contains('\0')
+            {
+                return Err(ValidationError::InvalidContainerEnv);
+            }
+            let mut chars = k.bytes();
+            let Some(first) = chars.next() else {
+                return Err(ValidationError::InvalidContainerEnv);
+            };
+            if !(first.is_ascii_alphabetic() || first == b'_')
+                || !chars.all(|b| b.is_ascii_alphanumeric() || b == b'_')
+            {
+                return Err(ValidationError::InvalidContainerEnv);
+            }
+        }
+        if self.command.len() > MAX_CONTAINER_COMMAND_ARGS {
+            return Err(ValidationError::InvalidContainerCommand);
+        }
+        for arg in &self.command {
+            if arg.is_empty() || arg.len() > 1024 || arg.contains('\0') {
+                return Err(ValidationError::InvalidContainerCommand);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl ContainerLifecyclePayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.container_id.is_nil() {
+            return Err(ValidationError::InvalidContainerId);
+        }
+        if self.tenant_id.is_nil() {
+            return Err(ValidationError::InvalidTenantId);
+        }
+        if !valid_container_name(&self.name) {
+            return Err(ValidationError::InvalidContainerName);
+        }
+        Ok(())
+    }
+}
+
+impl ContainerDeletePayload {
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.container_id.is_nil() {
+            return Err(ValidationError::InvalidContainerId);
+        }
+        if self.tenant_id.is_nil() {
+            return Err(ValidationError::InvalidTenantId);
+        }
+        if !valid_container_name(&self.name) {
+            return Err(ValidationError::InvalidContainerName);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -1867,6 +2243,124 @@ mod tests {
         assert_eq!(
             bad_sched.validate(),
             Err(ValidationError::InvalidCronSchedule)
+        );
+    }
+
+    #[test]
+    fn test_container_pinned_image_and_port_normalization() {
+        let digest = "a".repeat(64);
+        assert!(valid_pinned_image_ref(&format!("nginx@sha256:{digest}")));
+        assert!(valid_pinned_image_ref(&format!(
+            "ghcr.io/fusionpanel/app:1.2.3@sha256:{digest}"
+        )));
+        assert!(valid_pinned_image_ref(&format!(
+            "localhost:5000/my-app@sha256:{digest}"
+        )));
+
+        // Unpinned or malformed images must be rejected
+        assert!(!valid_pinned_image_ref("nginx"));
+        assert!(!valid_pinned_image_ref("nginx:latest"));
+        assert!(!valid_pinned_image_ref("ghcr.io/fusionpanel/app:1.2.3"));
+        assert!(!valid_pinned_image_ref("nginx@sha256:short"));
+        assert!(!valid_pinned_image_ref(&format!(
+            "nginx@sha256:{}",
+            "A".repeat(64)
+        )));
+
+        let ports = vec![
+            ContainerPortMapping {
+                host_port: 8443,
+                container_port: 443,
+                protocol: ContainerPortProtocol::Tcp,
+            },
+            ContainerPortMapping {
+                host_port: 8080,
+                container_port: 80,
+                protocol: ContainerPortProtocol::Udp,
+            },
+            ContainerPortMapping {
+                host_port: 8080,
+                container_port: 80,
+                protocol: ContainerPortProtocol::Tcp,
+            },
+        ];
+        let normalized = normalize_container_ports(&ports).unwrap();
+        assert_eq!(normalized[0].host_port, 8080);
+        assert_eq!(normalized[0].protocol, ContainerPortProtocol::Tcp);
+        assert_eq!(normalized[1].host_port, 8080);
+        assert_eq!(normalized[1].protocol, ContainerPortProtocol::Udp);
+        assert_eq!(normalized[2].host_port, 8443);
+
+        // Duplicate (host_port, protocol) rejected
+        let dup_ports = vec![
+            ContainerPortMapping {
+                host_port: 8080,
+                container_port: 80,
+                protocol: ContainerPortProtocol::Tcp,
+            },
+            ContainerPortMapping {
+                host_port: 8080,
+                container_port: 81,
+                protocol: ContainerPortProtocol::Tcp,
+            },
+        ];
+        assert_eq!(
+            normalize_container_ports(&dup_ports),
+            Err(ValidationError::InvalidContainerPorts)
+        );
+    }
+
+    #[test]
+    fn test_container_payload_validation_and_roundtrip() {
+        let digest = "0123456789abcdef".repeat(4);
+        let container_id = Uuid::new_v4();
+        let tenant_id = Uuid::new_v4();
+        let req = Request {
+            version: 1,
+            request_id: Uuid::new_v4(),
+            operation: Operation::ContainerApply(ContainerApplyPayload {
+                container_id,
+                tenant_id,
+                name: "web-app-1".to_string(),
+                image: format!("ghcr.io/org/web:1.0@sha256:{digest}"),
+                ports: vec![ContainerPortMapping {
+                    host_port: 8080,
+                    container_port: 80,
+                    protocol: ContainerPortProtocol::Tcp,
+                }],
+                resources: ContainerResourceLimits {
+                    cpu_millicores: 500,
+                    memory_bytes: 256 * 1024 * 1024,
+                    pids_limit: Some(128),
+                },
+                env: BTreeMap::from([("APP_ENV".to_string(), "production".to_string())]),
+                command: vec!["/bin/server".to_string()],
+                restart_policy: ContainerRestartPolicy::UnlessStopped,
+            }),
+        };
+        assert!(req.validate().is_ok());
+        let encoded = serde_json::to_string(&req).unwrap();
+        let decoded: Request = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded, req);
+
+        // Out-of-bounds resources rejected
+        let mut bad_res = req.clone();
+        if let Operation::ContainerApply(ref mut p) = bad_res.operation {
+            p.resources.cpu_millicores = 0;
+        }
+        assert_eq!(
+            bad_res.validate(),
+            Err(ValidationError::InvalidContainerResources)
+        );
+
+        // Unpinned image rejected
+        let mut bad_img = req;
+        if let Operation::ContainerApply(ref mut p) = bad_img.operation {
+            p.image = "nginx:latest".to_string();
+        }
+        assert_eq!(
+            bad_img.validate(),
+            Err(ValidationError::InvalidContainerImage)
         );
     }
 }
