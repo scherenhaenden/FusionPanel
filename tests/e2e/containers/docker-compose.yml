@@ -1,0 +1,126 @@
+x-sprint13-logging: &sprint13-logging
+  driver: local
+  options:
+    max-size: "2m"
+    max-file: "2"
+
+services:
+  registry:
+    image: "${FUSIONPANEL_S13_REGISTRY_IMAGE:-registry:2.8.3}"
+    init: true
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.50
+    pids_limit: 64
+    ports:
+      - "127.0.0.1::5000"
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+    tmpfs:
+      - /var/lib/registry:rw,noexec,nosuid,nodev,size=256m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5000/v2/"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 2s
+    logging: *sprint13-logging
+
+  sentinel:
+    image: "${FUSIONPANEL_S13_SENTINEL_IMAGE:?set sentinel image}"
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    memswap_limit: 64m
+    cpus: 0.25
+    pids_limit: 32
+    labels:
+      com.example.sentinel: "unmanaged"
+      fusionpanel.e2e.sentinel: "true"
+    ports:
+      - "127.0.0.1::8080"
+    healthcheck:
+      test: ["CMD", "busybox", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 1s
+    logging: *sprint13-logging
+
+  api:
+    image: "${FUSIONPANEL_S13_API_IMAGE:?set API image}"
+    build:
+      context: "${FUSIONPANEL_S13_API_BUILD_CONTEXT:?set API context}"
+      dockerfile: Dockerfile
+    init: true
+    read_only: true
+    user: "${FUSIONPANEL_S13_UID:?set UID}:${FUSIONPANEL_S13_GID:?set GID}"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 384m
+    memswap_limit: 384m
+    cpus: 0.50
+    pids_limit: 128
+    ports:
+      - "127.0.0.1::8080"
+    environment:
+      FUSIONPANEL_ADMIN_TOKEN: "${FUSIONPANEL_E2E_ADMIN_TOKEN:?set admin token}"
+      FUSIONPANEL_DATABASE_URL: /state/fusionpanel.db
+      FUSIONPANEL_E2E_USERNAME: "${FUSIONPANEL_E2E_USERNAME:-e2e-admin}"
+      FUSIONPANEL_E2E_PASSWORD: "${FUSIONPANEL_E2E_PASSWORD:?set password}"
+      FUSIONPANEL_FRONTEND_DIR: /app/frontend
+      FUSIONPANEL_LISTEN: 0.0.0.0:8080
+    volumes:
+      - "${FUSIONPANEL_S13_REPO_ROOT}/target/debug/fusionpanel-api:/usr/local/bin/fusionpanel-api:ro"
+      - "${FUSIONPANEL_S13_REPO_ROOT}/target/debug/fusionpanel-cli:/usr/local/bin/fusionpanel-cli:ro"
+      - "${FUSIONPANEL_S13_REPO_ROOT}/frontend/dist:/app/frontend:ro"
+      - "${FUSIONPANEL_S13_API_STATE_DIR:?set API state dir}:/state:rw"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/fusionpanel-cli", "--server", "http://127.0.0.1:8080", "health"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+    logging: *sprint13-logging
+
+  agent:
+    image: "${FUSIONPANEL_S13_AGENT_IMAGE:?set agent image}"
+    build:
+      context: "${FUSIONPANEL_S13_AGENT_BUILD_CONTEXT:?set agent context}"
+      dockerfile: Dockerfile
+    init: true
+    read_only: true
+    depends_on:
+      api:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 384m
+    memswap_limit: 384m
+    cpus: 0.50
+    pids_limit: 128
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+      - /run:rw,noexec,nosuid,nodev,size=8m
+    environment:
+      FUSIONPANEL_AGENT_MODE: http
+      FUSIONPANEL_API_URL: http://api:8080
+      FUSIONPANEL_ADMIN_TOKEN: "${FUSIONPANEL_E2E_ADMIN_TOKEN}"
+      FUSIONPANEL_NODE_NAME: "sprint13-${FUSIONPANEL_S13_SUFFIX:?set suffix}"
+      FUSIONPANEL_AGENT_STATE_DIR: /var/lib/fusionpanel-agent
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - "${FUSIONPANEL_S13_REPO_ROOT}/crates/agent/target/debug/fusionpanel-agent:/usr/local/bin/fusionpanel-agent:ro"
+      - "${FUSIONPANEL_S13_AGENT_STATE_DIR:?set agent state dir}:/var/lib/fusionpanel-agent:rw"
+      - "${FUSIONPANEL_S13_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock"
+    logging: *sprint13-logging
