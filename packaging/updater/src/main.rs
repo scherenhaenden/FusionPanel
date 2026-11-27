@@ -18,11 +18,14 @@ fn parse_hex_key(hex_str: &str) -> Result<[u8; 32], String> {
         return Err("Public key must be exactly 64 hexadecimal characters (32 bytes)".to_string());
     }
 
+    if !hex_str.is_ascii() {
+        return Err("Public key must contain only ASCII hexadecimal characters".to_string());
+    }
+
     let mut key = [0u8; 32];
-    for i in 0..32 {
-        let byte_str = std::str::from_utf8(&hex_str.as_bytes()[i * 2..i * 2 + 2])
-            .map_err(|_| "Public key must contain only ASCII hexadecimal characters".to_string())?;
-        key[i] = u8::from_str_radix(byte_str, 16)
+    for (i, byte) in key.iter_mut().enumerate() {
+        let byte_str = &hex_str[i * 2..i * 2 + 2];
+        *byte = u8::from_str_radix(byte_str, 16)
             .map_err(|_| format!("Invalid hexadecimal character in public key: {}", byte_str))?;
     }
     Ok(key)

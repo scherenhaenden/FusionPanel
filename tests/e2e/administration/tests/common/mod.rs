@@ -34,6 +34,7 @@ impl RunningServer {
 
 pub fn app_state(audit_path: &Path, invitations_path: &Path) -> AppState {
     AppState {
+        operators: Arc::new(Mutex::new(Vec::new())),
         quotas: Arc::new(QuotaEngine::new()),
         audit: Arc::new(Mutex::new(AuditLog::with_path(audit_path).unwrap())),
         invitations: Arc::new(Mutex::new(DurableInvitations::new(
