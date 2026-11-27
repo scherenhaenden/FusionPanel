@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use std::collections::BTreeMap;
 use std::path::{Component, Path};
 
 use super::error::DomainError;
@@ -184,6 +185,12 @@ pub struct ContainerSpec {
     pub limits: Option<ResourceLimits>,
     #[serde(default)]
     pub command: Vec<String>,
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
+    #[serde(default)]
+    pub labels: BTreeMap<String, String>,
+    #[serde(default)]
+    pub restart_policy: Option<String>,
 }
 
 impl ContainerSpec {
@@ -201,6 +208,9 @@ impl ContainerSpec {
             network: None,
             limits: None,
             command: Vec::new(),
+            env: BTreeMap::new(),
+            labels: BTreeMap::new(),
+            restart_policy: None,
         }
     }
 
@@ -216,6 +226,26 @@ impl ContainerSpec {
 
     pub fn with_command(mut self, command: Vec<String>) -> Self {
         self.command = command;
+        self
+    }
+
+    pub fn with_env(mut self, env: BTreeMap<String, String>) -> Self {
+        self.env = env;
+        self
+    }
+
+    pub fn with_labels(mut self, labels: BTreeMap<String, String>) -> Self {
+        self.labels = labels;
+        self
+    }
+
+    pub fn with_label(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.labels.insert(key.into(), value.into());
+        self
+    }
+
+    pub fn with_restart_policy(mut self, policy: String) -> Self {
+        self.restart_policy = Some(policy);
         self
     }
 }

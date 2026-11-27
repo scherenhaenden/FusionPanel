@@ -2,6 +2,7 @@
 
 pub mod acme;
 pub mod backup_driver;
+pub mod container_driver;
 pub mod cron_driver;
 pub mod daemon;
 pub mod database_driver;
