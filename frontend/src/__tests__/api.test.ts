@@ -161,4 +161,59 @@ describe('API Client', () => {
       expect(mockAdapter.history.post[0].headers?.['Idempotency-Key']).toBe('idem-key-123');
     });
   });
+
+  describe('/v1/metrics and /v1/alerts', () => {
+    it('uses the operator API routes for telemetry, rule management, and delivery history', async () => {
+      const sample = {
+        node_id: 'node/1',
+        cpu_usage_percent: 42,
+        memory_used_kb: 2048,
+        memory_available_kb: 6144,
+        disk_io_ops: 17,
+        recorded_at: '2026-11-19T10:00:00Z',
+      };
+      const rule = {
+        id: 'rule-1',
+        name: 'High CPU',
+        metric: 'cpu_usage_percent',
+        operator: 'above',
+        threshold: 85,
+        severity: 'critical',
+        webhook_url: 'https://alerts.example.test/hook',
+        enabled: true,
+        has_secret: true,
+        created_at: '2026-11-19T10:00:00Z',
+        updated_at: '2026-11-19T10:00:00Z',
+      };
+      mockAdapter.onGet('/v1/metrics').reply(200, { samples: [sample] });
+      mockAdapter.onGet('/v1/nodes/node%2F1/metrics').reply(200, { samples: [sample] });
+      mockAdapter.onGet('/v1/alerts/rules').reply(200, { rules: [rule] });
+      mockAdapter.onPost('/v1/alerts/rules').reply(201, { rule });
+      mockAdapter.onDelete('/v1/alerts/rules/rule-1').reply(204);
+      mockAdapter.onGet('/v1/alerts/active').reply(200, { active: [] });
+      mockAdapter.onGet('/v1/alerts/deliveries').reply(200, { deliveries: [] });
+
+      await expect(api.getLatestMetrics()).resolves.toEqual([sample]);
+      await expect(api.getNodeMetrics('node/1')).resolves.toEqual([sample]);
+      await expect(api.getAlertRules()).resolves.toEqual([rule]);
+      await expect(api.createAlertRule({
+        name: 'High CPU',
+        metric: 'cpu_usage_percent',
+        operator: 'above',
+        threshold: 85,
+        severity: 'critical',
+        webhook_url: rule.webhook_url,
+        webhook_secret: 'test webhook secret with at least thirty two bytes',
+      })).resolves.toEqual(rule);
+      await expect(api.deleteAlertRule(rule.id)).resolves.toBeUndefined();
+      await expect(api.getActiveAlerts()).resolves.toEqual([]);
+      await expect(api.getAlertDeliveries(5)).resolves.toEqual([]);
+
+      expect(JSON.parse(mockAdapter.history.post[0].data).webhook_secret).toBe(
+        'test webhook secret with at least thirty two bytes',
+      );
+      const deliveriesRequest = mockAdapter.history.get.find((request) => request.url === '/v1/alerts/deliveries');
+      expect(deliveriesRequest?.params).toEqual({ limit: 5 });
+    });
+  });
 });

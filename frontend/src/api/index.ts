@@ -1,10 +1,15 @@
 import { apiClient } from './client';
 import {
+  AlertDeliveryRecord,
+  AlertRuleRecord,
+  AlertStateRecord,
   HealthResponse,
   CapabilitiesResponse,
   JobLogEntry,
   JobRecord,
+  NodeMetricSample,
   NodeRecord,
+  CreateAlertRuleRequest,
   MailDomainRecord,
   MailDomainDetailsResponse,
   CreateMailDomainRequest,
@@ -368,6 +373,45 @@ export const api = {
   getNodes: async (): Promise<NodeRecord[]> => {
     const response = await apiClient.get<{ nodes: NodeRecord[] }>('/v1/nodes');
     return response.data.nodes;
+  },
+
+  getLatestMetrics: async (): Promise<NodeMetricSample[]> => {
+    const response = await apiClient.get<{ samples: NodeMetricSample[] }>('/v1/metrics');
+    return response.data.samples;
+  },
+
+  getNodeMetrics: async (nodeId: string): Promise<NodeMetricSample[]> => {
+    const response = await apiClient.get<{ samples: NodeMetricSample[] }>(
+      `/v1/nodes/${encodeURIComponent(nodeId)}/metrics`,
+    );
+    return response.data.samples;
+  },
+
+  getAlertRules: async (): Promise<AlertRuleRecord[]> => {
+    const response = await apiClient.get<{ rules: AlertRuleRecord[] }>('/v1/alerts/rules');
+    return response.data.rules;
+  },
+
+  createAlertRule: async (data: CreateAlertRuleRequest): Promise<AlertRuleRecord> => {
+    const response = await apiClient.post<{ rule: AlertRuleRecord }>('/v1/alerts/rules', data);
+    return response.data.rule;
+  },
+
+  deleteAlertRule: async (ruleId: string): Promise<void> => {
+    await apiClient.delete(`/v1/alerts/rules/${encodeURIComponent(ruleId)}`);
+  },
+
+  getActiveAlerts: async (): Promise<AlertStateRecord[]> => {
+    const response = await apiClient.get<{ active: AlertStateRecord[] }>('/v1/alerts/active');
+    return response.data.active;
+  },
+
+  getAlertDeliveries: async (limit = 10): Promise<AlertDeliveryRecord[]> => {
+    const response = await apiClient.get<{ deliveries: AlertDeliveryRecord[] }>(
+      '/v1/alerts/deliveries',
+      { params: { limit } },
+    );
+    return response.data.deliveries;
   },
 
   getJobs: async (): Promise<JobRecord[]> => {

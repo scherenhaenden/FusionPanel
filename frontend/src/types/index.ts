@@ -46,6 +46,67 @@ export interface NodeRecord {
   last_heartbeat: string;
 }
 
+export interface NodeMetricSample {
+  node_id: string;
+  cpu_usage_percent: number;
+  memory_used_kb: number;
+  memory_available_kb: number;
+  disk_io_ops: number;
+  recorded_at: string;
+}
+
+export type AlertMetric = 'cpu_usage_percent' | 'memory_used_percent' | 'disk_io_ops';
+export type AlertOperator = 'above' | 'below';
+export type AlertSeverity = 'info' | 'warning' | 'critical';
+
+export interface AlertRuleRecord {
+  id: string;
+  name: string;
+  metric: AlertMetric;
+  operator: AlertOperator;
+  threshold: number;
+  severity: AlertSeverity;
+  webhook_url: string;
+  enabled: boolean;
+  has_secret: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateAlertRuleRequest {
+  name: string;
+  metric: AlertMetric;
+  operator: AlertOperator;
+  threshold: number;
+  severity: AlertSeverity;
+  webhook_url: string;
+  webhook_secret: string;
+  enabled?: boolean;
+}
+
+export interface AlertStateRecord {
+  rule_id: string;
+  node_id: string;
+  active: boolean;
+  last_value: number;
+  started_at: string | null;
+  resolved_at: string | null;
+  updated_at: string;
+}
+
+export interface AlertDeliveryRecord {
+  id: string;
+  rule_id: string;
+  node_id: string;
+  event: 'triggered' | 'resolved' | string;
+  status: 'pending' | 'delivered' | 'failed' | string;
+  attempt_count: number;
+  http_status: number | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type JobState = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 
 export interface JobRecord {

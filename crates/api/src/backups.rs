@@ -494,6 +494,8 @@ mod tests {
             control_store: Arc::new(Mutex::new(ControlStore::new_in_memory().unwrap())),
             jobs_store: Arc::new(Mutex::new(JobStore::in_memory().unwrap())),
             frontend_dir: None,
+            metrics_store: crate::metrics::shared_store(),
+            alerts_store: crate::alerts::test_store(),
         }
     }
 
